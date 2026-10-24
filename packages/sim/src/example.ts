@@ -5,7 +5,7 @@
 import { resolveSettings, scoreGame, type GameResult } from '@gn/engine';
 import { PARAM_SETS, SIM_OPTIONS } from './paramSets';
 import { runNight } from './runner';
-import { netWorthH, type AgentKind, type World } from './world';
+import { AGENT_LABEL, netWorthH, type World } from './world';
 
 const seed = Number(process.argv[2] ?? 1);
 const players = Number(process.argv[3] ?? 12);
@@ -13,15 +13,7 @@ const setName = process.argv[4] ?? 'recommended';
 const set = PARAM_SETS.find((s) => s.name === setName)!;
 const settings = resolveSettings(set.settings);
 
-const STYLE: Record<AgentKind, string> = {
-  holder: 'Buy & hold',
-  trader: 'Active trader',
-  selfPumper: 'Self-pumper',
-  coalition: 'Pump crew',
-  gambler: 'Crypto gambler',
-  random: 'Random clicker',
-  inactive: 'Never trades',
-};
+const STYLE = AGENT_LABEL;
 const g = (h: number) => (h / 100).toFixed(1);
 const sg = (h: number) => `${h >= 0 ? '+' : ''}${g(h)}`;
 const clock = (min: number) => `${Math.floor(min / 60)}:${String(Math.floor(min % 60)).padStart(2, '0')}`;

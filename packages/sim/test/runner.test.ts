@@ -20,3 +20,23 @@ describe('sim runner', () => {
     }
   });
 });
+
+import { analyse, buildRoster, runStudyNight, SOLO } from '../src/study';
+import { createRng } from '@gn/engine';
+import { AGENT_KINDS } from '../src/world';
+
+describe('population study', () => {
+  it('rosters cover every type and tier over many nights', () => {
+    const rng = createRng(3);
+    const seen = new Set<string>();
+    for (let i = 0; i < 300; i++) for (const r of buildRoster(rng, 20)) seen.add(`${r.agent}|${r.tier}`);
+    expect(seen.size).toBe(AGENT_KINDS.length * 3);
+    expect(SOLO).toHaveLength(25);
+  });
+  it('every agent type runs without breaking the ledger', () => {
+    const s = resolveSettings(PARAM_SETS.find((p) => p.name === 'recommended')!.settings);
+    const nights = [1, 2, 3, 4, 5, 6].map((i) => runStudyNight(i, i % 2 ? 12 : 20, s));
+    expect(nights.every((n) => n.playerRows.length === n.players)).toBe(true);
+    expect(analyse(nights).cells.size).toBe(AGENT_KINDS.length * 3);
+  });
+});

@@ -27,7 +27,7 @@ import {
   type MoodReading,
   type Settings,
 } from '@gn/engine';
-import { AGENTS, agentMix, coalitionStep } from './agents';
+import { AGENTS, agentMix, coalitionStep, kingmakerStep, TRAITS, voteStyle } from './agents';
 import {
   active,
   addGold,
@@ -37,6 +37,7 @@ import {
   type ActiveGame,
   type AgentKind,
   type SimPlayer,
+  type SkillTier,
   type World,
 } from './world';
 
@@ -53,6 +54,8 @@ export interface NightOptions {
   inGameActivity: number;
   /** Minutes between coalition pump rounds (min, max). */
   coalitionGapMinutes: [number, number];
+  /** Explicit players (type + skill) for the population study. Overrides the default mix. */
+  roster?: { agent: AgentKind; skill: number; tier: SkillTier }[];
   /** Optional observers for example/trace output. Not used by the batch runs. */
   hooks?: {
     onTick?(w: World, nightMin: number): void;
@@ -87,6 +90,22 @@ export interface NightMetrics {
   marketPnlByAgent: Partial<Record<AgentKind, number[]>>;
   /** Gold sources: winner and average player. */
   sources: { winnerGamesH: number; winnerTradeH: number; avgGamesH: number; avgOtherH: number; avgFinalH: number };
+  /** One row per starting player (population study). */
+  playerRows: PlayerRow[];
+}
+
+export interface PlayerRow {
+  agent: AgentKind;
+  tier: SkillTier | null;
+  skill: number;
+  goldH: number;
+  gamesH: number;
+  tradeH: number;
+  bountyH: number;
+  rank: number;
+  won: boolean;
+  top3: boolean;
+  gamesPlayed: number;
 }
 
 const G = (g: number) => Math.round(g * 100);
@@ -98,15 +117,20 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
   const lastEndMin = opts.lengthMinutes - 15;
   const minToTick = (m: number) => Math.round((m * 60_000) / tickMs);
 
-  const mix = agentMix(opts.players);
-  // shuffle agents onto players
-  for (let i = mix.length - 1; i > 0; i--) {
-    const j = rng.int(0, i);
-    [mix[i], mix[j]] = [mix[j]!, mix[i]!];
+  const mix = opts.roster ? opts.roster.map((r) => r.agent) : agentMix(opts.players);
+  const skills = opts.roster?.map((r) => r.skill);
+  const tiers = opts.roster?.map((r) => r.tier);
+  if (!opts.roster) {
+    // shuffle agents onto players
+    for (let i = mix.length - 1; i > 0; i--) {
+      const j = rng.int(0, i);
+      [mix[i], mix[j]] = [mix[j]!, mix[i]!];
+    }
   }
   const players: SimPlayer[] = mix.map((agent, i) => ({
     id: `P${i + 1}`,
-    skill: rng.normal(),
+    skill: skills ? skills[i]! : rng.normal(),
+    tier: tiers?.[i],
     agent,
     joinedTick: 0,
     leftTick: null,
@@ -148,6 +172,11 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
       sellTick: 0,
       costs: new Map(),
     },
+    priceHist: new Map(securities.map((s) => [s.id, [s.price]])),
+    recent: [],
+    dethroned: [],
+    quarter: { n: null, phase: 'pre' },
+    kingmaker: { members: players.filter((p) => p.agent === 'kingmaker').map((p) => p.id), targetPid: null, quarter: null, costs: new Map(), sellTick: 0 },
   };
   for (const p of players) addGold(w, p.id, toH(settings.stake.startingGold), true);
 
@@ -168,6 +197,7 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
   let kingfalls = 0;
   let bountyPaidH = 0;
   let mid: { leader: string[]; bottom: string[] } | null = null;
+  const gamesPlayed = new Map<string, number>();
 
   // stats
   let playerDeltaSum = 0;
@@ -257,11 +287,18 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
       w.ledger.results.push(g.result);
       for (const row of scoreGame(g.result, settings).rows) addGold(w, row.playerId, row.goldH, true);
       opts.hooks?.onResult?.(w, g.result, (w.tick * tickMs) / 60_000);
-      for (const pp of g.result.participants) {
+      const r = g.result;
+      const maxPlace = Math.max(0, ...r.participants.filter((x) => !x.dnf && x.placement != null).map((x) => x.placement!));
+      for (const pp of r.participants) {
         const p = w.players.find((x) => x.id === pp.playerId)!;
         p.inGame = false;
-        p.busyUntil = w.tick + minToTick(rng.int(3, 10));
+        const gap = TRAITS[p.agent]?.gap ?? [3, 10];
+        p.busyUntil = w.tick + minToTick(rng.int(gap[0], gap[1]));
+        const won = r.mode === 'coop' ? !!r.coopWon : !pp.dnf && pp.placement === 1;
+        const lastPlace = r.mode === 'coop' ? !r.coopWon : !!pp.dnf || pp.placement === maxPlace;
+        w.recent.push({ tick: w.tick, playerId: p.id, won, lastPlace });
       }
+      for (const pp of r.participants) gamesPlayed.set(pp.playerId, (gamesPlayed.get(pp.playerId) ?? 0) + 1);
       award();
     }
   };
@@ -274,6 +311,7 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
         const pick = rng.next() < 0.4 + 0.5 * progress ? rng.pick(g.winners) : rng.pick(ids);
         const t = tapLeader(g.crown, pick, w.tick * tickMs, settings);
         g.crown = t.state;
+        if (t.dethroned) w.dethroned.push({ tick: w.tick, playerId: t.dethroned.from });
         if (t.kingfall) {
           kingfalls++;
           const imp = kingfallImpulse(w.securities, settings);
@@ -317,6 +355,7 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
   const voteEvents = (nightMin: number) => {
     const pos = quarterAt(schedule, nightMin);
     const q = pos.quarter?.n ?? null;
+    w.quarter = { n: q, phase: pos.phase };
     if (q !== openQuarter) {
       if (openQuarter !== null) resolveOpenQuarter();
       if (q !== null) {
@@ -341,8 +380,8 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
   };
 
   const chooseVote = (p: SimPlayer): string => {
-    if (p.agent === 'selfPumper') return p.id;
-    if (p.agent === 'coalition') return w.coalition.members[0]!;
+    const styled = voteStyle(w, p);
+    if (styled && active(w).some((x) => x.id === styled)) return styled;
     const r = ranksBy(w, (id) => netWorthH(w, id));
     const ids = [...r.keys()];
     const x = rng.next();
@@ -392,7 +431,7 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
     }
     if (w.tick === leaveTick) pendingLeave = true;
     if (pendingLeave) {
-      const cand = active(w).filter((p) => !p.inGame && p.agent !== 'coalition');
+      const cand = active(w).filter((p) => !p.inGame && p.agent !== 'coalition' && p.agent !== 'kingmaker');
       if (cand.length) {
         const p = rng.pick(cand);
         p.leftTick = w.tick;
@@ -444,8 +483,9 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
 
     // Agents trade at current prices.
     coalitionStep(w);
+    kingmakerStep(w);
     for (const p of active(w)) {
-      if (p.inGame && rng.next() > opts.inGameActivity) continue;
+      if (p.inGame && rng.next() > opts.inGameActivity * (TRAITS[p.agent]?.phone ?? 1)) continue;
       AGENTS[p.agent](w, p);
     }
 
@@ -455,6 +495,12 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
     const res = tickMarket(w.securities, { earned: earnedActive, drift, mood: moodBiasMap(moods, w.tick, settings), impulses: w.impulses }, settings, rng);
     w.securities = res.securities;
     w.impulses = [];
+    for (const s of w.securities) {
+      const h = w.priceHist.get(s.id) ?? [];
+      h.push(s.price);
+      if (h.length > 30) h.shift();
+      w.priceHist.set(s.id, h);
+    }
     tradingTicks++;
     for (const s of w.securities) {
       const p0 = prev.get(s.id)!;
@@ -536,6 +582,25 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
     kingfalls,
     games: w.results.length,
     marketPnlByAgent,
+    playerRows: w.players
+      .filter((p) => p.joinedTick === 0)
+      .map((p) => {
+        const l = end.ledger.get(p.id)!;
+        const rank = end.podium.find((r) => r.playerId === p.id)!.rank;
+        return {
+          agent: p.agent,
+          tier: p.tier ?? null,
+          skill: p.skill,
+          goldH: l.cashH,
+          gamesH: l.resultsH,
+          tradeH: l.tradeFlowH,
+          bountyH: l.bountiesH,
+          rank,
+          won: rank === 1,
+          top3: rank <= 3,
+          gamesPlayed: gamesPlayed.get(p.id) ?? 0,
+        };
+      }),
     sources: (() => {
       const rows = [...end.ledger.values()];
       const avg = (f: (r: (typeof rows)[number]) => number) => rows.reduce((a, r) => a + f(r), 0) / rows.length;

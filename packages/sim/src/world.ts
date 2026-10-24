@@ -14,13 +14,77 @@ import {
   type Settings,
 } from '@gn/engine';
 
-export type AgentKind = 'holder' | 'trader' | 'selfPumper' | 'coalition' | 'gambler' | 'random' | 'inactive';
-export const AGENT_KINDS: AgentKind[] = ['holder', 'trader', 'selfPumper', 'coalition', 'gambler', 'random', 'inactive'];
+export const AGENT_KINDS = [
+  // original 7
+  'holder',
+  'trader',
+  'selfPumper',
+  'coalition',
+  'gambler',
+  'random',
+  'inactive',
+  // added 20
+  'crownChaser',
+  'contrarian',
+  'momentum',
+  'loyalFriend',
+  'indexHugger',
+  'panicSeller',
+  'bagholder',
+  'profitLocker',
+  'yolo',
+  'lateTrader',
+  'earlyBird',
+  'feeAware',
+  'eventSpec',
+  'deadLoneWolf',
+  'leaderVoter',
+  'underdogVoter',
+  'kingmaker',
+  'soreLoser',
+  'grinder',
+  'butterfly',
+] as const;
+export type AgentKind = (typeof AGENT_KINDS)[number];
+
+/** Plain-language names for reports. */
+export const AGENT_LABEL: Record<AgentKind, string> = {
+  holder: 'Buy & hold',
+  trader: 'Active trader',
+  selfPumper: 'Self-pumper',
+  coalition: 'Pump crew',
+  gambler: 'Crypto gambler',
+  random: 'Random clicker',
+  inactive: 'Never trades',
+  crownChaser: 'Crown chaser',
+  contrarian: 'Contrarian',
+  momentum: 'Momentum chaser',
+  loyalFriend: 'Loyal friend',
+  indexHugger: 'Index hugger',
+  panicSeller: 'Panic seller',
+  bagholder: 'Bagholder',
+  profitLocker: 'Profit locker',
+  yolo: 'All-in YOLO',
+  lateTrader: 'Late-night trader',
+  earlyBird: 'Early bird',
+  feeAware: 'Fee-aware minimalist',
+  eventSpec: 'Event-stock speculator',
+  deadLoneWolf: 'Dead-stock lone wolf',
+  leaderVoter: 'Leader voter',
+  underdogVoter: 'Underdog voter',
+  kingmaker: 'Kingmaker crew',
+  soreLoser: 'Sore loser',
+  grinder: 'Game grinder',
+  butterfly: 'Social butterfly',
+};
+
+export type SkillTier = 'low' | 'mid' | 'high';
 
 export interface SimPlayer {
   id: string;
   skill: number;
   agent: AgentKind;
+  tier?: SkillTier;
   joinedTick: number;
   leftTick: number | null;
   gotStake: boolean;
@@ -78,6 +142,16 @@ export interface World {
   results: GameResult[];
   trips: { selfPump: RoundTrip[]; coalition: RoundTrip[] };
   coalition: { members: string[]; targetId: string; phase: 'idle' | 'holding'; nextTick: number; sellTick: number; gap: [number, number]; costs: Map<string, GoldH> };
+  /** Recent prices per security (newest last, up to 30). */
+  priceHist: Map<string, number[]>;
+  /** Finished-game placements, newest last. */
+  recent: { tick: number; playerId: string; won: boolean; lastPlace: boolean }[];
+  /** Players who lost a crown, newest last. */
+  dethroned: { tick: number; playerId: string }[];
+  /** Current quarter and phase (pre/window/drift/post). */
+  quarter: { n: number | null; phase: string };
+  /** Kingmaker crew: votes for and buys one mid-ranked player each quarter. */
+  kingmaker: { members: string[]; targetPid: string | null; quarter: number | null; costs: Map<string, GoldH>; sellTick: number };
 }
 
 export const now = (w: World) => w.tick * w.tickMs;
