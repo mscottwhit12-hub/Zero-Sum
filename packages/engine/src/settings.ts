@@ -43,6 +43,8 @@ export interface Settings {
     /** Max |Δprice| per tick as a fraction of the previous price. */
     maxChangeFrac: number;
     feeFrac: number;
+    /** Night-end auto-sell: fee on profit only, per position (player × security). Losing positions pay nothing. */
+    endSellProfitFeeFrac: number;
     investCap: number;
     minTrade: number;
     lockoutMinutes: number;
@@ -143,6 +145,7 @@ export const DEFAULT_SETTINGS: Settings = {
     tickSeconds: 20,
     maxChangeFrac: 0.3,
     feeFrac: 0,
+    endSellProfitFeeFrac: 0.1,
     investCap: 50,
     minTrade: 1,
     lockoutMinutes: 5,
@@ -244,6 +247,7 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   need(m.tickSeconds >= 15 && m.tickSeconds <= 30, 'market.tickSeconds', 'must be 15–30');
   frac(m.maxChangeFrac, 'market.maxChangeFrac');
   frac(m.feeFrac, 'market.feeFrac');
+  frac(m.endSellProfitFeeFrac, 'market.endSellProfitFeeFrac');
   pos(m.investCap, 'market.investCap');
   pos(m.minTrade, 'market.minTrade');
   nonNeg(m.lockoutMinutes, 'market.lockoutMinutes');

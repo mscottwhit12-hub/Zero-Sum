@@ -191,10 +191,11 @@ function consumeFifo(lots: Lot[], sharesH: SharesH, now: number, ignoreLock: boo
 }
 
 /**
- * Night end: every lot auto-sells at full pre-crash price, ignoring lockout and fee.
- * Returns one forced sell trade per (player, security).
+ * Night end: every lot auto-sells at the pre-crash price, ignoring lockout and the normal trade fee.
+ * Fee = profitFeeFrac × profit per position (player × security); a losing or flat position pays nothing.
+ * Returns one forced sell trade per position.
  */
-export function liquidateAll(lots: Lot[], priceBySecurity: Map<string, number>): TradeRecord[] {
+export function liquidateAll(lots: Lot[], priceBySecurity: Map<string, number>, profitFeeFrac = 0): TradeRecord[] {
   const groups = new Map<string, Lot[]>();
   for (const l of lots) {
     if (l.sharesH <= 0) continue;
@@ -210,7 +211,9 @@ export function liquidateAll(lots: Lot[], priceBySecurity: Map<string, number>):
     if (price === undefined) throw new Error(`no price for ${first.securityId}`);
     const sharesH = g.reduce((a, l) => a + l.sharesH, 0);
     const basisH = g.reduce((a, l) => a + l.costBasisH, 0);
-    const cashH = valueH(sharesH, price);
+    const grossH = valueH(sharesH, price);
+    const feeH = grossH > basisH ? Math.round((grossH - basisH) * profitFeeFrac) : 0;
+    const cashH = grossH - feeH;
     trades.push({
       playerId: first.playerId,
       securityId: first.securityId,
@@ -218,7 +221,7 @@ export function liquidateAll(lots: Lot[], priceBySecurity: Map<string, number>):
       sharesH,
       price,
       cashH,
-      feeH: 0,
+      feeH,
       basisH,
       realizedH: cashH - basisH,
       forced: true,

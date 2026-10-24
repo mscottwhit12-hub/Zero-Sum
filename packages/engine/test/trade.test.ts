@@ -93,9 +93,23 @@ describe('sell', () => {
 });
 
 describe('liquidateAll', () => {
-  it('sells everything at full price ignoring lockout and fee', () => {
-    const t = liquidateAll([lot('A', 20, 1000, 0), lot('B', 20, 800, 0)], new Map([['x', 70]]));
+  const lots = [lot('A', 20, 1000, 0), lot('B', 20, 800, 0)];
+  it('ignores lockout; no fee when profitFeeFrac is 0', () => {
+    const t = liquidateAll(lots, new Map([['x', 70]]));
     expect(t).toHaveLength(1);
     expect(t[0]).toMatchObject({ sharesH: 40, cashH: 2800, feeH: 0, basisH: 1800, realizedH: 1000, forced: true });
+  });
+  it('10% of profit: 28.00 − 18.00 basis = 10.00 profit → fee 1.00, receives 27.00', () => {
+    const t = liquidateAll(lots, new Map([['x', 70]]), 0.1);
+    expect(t[0]).toMatchObject({ cashH: 2700, feeH: 100, realizedH: 900 });
+  });
+  it('losing position pays no fee', () => {
+    const t = liquidateAll(lots, new Map([['x', 40]]), 0.1);
+    expect(t[0]).toMatchObject({ cashH: 1600, feeH: 0, realizedH: -200 });
+  });
+  it('fee is per position, not per lot', () => {
+    // A bought at 50, B at 40; at 45: A −1.00, B +1.00 → net 0 → no fee
+    const t = liquidateAll(lots, new Map([['x', 45]]), 0.1);
+    expect(t[0]).toMatchObject({ cashH: 1800, feeH: 0 });
   });
 });

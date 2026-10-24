@@ -32,7 +32,7 @@ export interface EndNightResult {
 /**
  * End sequence:
  *  1. Force-resolve the open quarter on net worth (holdings still open) and pay its bounty.
- *  2. Auto-sell every holding at full pre-crash price (no lockout, no fee).
+ *  2. Auto-sell every holding at the pre-crash price (no lockout); fee on profits only.
  *  3. Re-derive the ledger; podium by gold.
  */
 export function endNight(input: EndNightInput, settings: Settings): EndNightResult {
@@ -49,7 +49,7 @@ export function endNight(input: EndNightInput, settings: Settings): EndNightResu
     ledgerInput = { ...ledgerInput, bounties: [...ledgerInput.bounties, ...quarter.payouts] };
   }
 
-  const liquidations = liquidateAll(input.lots, prices);
+  const liquidations = liquidateAll(input.lots, prices, settings.market.endSellProfitFeeFrac);
   ledgerInput = {
     ...ledgerInput,
     tradeFlows: [...ledgerInput.tradeFlows, ...liquidations.map((t) => ({ playerId: t.playerId, cashH: t.cashH }))],

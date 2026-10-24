@@ -227,9 +227,10 @@ describe('end night (locked #3)', () => {
     );
     expect(r.quarter!.winners).toEqual(['a']);
     expect(r.quarter!.payouts).toEqual([{ playerId: 'b', goldH: 200 }]);
-    expect(r.liquidations[0]).toMatchObject({ cashH: 2000, forced: true });
+    // 20.00 value − 10.00 basis = 10.00 profit → 10% fee = 1.00
+    expect(r.liquidations[0]).toMatchObject({ cashH: 1900, feeH: 100, forced: true });
     expect(r.podium.map((p) => [p.playerId, p.goldH, p.rank])).toEqual([
-      ['a', 3000, 1],
+      ['a', 2900, 1],
       ['b', 2700, 2],
     ]);
   });

@@ -1,16 +1,47 @@
 {
   "currency": "gold",
   "securities": {
-    "index": { "name": "Blue Chip Composite", "blurb": "A diversified basket of associates. Board-approved." },
-    "crypto": { "name": "PlaceholderCoin", "blurb": "Crypto. Past performance is not indicative of anything." },
-    "event-reroll": { "name": "Second Chance Insurance Co.", "blurb": "Underwriting regret since tonight." },
-    "event-espionage": { "name": "Shadow Logistics", "blurb": "Discreet deliveries. No questions answered." },
-    "dead": { "name": "Defunct Holdings", "blurb": "Delisting pending. Probably." }
+    "index": {
+      "name": "Blue Chip Composite",
+      "blurb": "A diversified basket of associates. Board-approved."
+    },
+    "crypto": {
+      "name": "PlaceholderCoin",
+      "blurb": "Crypto. Past performance is not indicative of anything."
+    },
+    "event-reroll": {
+      "name": "Second Chance Insurance Co.",
+      "blurb": "Underwriting regret since tonight."
+    },
+    "event-espionage": {
+      "name": "Shadow Logistics",
+      "blurb": "Discreet deliveries. No questions answered."
+    },
+    "dead": {
+      "name": "Defunct Holdings",
+      "blurb": "Delisting pending. Probably."
+    }
   },
   "achievements": {
-    "first_blood": { "name": "First Mover", "text": "Closed the night's first deal." },
-    "hat_trick": { "name": "Hostile Takeover", "text": "Three wins. Regulators notified." },
-    "regular": { "name": "Committed Associate", "text": "Four games played. HR is pleased." },
-    "oracle": { "name": "Market Oracle", "text": "Two correct calls. Purely ceremonial." }
+    "first_blood": {
+      "name": "First Mover",
+      "text": "Closed the night's first deal."
+    },
+    "hat_trick": {
+      "name": "Hostile Takeover",
+      "text": "Three wins. Regulators notified."
+    },
+    "regular": {
+      "name": "Committed Associate",
+      "text": "Four games played. HR is pleased."
+    },
+    "oracle": {
+      "name": "Market Oracle",
+      "text": "Two correct calls. Purely ceremonial."
+    }
+  },
+  "tradingClose": {
+    "warning": "Trading desks are closing. Positions still open at collapse will be liquidated automatically. A {pct}% compliance fee applies to profits. Losses are exempt, out of sympathy.",
+    "closed": "Trading desks are closed. Please liquidate your conscience."
   }
 }
