@@ -33,6 +33,11 @@ describe('settings', () => {
   it('defaults are valid', () => {
     expect(validateSettings(DEFAULT_SETTINGS)).toEqual([]);
   });
+  it('defaults are the sim-tuned market (approved Oct 24 2026)', () => {
+    const m = DEFAULT_SETTINGS.market;
+    expect([DEFAULT_SETTINGS.scoring.goldScale, m.feeFrac, m.investCap, m.player.reversion]).toEqual([3, 0.03, 25, 0.2]);
+    expect([m.crypto.sigma, m.crypto.reversion, m.crypto.kingfallFrac, m.impact.dead, m.dead.reversion]).toEqual([0.07, 0.05, 0.1, 0.06, 0.02]);
+  });
   it('partial override merges deeply; arrays replace', () => {
     const s = resolveSettings({ market: { bands: { crypto: { min: 2, max: 200 } } }, scoring: { placementMults: [1] } });
     expect(s.market.bands.crypto).toEqual({ min: 2, max: 200 });

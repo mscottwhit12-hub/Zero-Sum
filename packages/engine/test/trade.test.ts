@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buy, capRemainingH, liquidateAll, resolveSettings, sell, type Lot, type SecurityState, type TradeGate } from '../src';
+import { buy, capRemainingH, liquidateAll, sell, type Lot, type SecurityState, type TradeGate } from '../src';
+import { spec } from './fixtures';
 
-const S = resolveSettings();
+const S = spec();
 const sec = (price: number, kind: SecurityState['kind'] = 'player'): SecurityState => ({
   id: 'x',
   kind,
@@ -38,7 +39,7 @@ describe('buy', () => {
     expect(r.lot.costBasisH).toBe(990);
   });
   it('fee 5%: 10 gold at 50 → 0.19 sh, cost 9.50 + fee 0.48 = 9.98', () => {
-    const s = resolveSettings({ market: { feeFrac: 0.05 } });
+    const s = spec({ market: { feeFrac: 0.05 } });
     const r = buy({ playerId: 'a', security: sec(50), goldH: 1000, cashH: 2000, lots: [], gate, lotId: 'l1' }, s);
     if (!r.ok) throw new Error(r.error);
     expect(r.lot.sharesH).toBe(19);
@@ -94,7 +95,7 @@ describe('sell', () => {
 
 describe('slippage', () => {
   it('half-impact slippage: buy fills at 50 × 1.01, sell at 60 × 0.99', () => {
-    const s = resolveSettings({ market: { slippage: 0.5 } });
+    const s = spec({ market: { slippage: 0.5 } });
     const b = buy({ playerId: 'a', security: sec(50), goldH: 1010, cashH: 2000, lots: [], gate, lotId: 'l' }, s);
     if (!b.ok) throw new Error(b.error);
     expect(b.trade.price).toBeCloseTo(50.5);
@@ -104,7 +105,7 @@ describe('slippage', () => {
     expect(r.trade.cashH).toBe(1188); // 0.20 × 59.4
   });
   it('index never slips', () => {
-    const s = resolveSettings({ market: { slippage: 1 } });
+    const s = spec({ market: { slippage: 1 } });
     const b = buy({ playerId: 'a', security: sec(50, 'index'), goldH: 1000, cashH: 2000, lots: [], gate, lotId: 'l' }, s);
     expect(b.ok && b.trade.price).toBe(50);
   });

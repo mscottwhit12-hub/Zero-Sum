@@ -28,7 +28,20 @@ const tunedMarket = {
 const tunedCap30 = { ...tunedMarket, investCap: 30, player: { reversion: 0.2 } };
 
 export const PARAM_SETS: ParamSet[] = [
-  { name: 'baseline', note: 'Spec §20 market defaults, game gold ×3.', settings: {} },
+  {
+    name: 'spec-original',
+    note: 'Original spec §20 market values with game gold ×3. For comparison only.',
+    settings: {
+      market: {
+        feeFrac: 0,
+        investCap: 50,
+        impact: { player: 0.02, index: 0, crypto: 0.06, event: 0.02, dead: 0.08 },
+        player: { reversion: 0.1 },
+        crypto: { sigma: 0.1, reversion: 0.03, kingfallFrac: 0.2 },
+        dead: { reversion: 0.01 },
+      },
+    },
+  },
   {
     name: 'old-x1-tuned',
     note: 'Previous recommendation (game gold ×1, 3% fee, cap 30). For comparison only.',
@@ -36,8 +49,8 @@ export const PARAM_SETS: ParamSet[] = [
   },
   {
     name: 'recommended',
-    note: 'Game gold ×3, 3% trade fee, invest cap 25, faster player-price catch-up, calmer crypto, gentler dead stock.',
-    settings: { market: { ...tunedCap30, investCap: 25 } },
+    note: 'Engine defaults (approved): game gold ×3, 3% trade fee, invest cap 25, faster player-price catch-up, calmer crypto, gentler dead stock.',
+    settings: {},
   },
   {
     name: 'slippage-alt',

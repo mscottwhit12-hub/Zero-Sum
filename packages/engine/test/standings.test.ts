@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { computeStandings, deriveLedger, formatGold, leaders, resolveSettings, toH, type LedgerInput } from '../src';
+import { computeStandings, deriveLedger, formatGold, leaders, toH, type LedgerInput } from '../src';
+import { spec } from './fixtures';
 
-// Worked examples use the raw formula (game gold ×1).
-const x1 = (p: Parameters<typeof resolveSettings>[0] = {}) => resolveSettings(p, resolveSettings({ scoring: { goldScale: 1 } }));
+// Worked examples use the original spec values (game gold ×1).
+const x1 = spec;
 
 const S = x1();
 

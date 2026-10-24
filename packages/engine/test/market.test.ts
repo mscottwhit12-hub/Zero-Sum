@@ -17,8 +17,9 @@ import {
   type Rng,
   type SecurityState,
 } from '../src';
+import { spec } from './fixtures';
 
-const S = resolveSettings();
+const S = spec();
 const band = S.market.bands.player; // 30–80
 
 const player = (price: number, extra: Partial<SecurityState> = {}): SecurityState => ({

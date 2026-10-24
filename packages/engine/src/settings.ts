@@ -138,6 +138,10 @@ export interface Settings {
   };
 }
 
+/**
+ * Defaults = the simulation-tuned market (Phase 2, approved Oct 24 2026; subject to change).
+ * Original spec §20 values are kept in the sim as the 'spec-original' parameter set.
+ */
 export const DEFAULT_SETTINGS: Settings = {
   scoring: {
     placementMults: [1.0, 0.5, 0.25],
@@ -152,9 +156,9 @@ export const DEFAULT_SETTINGS: Settings = {
   market: {
     tickSeconds: 20,
     maxChangeFrac: 0.3,
-    feeFrac: 0,
+    feeFrac: 0.03,
     endSellProfitFeeFrac: 0.1,
-    investCap: 50,
+    investCap: 25,
     minTrade: 1,
     lockoutMinutes: 5,
     bands: {
@@ -164,26 +168,26 @@ export const DEFAULT_SETTINGS: Settings = {
       event: { min: 10, max: 100 },
       dead: { min: 1, max: 40 },
     },
-    impact: { player: 0.02, index: 0, crypto: 0.06, event: 0.02, dead: 0.08 },
+    impact: { player: 0.02, index: 0, crypto: 0.06, event: 0.02, dead: 0.06 },
     slippage: 0,
     player: {
       fairInnerLo: 0.15,
       fairInnerHi: 0.85,
-      reversion: 0.1,
+      reversion: 0.2,
       leaverDecay: 0.02,
       espionageFrac: 0.03,
     },
     index: { scale: 1, smoothing: 0.3 },
     crypto: {
-      sigma: 0.1,
-      reversion: 0.03,
+      sigma: 0.07,
+      reversion: 0.05,
       baselineAlpha: 0.002,
       startFrac: 0.25,
-      kingfallFrac: 0.2,
+      kingfallFrac: 0.1,
       kingfallHoldMinutes: 15,
     },
     event: { startFrac: 0.35, floorFrac: 0.1, decay: 0.005, bump: 0.08, reversion: 0.1 },
-    dead: { baselineFrac: 0.05, reversion: 0.01 },
+    dead: { baselineFrac: 0.05, reversion: 0.02 },
   },
   votes: {
     quarterCount: 4,
