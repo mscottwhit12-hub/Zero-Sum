@@ -52,6 +52,12 @@ export interface TradeGate {
 
 type Fail = { ok: false; error: TradeError };
 
+/** Fill price including slippage on the trade's own impact (index has no impact, so no slippage). */
+export function fillPrice(security: SecurityState, side: 'buy' | 'sell', settings: Settings): number {
+  const slip = settings.market.slippage * (security.kind === 'index' ? 0 : settings.market.impact[security.kind]);
+  return security.price * (side === 'buy' ? 1 + slip : 1 - slip);
+}
+
 function gateCheck(g: TradeGate): Fail | null {
   if (!g.marketOpen) return { ok: false, error: 'market_closed' };
   if (g.lastTradeTick != null && g.lastTradeTick === g.tick) return { ok: false, error: 'rate_limited' };
@@ -91,7 +97,7 @@ export function buy(input: BuyInput, settings: Settings): BuyResult {
   const m = settings.market;
   if (input.goldH < toH(m.minTrade)) return { ok: false, error: 'below_minimum' };
   if (input.goldH > input.cashH) return { ok: false, error: 'insufficient_gold' };
-  const price = input.security.price;
+  const price = fillPrice(input.security, 'buy', settings);
   const feeOnRequest = Math.round(input.goldH * m.feeFrac);
   const sharesH = Math.floor((input.goldH - feeOnRequest) / price);
   if (sharesH <= 0) return { ok: false, error: 'too_small' };
@@ -146,7 +152,7 @@ export function sell(input: SellInput, settings: Settings): SellResult {
   if (want <= 0) return { ok: false, error: unlocked === 0 ? 'locked' : 'too_small' };
   if (want > unlocked) return { ok: false, error: want > total ? 'no_shares' : 'locked' };
 
-  const price = input.security.price;
+  const price = fillPrice(input.security, 'sell', settings);
   const grossH = valueH(want, price);
   if (grossH < toH(settings.market.minTrade) && want !== unlocked) return { ok: false, error: 'below_minimum' };
   const feeH = Math.round(grossH * settings.market.feeFrac);

@@ -51,6 +51,11 @@ export interface Settings {
     bands: Record<SecurityKind, Band>;
     /** Trade impact per trade, fraction of price. Index ignores this (never impacted). */
     impact: Record<SecurityKind, number>;
+    /**
+     * Fraction of a trade's own impact the trader pays at execution (buy fills at price × (1 + slippage × impact),
+     * sell at price × (1 − slippage × impact)). 0 = spec behavior: fill at the current price, nudge next tick.
+     */
+    slippage: number;
     player: {
       /** Rank fair is spread across this sub-range of the band (fractions of width). */
       fairInnerLo: number;
@@ -157,6 +162,7 @@ export const DEFAULT_SETTINGS: Settings = {
       dead: { min: 1, max: 40 },
     },
     impact: { player: 0.02, index: 0, crypto: 0.06, event: 0.02, dead: 0.08 },
+    slippage: 0,
     player: {
       fairInnerLo: 0.15,
       fairInnerHi: 0.85,
@@ -168,7 +174,7 @@ export const DEFAULT_SETTINGS: Settings = {
     crypto: {
       sigma: 0.1,
       reversion: 0.03,
-      baselineAlpha: 0.01,
+      baselineAlpha: 0.002,
       startFrac: 0.25,
       kingfallFrac: 0.2,
       kingfallHoldMinutes: 15,
@@ -247,6 +253,7 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   need(m.tickSeconds >= 15 && m.tickSeconds <= 30, 'market.tickSeconds', 'must be 15–30');
   frac(m.maxChangeFrac, 'market.maxChangeFrac');
   frac(m.feeFrac, 'market.feeFrac');
+  frac(m.slippage, 'market.slippage');
   frac(m.endSellProfitFeeFrac, 'market.endSellProfitFeeFrac');
   pos(m.investCap, 'market.investCap');
   pos(m.minTrade, 'market.minTrade');

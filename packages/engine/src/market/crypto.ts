@@ -16,7 +16,9 @@ export function tickCrypto(
   const s = settings.market.crypto;
   const band = settings.market.bands.crypto;
   const baseline = sec.baseline ?? sec.price;
-  const shock = s.sigma * rng.normal();
+  // Log-space reversion to a slow baseline keeps it stationary (no collapse to the floor, no runaway).
+  // −σ²/2: price-martingale shocks, so buying a fixed gold amount at a random time has ~zero expected gain.
+  const shock = s.sigma * rng.normal() - (s.sigma * s.sigma) / 2;
   const logRet = shock + s.reversion * Math.log(baseline / sec.price);
   const model = sec.price * Math.exp(logRet);
   const c = applyImpulsesAndClamp(sec.price, model, impulses, band, settings.market.maxChangeFrac);

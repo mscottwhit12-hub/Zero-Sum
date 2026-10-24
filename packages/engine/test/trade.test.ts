@@ -92,6 +92,24 @@ describe('sell', () => {
   });
 });
 
+describe('slippage', () => {
+  it('half-impact slippage: buy fills at 50 × 1.01, sell at 60 × 0.99', () => {
+    const s = resolveSettings({ market: { slippage: 0.5 } });
+    const b = buy({ playerId: 'a', security: sec(50), goldH: 1010, cashH: 2000, lots: [], gate, lotId: 'l' }, s);
+    if (!b.ok) throw new Error(b.error);
+    expect(b.trade.price).toBeCloseTo(50.5);
+    expect(b.lot.sharesH).toBe(20);
+    const r = sell({ playerId: 'a', security: sec(60), sharesH: 20, lots: [b.lot], gate: { ...gate, now: 5 * MIN } }, s);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.trade.cashH).toBe(1188); // 0.20 × 59.4
+  });
+  it('index never slips', () => {
+    const s = resolveSettings({ market: { slippage: 1 } });
+    const b = buy({ playerId: 'a', security: sec(50, 'index'), goldH: 1000, cashH: 2000, lots: [], gate, lotId: 'l' }, s);
+    expect(b.ok && b.trade.price).toBe(50);
+  });
+});
+
 describe('liquidateAll', () => {
   const lots = [lot('A', 20, 1000, 0), lot('B', 20, 800, 0)];
   it('ignores lockout; no fee when profitFeeFrac is 0', () => {

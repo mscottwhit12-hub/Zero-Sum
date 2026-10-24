@@ -101,10 +101,24 @@ describe('index', () => {
 
 describe('crypto', () => {
   const c: SecurityState = { id: 'crypto', kind: 'crypto', ticker: 'COIN', price: 40, baseline: 40, gmOffset: 0 };
-  it('no shock + no gap = flat; kingfall +20%', () => {
-    expect(tickCrypto(c, [], S, zeroRng).sec.price).toBe(40);
+  it('zero shock + no gap ≈ flat (only the −σ²/2 term); kingfall +20%', () => {
+    expect(tickCrypto(c, [], S, zeroRng).sec.price).toBeCloseTo(40 * Math.exp(-0.005), 3);
     const k = kingfallImpulse([c], S)!;
-    expect(tickCrypto(c, [k], S, zeroRng).sec.price).toBe(48);
+    expect(tickCrypto(c, [k], S, zeroRng).sec.price).toBeCloseTo(48 * Math.exp(-0.005), 3);
+  });
+  it('stationary over a night: no collapse to the floor, no runaway', () => {
+    let sumFinal = 0;
+    let atFloor = 0;
+    for (let seed = 1; seed <= 200; seed++) {
+      const rng = createRng(seed);
+      let x = c;
+      for (let t = 0; t < 900; t++) x = tickCrypto(x, [], S, rng).sec;
+      sumFinal += x.price / 40;
+      if (x.price < 8) atFloor++;
+    }
+    expect(sumFinal / 200).toBeGreaterThan(0.8);
+    expect(sumFinal / 200).toBeLessThan(1.5);
+    expect(atFloor).toBeLessThan(10);
   });
   it('mean |log return| ≈ σ·√(2/π) over a long run', () => {
     const rng = createRng(42);
@@ -123,7 +137,7 @@ describe('crypto', () => {
   it('baseline follows price slowly', () => {
     const r = tickCrypto({ ...c, price: 50 }, [], S, zeroRng);
     expect(r.sec.baseline!).toBeGreaterThan(40);
-    expect(r.sec.baseline!).toBeLessThan(40.2);
+    expect(r.sec.baseline!).toBeLessThan(40.05);
   });
 });
 
