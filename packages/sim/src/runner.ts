@@ -53,6 +53,13 @@ export interface NightOptions {
   inGameActivity: number;
   /** Minutes between coalition pump rounds (min, max). */
   coalitionGapMinutes: [number, number];
+  /** Optional observers for example/trace output. Not used by the batch runs. */
+  hooks?: {
+    onTick?(w: World, nightMin: number): void;
+    onResult?(w: World, result: GameResult, nightMin: number): void;
+    onBounty?(w: World, quarter: number, payouts: { playerId: string; goldH: number }[], winners: string[], nightMin: number): void;
+    onEnd?(w: World, end: ReturnType<typeof endNight>): void;
+  };
 }
 
 export interface NightMetrics {
@@ -218,7 +225,10 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
           id: `g${w.results.length + w.games.length}`,
           mode,
           actualHours: hours,
-          participants: order.map((o, i) => (rng.next() < 0.02 ? { playerId: o.p.id, dnf: true } : { playerId: o.p.id, placement: i + 1 })),
+          participants: (() => {
+            let place = 0;
+            return order.map((o) => (rng.next() < 0.02 ? { playerId: o.p.id, dnf: true } : { playerId: o.p.id, placement: ++place }));
+          })(),
         };
         winners = [order[0]!.p.id];
       }
@@ -244,6 +254,7 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
       w.results.push(g.result);
       w.ledger.results.push(g.result);
       for (const row of scoreGame(g.result, settings).rows) addGold(w, row.playerId, row.goldH, true);
+      opts.hooks?.onResult?.(w, g.result, (w.tick * tickMs) / 60_000);
       for (const pp of g.result.participants) {
         const p = w.players.find((x) => x.id === pp.playerId)!;
         p.inGame = false;
@@ -347,6 +358,7 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
 
   const resolveOpenQuarter = () => {
     const res = resolveQuarter(ballots, standingsRows(), settings);
+    opts.hooks?.onBounty?.(w, openQuarter ?? 0, res.payouts, res.winners, (w.tick * tickMs) / 60_000);
     for (const pay of res.payouts) {
       w.ledger.bounties.push(pay);
       addGold(w, pay.playerId, pay.goldH, true);
@@ -392,6 +404,7 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
   for (w.tick = 0; w.tick < totalTicks; w.tick++) {
     const nightMin = (w.tick * tickMs) / 60_000;
     finishGames();
+    opts.hooks?.onTick?.(w, nightMin);
     membershipEvents();
     startGames();
     gameEvents();
@@ -470,6 +483,7 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
     settings,
   );
   if (end.quarter) for (const p of end.quarter.payouts) bountyPaidH += p.goldH;
+  opts.hooks?.onEnd?.(w, end);
 
   // Sanity: incremental cash matches the engine's derivation before liquidation.
   const check = deriveLedger(w.ledger, settings);
