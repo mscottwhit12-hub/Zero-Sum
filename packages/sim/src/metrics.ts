@@ -80,6 +80,8 @@ export function aggregate(ms: NightMetrics[]): Aggregate {
     targets,
     extra: {
       'Winner gold (mean)': gold(mean(ms.map((m) => m.winnerGoldH))),
+      'Winner: from games / from trading (mean)': `${gold(mean(ms.map((m) => m.sources.winnerGamesH)))} / ${gold(mean(ms.map((m) => m.sources.winnerTradeH)))}`,
+      'Avg player: games / stake+other / final (mean)': `${gold(mean(ms.map((m) => m.sources.avgGamesH)))} / ${gold(mean(ms.map((m) => m.sources.avgOtherH)))} / ${gold(mean(ms.map((m) => m.sources.avgFinalH)))}`,
       'Games per night (mean)': mean(ms.map((m) => m.games)).toFixed(1),
       'Coalition on crypto': `ROI ${pct(cc.roi, 1)}, +${gold(cc.perMember)}/member, profitable ${pct(cc.profitable)}`,
       'Coalition on dead stock': `ROI ${pct(cd.roi, 1)}, +${gold(cd.perMember)}/member, profitable ${pct(cd.profitable)}`,

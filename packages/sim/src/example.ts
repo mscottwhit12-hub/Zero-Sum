@@ -9,7 +9,7 @@ import { netWorthH, type AgentKind, type World } from './world';
 
 const seed = Number(process.argv[2] ?? 1);
 const players = Number(process.argv[3] ?? 12);
-const setName = process.argv[4] ?? 'tuned-fee-cap30';
+const setName = process.argv[4] ?? 'recommended';
 const set = PARAM_SETS.find((s) => s.name === setName)!;
 const settings = resolveSettings(set.settings);
 

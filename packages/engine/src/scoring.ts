@@ -107,7 +107,7 @@ export function validateResult(r: GameResult): string[] {
   return errs;
 }
 
-/** gold = actual_hours × players_in_game × placement_mult, rounded once to hundredths. */
+/** gold = actual_hours × players_in_game × placement_mult × goldScale, rounded once to hundredths. */
 export function scoreGame(r: GameResult, settings: Settings): ScoredGame {
   const errs = validateResult(r);
   if (errs.length) throw new ScoringError(errs.join('; '));
@@ -132,7 +132,7 @@ export function scoreGame(r: GameResult, settings: Settings): ScoredGame {
 
   const rows = r.participants.map((p) => {
     const mult = mults.get(p.playerId)!;
-    return { playerId: p.playerId, mult, goldH: Math.round(r.actualHours * n * mult * 100) };
+    return { playerId: p.playerId, mult, goldH: Math.round(r.actualHours * n * mult * s.goldScale * 100) };
   });
   return { gameId: r.id, playersInGame: n, hours: r.actualHours, rows };
 }

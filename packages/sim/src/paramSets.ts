@@ -25,27 +25,29 @@ const tunedMarket = {
   dead: { reversion: 0.02 },
 };
 
+const tunedCap30 = { ...tunedMarket, investCap: 30, player: { reversion: 0.2 } };
+
 export const PARAM_SETS: ParamSet[] = [
-  { name: 'baseline', note: 'Spec §20 defaults (Phase 1 build, with the crypto model fix).', settings: {} },
+  { name: 'baseline', note: 'Spec §20 market defaults, game gold ×3.', settings: {} },
   {
-    name: 'tuned-fee',
-    note: '3% trade fee, faster player-price reversion, calmer crypto, gentler dead stock. Uses only existing settings.',
-    settings: { market: tunedMarket },
+    name: 'old-x1-tuned',
+    note: 'Previous recommendation (game gold ×1, 3% fee, cap 30). For comparison only.',
+    settings: { scoring: { goldScale: 1 }, market: tunedCap30 },
   },
   {
-    name: 'tuned-fee-cap30',
-    note: 'As tuned-fee, with slower player reversion (0.2) and invest cap 30.',
-    settings: { market: { ...tunedMarket, investCap: 30, player: { reversion: 0.2 } } },
+    name: 'recommended',
+    note: 'Game gold ×3, 3% trade fee, invest cap 25, faster player-price catch-up, calmer crypto, gentler dead stock.',
+    settings: { market: { ...tunedCap30, investCap: 25 } },
   },
   {
-    name: 'tuned-slippage',
-    note: 'NEW MECHANIC: traders pay half their own price impact at execution. 2% fee, narrower fair range (20–80%), cap 30.',
+    name: 'slippage-alt',
+    note: 'NEW MECHANIC alternative: traders pay half their own price impact. Game gold ×3, 2% fee, fair range 20–80%, cap 25.',
     settings: {
       market: {
         ...tunedMarket,
         feeFrac: 0.02,
         slippage: 0.5,
-        investCap: 30,
+        investCap: 25,
         player: { reversion: 0.3, fairInnerLo: 0.2, fairInnerHi: 0.8 },
         impact: { ...tunedMarket.impact, dead: 0.08 },
       },

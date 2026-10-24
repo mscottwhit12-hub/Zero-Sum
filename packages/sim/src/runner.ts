@@ -85,6 +85,8 @@ export interface NightMetrics {
   kingfalls: number;
   games: number;
   marketPnlByAgent: Partial<Record<AgentKind, number[]>>;
+  /** Gold sources: winner and average player. */
+  sources: { winnerGamesH: number; winnerTradeH: number; avgGamesH: number; avgOtherH: number; avgFinalH: number };
 }
 
 const G = (g: number) => Math.round(g * 100);
@@ -534,5 +536,16 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
     kingfalls,
     games: w.results.length,
     marketPnlByAgent,
+    sources: (() => {
+      const rows = [...end.ledger.values()];
+      const avg = (f: (r: (typeof rows)[number]) => number) => rows.reduce((a, r) => a + f(r), 0) / rows.length;
+      return {
+        winnerGamesH: winnerRow.resultsH,
+        winnerTradeH: winnerRow.tradeFlowH,
+        avgGamesH: avg((r) => r.resultsH),
+        avgOtherH: avg((r) => r.earnedH - r.resultsH),
+        avgFinalH: avg((r) => r.cashH),
+      };
+    })(),
   };
 }

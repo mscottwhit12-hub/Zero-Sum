@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { computeStandings, deriveLedger, formatGold, leaders, resolveSettings, toH, type LedgerInput } from '../src';
 
-const S = resolveSettings();
+// Worked examples use the raw formula (game gold ×1).
+const x1 = (p: Parameters<typeof resolveSettings>[0] = {}) => resolveSettings(p, resolveSettings({ scoring: { goldScale: 1 } }));
+
+const S = x1();
 
 const base: LedgerInput = {
   players: [
@@ -44,7 +47,7 @@ describe('ledger', () => {
   });
 
   it('live settings change re-derives results but the frozen late-join stake stays put', () => {
-    const s2 = resolveSettings({ stake: { startingGold: 30 }, scoring: { placementMults: [2, 1] } });
+    const s2 = x1({ stake: { startingGold: 30 }, scoring: { placementMults: [2, 1] } });
     const l = deriveLedger(base, s2);
     expect(l.get('a')!.resultsH).toBe(400);
     expect(l.get('a')!.stakeH).toBe(3000);
@@ -66,7 +69,7 @@ describe('standings', () => {
   });
 
   it('net worth uses sell value net of fee', () => {
-    const s = resolveSettings({ market: { feeFrac: 0.1 } });
+    const s = x1({ market: { feeFrac: 0.1 } });
     const l = deriveLedger(base, s);
     const st = computeStandings(l, [{ playerId: 'a', securityId: 'x', sharesH: 40 }], new Map([['x', 50]]), s);
     expect(st.find((r) => r.playerId === 'a')!.holdingsH).toBe(1800);

@@ -27,6 +27,8 @@ export interface Settings {
     tieRule: TieRule;
     dnfMult: number;
     coopLossMult: number;
+    /** Game gold multiplier: gold = hours × players × place mult × goldScale. Other gold sources are unaffected. */
+    goldScale: number;
   };
   stake: {
     startingGold: number;
@@ -143,6 +145,7 @@ export const DEFAULT_SETTINGS: Settings = {
     tieRule: 'average',
     dnfMult: 0,
     coopLossMult: 0.25,
+    goldScale: 3,
   },
   stake: { startingGold: 20 },
   lateJoin: { goldFraction: 0.75, goldPenalty: 2, stockPenalty: 0.05 },
@@ -244,6 +247,7 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   need(['average', 'best', 'worst'].includes(s.scoring.tieRule), 'scoring.tieRule', 'unknown rule');
   nonNeg(s.scoring.dnfMult, 'scoring.dnfMult');
   nonNeg(s.scoring.coopLossMult, 'scoring.coopLossMult');
+  pos(s.scoring.goldScale, 'scoring.goldScale');
   nonNeg(s.stake.startingGold, 'stake.startingGold');
   frac(s.lateJoin.goldFraction, 'lateJoin.goldFraction');
   nonNeg(s.lateJoin.goldPenalty, 'lateJoin.goldPenalty');

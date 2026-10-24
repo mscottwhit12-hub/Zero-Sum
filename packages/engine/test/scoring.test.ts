@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { hoursPlayed, placeMult, resolveSettings, scoreGame, ScoringError, type GameResult } from '../src';
 
-const S = resolveSettings();
+// Worked examples use the raw formula (game gold ×1).
+const x1 = (p: Parameters<typeof resolveSettings>[0] = {}) => resolveSettings(p, resolveSettings({ scoring: { goldScale: 1 } }));
+
+const S = x1();
 const gold = (r: GameResult, s = S) => Object.fromEntries(scoreGame(r, s).rows.map((x) => [x.playerId, x.goldH]));
 
 describe('placement multipliers', () => {
@@ -66,8 +69,8 @@ describe('competitive', () => {
         { playerId: 'b', placement: 1 },
       ],
     };
-    expect(gold(r, resolveSettings({ scoring: { tieRule: 'best' } }))).toEqual({ a: 200, b: 200 });
-    expect(gold(r, resolveSettings({ scoring: { tieRule: 'worst' } }))).toEqual({ a: 100, b: 100 });
+    expect(gold(r, x1({ scoring: { tieRule: 'best' } }))).toEqual({ a: 200, b: 200 });
+    expect(gold(r, x1({ scoring: { tieRule: 'worst' } }))).toEqual({ a: 100, b: 100 });
     expect(gold(r)).toEqual({ a: 150, b: 150 });
   });
 
@@ -113,7 +116,22 @@ describe('competitive', () => {
         { playerId: 'b', placement: 2 },
       ],
     };
-    expect(gold(r, resolveSettings({ scoring: { placementMults: [1, 0.8] } }))).toEqual({ a: 200, b: 160 });
+    expect(gold(r, x1({ scoring: { placementMults: [1, 0.8] } }))).toEqual({ a: 200, b: 160 });
+  });
+
+  it('goldScale multiplies game gold only (2h × 4 × 1.0 × 2.5 = 20.0)', () => {
+    const r: GameResult = {
+      id: 'g',
+      mode: 'competitive',
+      actualHours: 2,
+      participants: [
+        { playerId: 'a', placement: 1 },
+        { playerId: 'b', placement: 2 },
+        { playerId: 'c', placement: 3 },
+        { playerId: 'd', placement: 4 },
+      ],
+    };
+    expect(gold(r, x1({ scoring: { goldScale: 2.5 } }))).toEqual({ a: 2000, b: 1000, c: 500, d: 250 });
   });
 
   it('rejects missing placement / bad hours / duplicates', () => {
