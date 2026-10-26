@@ -4,6 +4,7 @@
   import { t } from '@shared/copy';
   import { connectLive, type Live } from '@shared/socket';
   import Toasts from '@shared/Toasts.svelte';
+  import { toast } from '@shared/ui';
   import type { GameInfo, GmState, WhoAmI } from '@shared/types';
   import Audit from './screens/Audit.svelte';
   import Dashboard from './screens/Dashboard.svelte';
@@ -66,6 +67,11 @@
     live?.close();
     unsub.forEach((u) => u());
     live = connectLive<GmState>('gm', {}, {
+      'device:approval': (d) => {
+        const x = d as { kind: string; displayName: string };
+        toast(`${x.kind === 'rejoin' ? 'Rejoin' : 'Late join'} request: ${x.displayName}`);
+        navigator.vibrate?.(80);
+      },
       'gm:device_pause': async () => {
         const me = await get<{ gm: WhoAmI }>('/api/gm/me').catch(() => null);
         if (me) whoami = me.gm;

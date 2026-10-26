@@ -63,7 +63,11 @@
     "game_result": "{name} concluded. {winners} reports a strong quarter.",
     "dethroned": "{to} has dethroned {from} at {name}.",
     "kingfall": "Kingfall: {from}'s long reign at {name} has ended.",
-    "correction": "Result restated for {name} by {by}."
+    "correction": "Result restated for {name} by {by}.",
+    "joined": "{player} has joined the firm.",
+    "late_join": "{player} has been onboarded mid-session.",
+    "left": "{player} has left the building. Their stock remains listed.",
+    "returned": "{player} is back at their desk."
   },
   "status": {
     "setup": "In setup",
@@ -87,5 +91,47 @@
     "gm": "Compliance Office (GM)",
     "sub": "Assistant GM",
     "soon": "Opens in a later build."
+  },
+  "phone": {
+    "boot": [
+      "BURNER OS v0.9 (unlicensed)",
+      "Checking for wiretaps… none found.",
+      "Mounting /dev/gold … ok",
+      "Welcome, associate."
+    ],
+    "apps": {
+      "wallet": "Wallet",
+      "market": "Market",
+      "standings": "Standings",
+      "messages": "Messages",
+      "feed": "Feed",
+      "rules": "Rules",
+      "profile": "Profile",
+      "vote": "Vote",
+      "minter": "NFT Minter"
+    },
+    "paused_title": "Markets suspended",
+    "paused_body": "Pending a routine review. Please remain calm and keep your hands visible.",
+    "ended_title": "Markets collapsed",
+    "ended_body": "Stand by.",
+    "rotate": "Please rotate your device. Associates work in portrait.",
+    "join_title": "Join the firm",
+    "join_late": "Request a desk",
+    "rejoin_title": "Return to my desk",
+    "rejoin_body": "Pick your name. The Compliance Office will verify you.",
+    "waiting": "Awaiting Compliance approval…",
+    "denied": "Request declined by Compliance.",
+    "closed": "Onboarding is closed. Ask the GM.",
+    "rules_soon": "The rulebook arrives in a later build."
+  },
+  "trade_errors": {
+    "market_closed": "Trading is closed right now.",
+    "rate_limited": "One trade per stock per tick. Try again in a few seconds.",
+    "below_minimum": "Minimum trade is 1 gold.",
+    "insufficient_gold": "Not enough gold.",
+    "over_cap": "That would put you over your investment limit.",
+    "too_small": "That amount buys less than 0.01 shares.",
+    "no_shares": "You don't hold that many shares.",
+    "locked": "Those shares are still locked."
   }
 }

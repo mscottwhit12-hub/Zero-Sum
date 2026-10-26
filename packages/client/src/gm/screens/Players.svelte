@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { post } from '@shared/api';
+  import { patch, post } from '@shared/api';
   import { gold, signedGold } from '@shared/format';
   import { run } from '@shared/ui';
   import type { GmState, WhoAmI } from '@shared/types';
@@ -13,6 +13,12 @@
       h: gs?.gm?.hours[p.id] ?? 0,
     })).sort((a, b) => (a.s?.rank ?? 99) - (b.s?.rank ?? 99)),
   );
+  const leave = (id: number, left: boolean) =>
+    (!left || confirm('Mark this player as left? Their stock stays listed and drifts down.')) && run(() => post(`/api/players/${id}/leave`, { left }), left ? 'Marked as left' : 'Welcome back');
+  const retick = (id: number, current: string) => {
+    const t = prompt('New ticker (3–4 letters)', current);
+    if (t && t !== current) run(() => patch(`/api/players/${id}`, { ticker: t }), 'Ticker updated');
+  };
   let who = $state('');
   let amount = $state<number | ''>('');
   let reason = $state('');
@@ -33,7 +39,7 @@
       <thead>
         <tr>
           <th>#</th><th>Player</th><th>Ticker</th><th class="num">Net worth</th><th class="num">Gold</th>
-          <th class="num">Stake</th><th class="num">Games</th><th class="num">Adj.</th><th class="num">Bounties</th><th class="num">Achiev.</th><th class="num">Trading</th><th class="num">Hours</th>
+          <th class="num">Stake</th><th class="num">Games</th><th class="num">Adj.</th><th class="num">Bounties</th><th class="num">Achiev.</th><th class="num">Trading</th><th class="num">Hours</th>{#if master}<th></th>{/if}
         </tr>
       </thead>
       <tbody>
@@ -51,6 +57,12 @@
             <td class="num">{gold(l?.achievementsH)}</td>
             <td class="num">{l ? signedGold(l.tradeFlowH) : '—'}</td>
             <td class="num">{h.toFixed(2)}</td>
+            {#if master}
+              <td class="actions">
+                <button onclick={() => retick(p.id, p.ticker)}>Ticker</button>
+                <button onclick={() => leave(p.id, !p.left)}>{p.left ? 'Back' : 'Left'}</button>
+              </td>
+            {/if}
           </tr>
         {/each}
       </tbody>

@@ -11,6 +11,8 @@ export interface NightInfo {
   quarters: { n: number; startMin: number; endMin: number; windowEndMin: number }[];
   tickSeconds: number;
   serverTime: number;
+  pauseUntil: number | null;
+  rules: { feeFrac: number; investCapH: number; lockoutMinutes: number; minTradeH: number; endSellProfitFeeFrac: number };
 }
 export interface PlayerInfo {
   id: number;
@@ -96,6 +98,7 @@ export interface GmExtras {
   hours: Record<number, number>;
   tickCount: number;
   feed: FeedItem[];
+  requests: PendingRequest[];
 }
 export interface WhoAmI {
   name: string;
@@ -107,4 +110,37 @@ export interface GmState extends PublicState {
   whoami?: WhoAmI;
   /** Absent when this device is remotely paused (it then gets the public view only). */
   gm?: GmExtras;
+}
+
+export interface Holding {
+  securityId: string;
+  sharesH: number;
+  costBasisH: number;
+  valueH: number;
+  lots: { sharesH: number; unlockNms: number }[];
+}
+export interface Me {
+  id: number;
+  displayName: string;
+  ticker: string;
+  cashH: number;
+  netWorthH: number;
+  rank: number | null;
+  rerollsLeft: number;
+  capRemainingH: number;
+  holdings: Holding[];
+  achievements: { type: string; createdAt: number }[];
+  messages: { id: number; message: string; createdAt: number; read: boolean }[];
+  trades: { securityId: string; side: 'buy' | 'sell'; sharesH: number; price: number; cashH: number; feeH: number; forced: number; createdAt: number }[];
+}
+export interface PlayerState extends PublicState {
+  me?: Me;
+}
+export interface PendingRequest {
+  id: number;
+  kind: 'rejoin' | 'late_join';
+  playerId: number | null;
+  displayName: string;
+  ticker: string | null;
+  createdAt: number;
 }

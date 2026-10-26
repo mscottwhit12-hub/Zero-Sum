@@ -28,10 +28,13 @@
   let nName = $state('Game Night');
   let nLength = $state(300);
 
-  const act = (path: string, ok: string, confirmText?: string) => {
+  const act = (path: string, ok: string, confirmText?: string, body: unknown = {}) => {
     if (confirmText && !confirm(confirmText)) return;
-    return run(() => post(`/api/night/${path}`), ok);
+    return run(() => post(`/api/night/${path}`, body), ok);
   };
+  let pauseMinutes = $state<number | ''>('');
+  const requests = $derived(gs?.gm?.requests ?? []);
+  const decide = (id: number, ok: boolean) => run(() => post(`/api/requests/${id}/${ok ? 'approve' : 'deny'}`), ok ? 'Approved' : 'Denied');
   const tap = (g: GameInfo, playerId: number) => run(() => post(`/api/games/${g.id}/leader`, { playerId }));
   const start = (g: GameInfo) => run(() => post(`/api/games/${g.id}/start`), `${g.name} started`);
 </script>
@@ -67,7 +70,12 @@
         <div class="row">
           {#if night.status === 'setup'}<button class="primary" onclick={() => act('open-joins', 'Joins open')}>Open joins</button>{/if}
           {#if night.status === 'joins_open'}<button class="primary" disabled={!gs?.players.length} onclick={() => act('start', 'Night is live')}>Start night</button>{/if}
-          {#if night.status === 'live'}<button onclick={() => act('pause', 'Paused')}>Pause</button>{/if}
+          {#if night.status === 'live'}
+            <span class="row">
+              <input type="number" min="1" max="240" placeholder="min" title="Optional countdown (minutes)" bind:value={pauseMinutes} style="width:70px" />
+              <button onclick={() => act('pause', 'Paused', undefined, { minutes: pauseMinutes || undefined })}>Pause</button>
+            </span>
+          {/if}
           {#if night.status === 'paused'}<button class="primary" onclick={() => act('resume', 'Resumed')}>Resume</button>{/if}
           {#if (night.status === 'live' || night.status === 'paused') && !night.tradingClosed}
             <button onclick={() => act('close-trading', 'Trading closed', 'Close trading for the rest of the night?')}>Close trading</button>
@@ -80,6 +88,18 @@
       {/if}
     </div>
   </section>
+
+  {#if requests.length}
+    <section class="panel">
+      <h2>Waiting for approval</h2>
+      {#each requests as r (r.id)}
+        <div class="spread line">
+          <span>{r.kind === 'rejoin' ? 'Rejoin on a new device' : 'Late join'}: <strong>{r.displayName}</strong>{r.ticker ? ` (${r.ticker})` : ''}</span>
+          <span class="row"><button class="primary" onclick={() => decide(r.id, true)}>Approve</button><button class="danger" onclick={() => decide(r.id, false)}>Deny</button></span>
+        </div>
+      {/each}
+    </section>
+  {/if}
 
   <section>
     <h2>Active games</h2>
