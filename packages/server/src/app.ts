@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { HttpError, nullBus, type Bus, type Config, type Ctx } from './context';
 import type { DB } from './db';
-import { registerGameRoutes, registerRoutes } from './routes';
+import { registerGameRoutes, registerPlayerRoutes, registerRoutes } from './routes';
 import { attachSockets } from './sockets';
 import type { Server } from 'socket.io';
 
@@ -41,6 +41,7 @@ export async function buildApp(opts: BuildOptions): Promise<App> {
 
   registerRoutes(app, ctx);
   registerGameRoutes(app, ctx);
+  registerPlayerRoutes(app, ctx);
 
   if (opts.clientDir && existsSync(opts.clientDir)) {
     await app.register(fastifyStatic, { root: opts.clientDir, index: false, wildcard: false });

@@ -33,6 +33,7 @@ export interface NightRow {
   current_quarter: number | null;
   started_at: number | null;
   paused_at: number | null;
+  pause_until: number | null;
   ended_at: number | null;
   tick_count: number;
   last_tick_at: number | null;

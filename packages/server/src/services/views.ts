@@ -7,6 +7,8 @@
  */
 import { capRemainingH, hoursPlayed, sellValueH, type GoldH } from '@gn/engine';
 import { gameViews, type GameView } from './games';
+import { pendingRequests, type PendingRequest } from './join';
+import { myTrades } from './trading';
 import { listLibrary, type LibraryGame } from './library';
 import type { Ctx } from '../context';
 import { feedTail } from './feed';
@@ -26,6 +28,10 @@ export interface PublicView {
     quarters: { n: number; startMin: number; endMin: number; windowEndMin: number }[];
     tickSeconds: number;
     serverTime: number;
+    /** Optional pause countdown (wall-clock epoch ms). */
+    pauseUntil: number | null;
+    /** Trade rules players need to see. */
+    rules: { feeFrac: number; investCapH: GoldH; lockoutMinutes: number; minTradeH: GoldH; endSellProfitFeeFrac: number };
   };
   players: { id: number; displayName: string; ticker: string; color: string | null; avatarPath: string | null; left: boolean }[];
   standings: { playerId: number; netWorthH: GoldH; rank: number }[];
@@ -50,6 +56,14 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
       quarters: st.quarters.map((q) => ({ n: q.n, startMin: q.startMin, endMin: q.endMin, windowEndMin: q.windowEndMin })),
       tickSeconds: st.settings.market.tickSeconds,
       serverTime: ctx.now(),
+      pauseUntil: n.status === 'paused' ? n.pause_until : null,
+      rules: {
+        feeFrac: st.settings.market.feeFrac,
+        investCapH: Math.round(st.settings.market.investCap * 100),
+        lockoutMinutes: st.settings.market.lockoutMinutes,
+        minTradeH: Math.round(st.settings.market.minTrade * 100),
+        endSellProfitFeeFrac: st.settings.market.endSellProfitFeeFrac,
+      },
     },
     players: st.players.map((p) => ({
       id: p.id,
@@ -85,6 +99,8 @@ export interface PlayerView extends PublicView {
     capRemainingH: GoldH;
     holdings: { securityId: string; sharesH: number; costBasisH: GoldH; valueH: GoldH; lots: { sharesH: number; unlockNms: number }[] }[];
     achievements: { type: string; createdAt: number }[];
+    messages: { id: number; message: string; createdAt: number; read: boolean }[];
+    trades: ReturnType<typeof myTrades>;
   };
 }
 
@@ -124,8 +140,25 @@ export function playerView(ctx: Ctx, st: NightState, playerId: number, base?: Pu
         };
       }),
       achievements: ach.map((a) => ({ type: a.type, createdAt: a.created_at })),
+      messages: playerMessages(ctx, st.night.id, playerId),
+      trades: myTrades(ctx, p),
     },
   };
+}
+
+/** GM notifications addressed to this player: target 'all', 'player:<id>' or 'players:<id>,<id>'. */
+export function playerMessages(ctx: Ctx, nightId: number, playerId: number) {
+  const rows = ctx.db.prepare('SELECT id, target, message, read_by, created_at FROM notification WHERE night_id = ? ORDER BY id DESC LIMIT 100').all(nightId) as {
+    id: number;
+    target: string;
+    message: string;
+    read_by: string;
+    created_at: number;
+  }[];
+  const mine = (t: string) => t === 'all' || t === `player:${playerId}` || (t.startsWith('players:') && t.slice(8).split(',').map(Number).includes(playerId));
+  return rows
+    .filter((r) => mine(r.target))
+    .map((r) => ({ id: r.id, message: r.message, createdAt: r.created_at, read: (JSON.parse(r.read_by) as number[]).includes(playerId) }));
 }
 
 export interface GmView extends PublicView {
@@ -149,6 +182,7 @@ export interface GmView extends PublicView {
     hours: Record<number, number>;
     tickCount: number;
     feed: ReturnType<typeof feedTail>;
+    requests: PendingRequest[];
   };
 }
 
@@ -181,6 +215,7 @@ export function gmView(ctx: Ctx, st: NightState, base?: PublicView): GmView {
       hours: Object.fromEntries([...hoursPlayed(loadResults(ctx, st.night.id))].map(([k, v]) => [Number(k), Math.round(v * 100) / 100])),
       tickCount: st.night.tick_count,
       feed: feedTail(ctx, st.night.id, true),
+      requests: pendingRequests(ctx, st.night.id),
     },
   };
 }

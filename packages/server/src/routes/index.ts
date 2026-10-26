@@ -1,5 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { type Ctx } from '../context';
+import { readFileSync } from 'node:fs';
+import { join as joinPath } from 'node:path';
+import { HttpError, type Ctx } from '../context';
+import { decideRequest, join, joinInfo, requestRejoin, requestStatus } from '../services/join';
+import { markLeft, overrideTicker, playerFromDevice } from '../services/players';
+import { playerBuy, playerSell } from '../services/trading';
 import { auditTail } from '../services/audit';
 import {
   createSubGm,
@@ -140,7 +145,7 @@ export function registerRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post<{ Params: { action: string } }>('/api/night/:action', async (req, reply) => {
     const action = NIGHT_ACTIONS[req.params.action];
     if (!action) return reply.code(404).send({ error: 'not_found' });
-    const n = applyNightAction(ctx, requireGm(ctx, req, { master: true }), action);
+    const n = applyNightAction(ctx, requireGm(ctx, req, { master: true }), action, { pauseMinutes: body(req.body).minutes });
     return { status: n.status, tradingClosed: !!n.trading_closed };
   });
   app.patch('/api/night/settings', async (req) => {
@@ -199,4 +204,68 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx) {
     return correctResult(ctx, requireGm(ctx, req), Number(req.params.id), { participants: x.participants, actualHours: x.actualHours, coopWon: x.coopWon });
   });
   app.post<Id>('/api/games/:id/leader', async (req) => leaderTap(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body).playerId));
+}
+
+// ---------------------------------------------------------------- players: join, devices, trading
+export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
+  type Id = { Params: { id: string } };
+  const b = (x: unknown) => (x ?? {}) as Record<string, unknown>;
+  const device = (req: { headers: Record<string, unknown> }) => {
+    const p = playerFromDevice(ctx, req.headers['x-device-token'] as string | undefined);
+    if (!p) throw new HttpError(401, 'unknown_device');
+    return p;
+  };
+
+  // Public join flow
+  app.get('/api/join', async () => joinInfo(ctx));
+  app.post('/api/join', async (req) => {
+    const x = b(req.body);
+    const r = join(ctx, { displayName: x.displayName, ticker: x.ticker, color: x.color, avatarData: x.avatarData });
+    return { deviceToken: r.deviceToken, pending: r.pending, playerId: r.player?.id ?? null };
+  });
+  app.post('/api/join/rejoin', async (req) => requestRejoin(ctx, b(req.body).playerId));
+  app.get('/api/join/status', async (req) => requestStatus(ctx, req.headers['x-device-token']));
+
+  // Player (device token)
+  app.get('/api/me', async (req) => {
+    const p = device(req);
+    return { player: { id: p.id, displayName: p.display_name, ticker: p.ticker } };
+  });
+  app.post('/api/trade/buy', async (req) => playerBuy(ctx, device(req), { securityId: b(req.body).securityId, gold: b(req.body).gold }));
+  app.post('/api/trade/sell', async (req) => playerSell(ctx, device(req), { securityId: b(req.body).securityId, shares: b(req.body).shares }));
+  app.post<Id>('/api/me/messages/:id/read', async (req) => {
+    const p = device(req);
+    const row = ctx.db.prepare('SELECT read_by FROM notification WHERE id = ? AND night_id = ?').get(Number(req.params.id), p.night_id) as { read_by: string } | undefined;
+    if (!row) return { ok: false };
+    const read = new Set(JSON.parse(row.read_by) as number[]);
+    read.add(p.id);
+    ctx.db.prepare('UPDATE notification SET read_by = ? WHERE id = ?').run(JSON.stringify([...read]), Number(req.params.id));
+    ctx.bus.refresh(p.night_id);
+    return { ok: true };
+  });
+
+  // Avatars (stored under DATA_DIR/uploads/avatars)
+  app.get<{ Params: { file: string } }>('/uploads/avatars/:file', async (req, reply) => {
+    const f = req.params.file;
+    if (!/^[a-f0-9]{24}\.(png|jpg|webp)$/.test(f)) return reply.code(404).send();
+    try {
+      const data = readFileSync(joinPath(ctx.config.dataDir, 'uploads', 'avatars', f));
+      const type = f.endsWith('.png') ? 'image/png' : f.endsWith('.jpg') ? 'image/jpeg' : 'image/webp';
+      return reply.header('content-type', type).header('cache-control', 'public, max-age=31536000, immutable').send(data);
+    } catch {
+      return reply.code(404).send();
+    }
+  });
+
+  // GM: approvals (field action), player management (Master)
+  app.post<Id>('/api/requests/:id/approve', async (req) => decideRequest(ctx, requireGm(ctx, req), Number(req.params.id), true));
+  app.post<Id>('/api/requests/:id/deny', async (req) => decideRequest(ctx, requireGm(ctx, req), Number(req.params.id), false));
+  app.post<Id>('/api/players/:id/leave', async (req) => {
+    markLeft(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body).left !== false);
+    return { ok: true };
+  });
+  app.patch<Id>('/api/players/:id', async (req) => {
+    overrideTicker(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body).ticker);
+    return { ok: true };
+  });
 }

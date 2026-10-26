@@ -37,9 +37,9 @@ describe('night lifecycle', () => {
     expect((await call(t, gm, 'POST', '/api/night/start')).json().error).toBe('no_players');
     createPlayer(t.ctx, { displayName: 'Alice', ticker: 'ali' });
     createPlayer(t.ctx, { displayName: 'Bob', ticker: 'BOB' });
-    expect(() => createPlayer(t.ctx, { displayName: 'alice', ticker: 'ALX' })).toThrow(/name_taken/);
-    expect(() => createPlayer(t.ctx, { displayName: 'Al', ticker: 'ALI' })).toThrow(/ticker_taken/);
-    expect(() => createPlayer(t.ctx, { displayName: 'Cee', ticker: 'IDX' })).toThrow(/ticker_taken/);
+    expect(() => createPlayer(t.ctx, { displayName: 'alice', ticker: 'ALX' })).toThrow(/name is taken/);
+    expect(() => createPlayer(t.ctx, { displayName: 'Al', ticker: 'ALI' })).toThrow(/ticker is taken/);
+    expect(() => createPlayer(t.ctx, { displayName: 'Cee', ticker: 'IDX' })).toThrow(/ticker is taken/);
 
     expect((await call(t, gm, 'POST', '/api/night/start')).json()).toEqual({ status: 'live', tradingClosed: false });
     expect(() => createPlayer(t.ctx, { displayName: 'Late', ticker: 'LAT' })).toThrow(/joins_closed/);

@@ -99,7 +99,7 @@ function requireNight(ctx: Ctx): NightRow {
 }
 
 /** Applies a state-machine action with its side effects. */
-export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction): NightRow {
+export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction, opts: { pauseMinutes?: unknown } = {}): NightRow {
   masterOnly(actor);
   const result = ctx.db.transaction(() => {
     const n = requireNight(ctx);
@@ -128,13 +128,17 @@ export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction): 
       }
       case 'pause':
         ctx.db.prepare('INSERT INTO night_pause (night_id, started_at) VALUES (?, ?)').run(n.id, now);
-        ctx.db.prepare('UPDATE night SET paused_at = ? WHERE id = ?').run(now, n.id);
+        {
+          const mins = Number(opts.pauseMinutes);
+          const until = Number.isFinite(mins) && mins > 0 && mins <= 240 ? now + Math.round(mins * 60_000) : null;
+          ctx.db.prepare('UPDATE night SET paused_at = ?, pause_until = ? WHERE id = ?').run(now, until, n.id);
+        }
         feed = { type: 'night', message: 'feed.paused' };
         break;
       case 'resume':
         closeOpenPause(ctx, n.id, now);
         // Don't fire a catch-up tick the instant we resume.
-        ctx.db.prepare('UPDATE night SET paused_at = NULL, last_tick_at = ? WHERE id = ?').run(now, n.id);
+        ctx.db.prepare('UPDATE night SET paused_at = NULL, pause_until = NULL, last_tick_at = ? WHERE id = ?').run(now, n.id);
         feed = { type: 'night', message: 'feed.resumed' };
         break;
       case 'closeTrading':
