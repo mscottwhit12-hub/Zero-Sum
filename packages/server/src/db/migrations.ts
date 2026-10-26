@@ -358,4 +358,8 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE sound ADD COLUMN mime TEXT;
   ALTER TABLE sound ADD COLUMN created_at INTEGER;
   `,
+  /* 6 — finale: server-timed recap, then phones unlock */ `
+  ALTER TABLE night ADD COLUMN recap_until INTEGER;
+  ALTER TABLE night ADD COLUMN recap_done INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

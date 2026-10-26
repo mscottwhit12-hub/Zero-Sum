@@ -19,6 +19,8 @@ import { gmChallenges, playerChallenges } from './espionage';
 import { seatingView } from './seating';
 import { ambientOff, currentAmbient, listSounds } from './sounds';
 import { minterLeaderboard } from './minter';
+import { finale, type Finale } from './recap';
+import { promptsView } from './prompts';
 import { loadResults, nightOverrides, pid, type NightState } from './state';
 
 export interface PublicView {
@@ -36,6 +38,9 @@ export interface PublicView {
     serverTime: number;
     /** Optional pause countdown (wall-clock epoch ms). */
     pauseUntil: number | null;
+    /** End of night: TV finale runs until this wall-clock time; phones unlock when done. */
+    recapUntil: number | null;
+    recapDone: boolean;
     /** Trade rules players need to see. */
     rules: { feeFrac: number; investCapH: GoldH; lockoutMinutes: number; minTradeH: GoldH; endSellProfitFeeFrac: number };
   };
@@ -48,6 +53,8 @@ export interface PublicView {
   vote: { quarter: number; open: boolean; windowEndsNms: number | null } | null;
   /** NFT Minter leaderboard (fun only). */
   minter: { leaderboard: { playerId: number; minted: number }[] };
+  /** Collapse → podium → recap (only once the night has ended). Public-safe. */
+  finale: Finale | null;
 }
 
 export function publicView(ctx: Ctx, st: NightState): PublicView {
@@ -67,6 +74,8 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
       tickSeconds: st.settings.market.tickSeconds,
       serverTime: ctx.now(),
       pauseUntil: n.status === 'paused' ? n.pause_until : null,
+      recapUntil: n.recap_until,
+      recapDone: !!n.recap_done,
       rules: {
         feeFrac: st.settings.market.feeFrac,
         investCapH: Math.round(st.settings.market.investCap * 100),
@@ -96,6 +105,7 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
     feed: feedTail(ctx, n.id, false),
     vote: ((v) => (v ? { quarter: v.quarter, open: v.open, windowEndsNms: v.windowEndsNms } : null))(voteView(ctx, st, null)),
     minter: { leaderboard: minterLeaderboard(ctx, n.id) },
+    finale: n.status === 'ended' ? finale(ctx, n.id) : null,
   };
 }
 
@@ -213,6 +223,7 @@ export interface GmView extends PublicView {
     seating: ReturnType<typeof seatingView>;
     sounds: ReturnType<typeof listSounds>;
     ambient: { current: ReturnType<typeof currentAmbient>; off: boolean };
+    prompts: ReturnType<typeof promptsView>;
   };
 }
 
@@ -254,6 +265,7 @@ export function gmView(ctx: Ctx, st: NightState, base?: PublicView): GmView {
       seating: seatingView(ctx, st.night.id),
       sounds: listSounds(ctx),
       ambient: { current: currentAmbient(ctx, st.night.id), off: ambientOff(ctx, st.night.id) },
+      prompts: promptsView(ctx, st.night),
     },
   };
 }

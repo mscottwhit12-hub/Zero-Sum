@@ -36,6 +36,9 @@
   const requests = $derived(gs?.gm?.requests ?? []);
   const decide = (id: number, ok: boolean) => run(() => post(`/api/requests/${id}/${ok ? 'approve' : 'deny'}`), ok ? 'Approved' : 'Denied');
   const tap = (g: GameInfo, playerId: number) => run(() => post(`/api/games/${g.id}/leader`, { playerId }));
+  const dismiss = (prompt: string) => run(() => post('/api/night/prompts/dismiss', { prompt }));
+  /** The prompt fires N minutes before the planned end; show the end time itself. */
+  const promptLead = $derived((((gs?.gm?.settings.resolved as { prompts?: { tradingCloseMinutesBefore: number } })?.prompts?.tradingCloseMinutesBefore) ?? 15) * 60_000);
   const start = (g: GameInfo) => run(() => post(`/api/games/${g.id}/start`), `${g.name} started`);
 </script>
 
@@ -96,6 +99,41 @@
       {/if}
     </div>
   </section>
+
+  {#if master && gs?.gm?.prompts.closeTradingAt != null && now >= gs.gm.prompts.closeTradingAt}
+    <section class="panel prompt">
+      <strong>{t('gm.prompt_close', { time: timeOfDay(gs.gm.prompts.closeTradingAt + promptLead) })}</strong>
+      <div class="actions">
+        <button class="primary" onclick={() => act('close-trading', 'Trading closed')}>Close trading</button>
+        <button onclick={() => dismiss('closeTrading')}>{t('gm.not_yet')}</button>
+      </div>
+    </section>
+  {/if}
+  {#if master && gs?.gm?.prompts.endNight}
+    <section class="panel prompt">
+      <strong>{t('gm.prompt_end')}</strong>
+      <div class="actions">
+        <button class="danger" onclick={() => act('end', 'Night ended', 'End the night? Holdings auto-sell and the market collapses.')}>End night</button>
+        <button onclick={() => dismiss('endNight')}>{t('gm.not_yet')}</button>
+      </div>
+    </section>
+  {/if}
+  {#if night.status === 'ended'}
+    <section class="panel">
+      <h2>After the collapse</h2>
+      <p class="small muted">{night.recapDone ? 'Finale finished. Phones show their Final Account Statements.' : 'The TV is playing the finale. Phones unlock when it ends.'}</p>
+      {#if master}
+        <div class="actions">
+          {#if !night.recapDone}<button onclick={() => run(() => post('/api/night/finale/skip'), 'Phones unlocked')}>Skip finale</button>{/if}
+          <button onclick={() => run(() => post('/api/night/finale/replay'), 'Replaying on TV')}>Replay on TV</button>
+          <a class="btn" href="/api/export/night.json">Export JSON</a>
+          <a class="btn" href="/api/export/standings.csv">Standings CSV</a>
+          <a class="btn" href="/api/export/results.csv">Results CSV</a>
+          <a class="btn" href="/api/export/trades.csv">Trades CSV</a>
+        </div>
+      {/if}
+    </section>
+  {/if}
 
   {#if requests.length}
     <section class="panel">
@@ -172,3 +210,9 @@
     </table>
   </section>
 {/if}
+
+<style>
+  .prompt {
+    border-left: 4px solid var(--accent);
+  }
+</style>

@@ -24,6 +24,8 @@
   import Rulebook from './screens/Rulebook.svelte';
   import Seating from './screens/Seating.svelte';
   import Sounds from './screens/Sounds.svelte';
+  import Archive from './screens/Archive.svelte';
+  import JoinQr from './screens/JoinQr.svelte';
 
   type Phase = 'loading' | 'setup' | 'login' | 'ready';
   let phase = $state<Phase>('loading');
@@ -44,6 +46,8 @@
     { id: 'seating', label: 'Seating', field: false },
     { id: 'sounds', label: 'Soundboard', field: false },
     { id: 'rules', label: 'Rulebook', field: false },
+    { id: 'qr', label: 'Join QR', field: false },
+    { id: 'archive', label: 'Archive & exports', field: false },
     { id: 'library', label: 'Library', field: false },
     { id: 'settings', label: 'Settings', field: false },
     { id: 'devices', label: 'Devices & GMs', field: false },
@@ -157,6 +161,8 @@
       {:else if route === 'seating'}<Seating gs={gmState} {whoami} />
       {:else if route === 'sounds'}<Sounds gs={gmState} {whoami} />
       {:else if route === 'rules'}<Rulebook {whoami} />
+      {:else if route === 'qr'}<JoinQr gs={gmState} />
+      {:else if route === 'archive'}<Archive {whoami} />
       {:else if route === 'library'}<Library gs={gmState} {whoami} />
       {:else if route === 'settings'}<Settings gs={gmState} {whoami} />
       {:else if route === 'devices'}<Devices {whoami} onlogout={() => { live?.close(); phase = 'login'; }} ondevice={(d) => whoami && (whoami = { ...whoami, deviceType: d })} />

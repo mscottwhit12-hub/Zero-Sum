@@ -1,4 +1,5 @@
 import { awardAchievements } from './achievements';
+import { finale, finaleSeconds, markRecapDone } from './recap';
 import { playCue } from './sounds';
 import {
   createSecurities,
@@ -168,12 +169,34 @@ export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction, o
       .prepare('INSERT INTO standings_snapshot (night_id, data, created_at) VALUES (?,?,?)')
       .run(n.id, j.str(st.standings.map((r) => ({ playerId: Number(r.playerId), goldH: r.netWorthH, rank: r.rank }))), ctx.now());
   }
+  // The TV finale runs on a server clock; phones unlock into their statements when it ends.
+  if (action === 'end') ctx.db.prepare('UPDATE night SET recap_until = ?, recap_done = 0 WHERE id = ?').run(ctx.now() + finaleSeconds(finale(ctx, n.id)) * 1000, n.id);
   if (action === 'pause') playCue(ctx, 'intermission');
-  if (action === 'end') playCue(ctx, 'night_end');
+  if (action === 'end') playCue(ctx, 'collapse');
   const event = { pause: 'night:paused', resume: 'night:resumed', end: 'night:ended' }[action as string] ?? 'night:update';
   ctx.bus.all(event, { status: n.status, tradingClosed: !!n.trading_closed });
   ctx.bus.refresh(n.id);
   return n;
+}
+
+/** GM: skip the rest of the finale and unlock phones now. */
+export function skipFinale(ctx: Ctx, actor: GmAuth) {
+  masterOnly(actor);
+  const n = requireNight(ctx);
+  if (n.status !== 'ended') throw conflict('night_not_ended');
+  if (!n.recap_done) markRecapDone(ctx, n.id);
+  audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'finale.skip', entity: 'night', entityId: n.id });
+  return { ok: true };
+}
+
+/** GM: replay the finale on the TV (phones stay unlocked once unlocked). */
+export function replayFinale(ctx: Ctx, actor: GmAuth) {
+  masterOnly(actor);
+  const n = requireNight(ctx);
+  if (n.status !== 'ended') throw conflict('night_not_ended');
+  ctx.bus.tv('finale:replay', { at: ctx.now() });
+  playCue(ctx, 'collapse');
+  return { ok: true };
 }
 
 function closeOpenPause(ctx: Ctx, nightId: number, now: number) {

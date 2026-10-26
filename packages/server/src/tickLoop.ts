@@ -5,6 +5,7 @@ import { computeNightState, currentNight } from './services/state';
 import { voteStep } from './services/votes';
 import { espionageStep } from './services/espionage';
 import { minterCrawlStep } from './services/minter';
+import { recapStep } from './services/recap';
 
 /**
  * Checks once a second. Ticks the market every `tickSeconds` (wall clock) while the night is live
@@ -26,6 +27,7 @@ export function startTickLoop(ctx: Ctx, intervalMs = 1000): () => void {
 export function tickOnce(ctx: Ctx): boolean {
   const n = currentNight(ctx);
   if (n && (n.status === 'live' || n.status === 'paused')) minterCrawlStep(ctx, n);
+  if (n && n.status === 'ended') recapStep(ctx, n);
   if (!n || n.status !== 'live' || !n.started_at) return false;
   const st = computeNightState(ctx, n.id)!;
   const q = quarterAt(st.quarters, st.nightMs / 60_000).quarter?.n ?? null;

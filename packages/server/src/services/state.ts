@@ -34,6 +34,8 @@ export interface NightRow {
   started_at: number | null;
   paused_at: number | null;
   pause_until: number | null;
+  recap_until: number | null;
+  recap_done: number;
   ended_at: number | null;
   tick_count: number;
   last_tick_at: number | null;

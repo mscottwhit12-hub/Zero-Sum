@@ -18,6 +18,7 @@
   import { FUN_APPS } from './fun';
   import { dapi, deviceToken, pendingToken, setDeviceToken, setPendingToken, store } from './device';
   import Join from './Join.svelte';
+  import Statement from './Statement.svelte';
 
   type Phase = 'boot' | 'join' | 'waiting' | 'phone';
   let phase = $state<Phase>('boot');
@@ -74,6 +75,11 @@
     live?.close();
     unsub.forEach((u) => u());
     live = connectLive<PlayerState>('player', { deviceToken: deviceToken() }, {
+      'night:update': (d) => {
+        const x = d as { tradingClosed?: boolean };
+        if (x.tradingClosed && s?.night && !s.night.tradingClosed && s.night.status !== 'ended')
+          toast(t('phone.trading_closed_toast', { fee: Math.round(s.night.rules.endSellProfitFeeFrac * 100) }));
+      },
       'vote:bounty': (d) => toast(t('phone.vote_bounty', { gold: signedGold((d as { goldH: number }).goldH) })),
       'espionage:result': (d) => toast((d as { success: boolean }).success ? t('phone.espionage_success') : t('phone.espionage_fail'), (d as { success: boolean }).success ? 'ok' : 'error'),
       'achievement:new': (d) => {
@@ -162,7 +168,8 @@
     if (app === 'feed' && unseenFeed) markFeedSeen();
   });
 
-  const locked = $derived(s?.night?.status === 'paused' ? 'paused' : s?.night?.status === 'ended' ? 'ended' : null);
+  const locked = $derived(s?.night?.status === 'paused' ? 'paused' : s?.night?.status === 'ended' && !s.night.recapDone ? 'ended' : null);
+  const statementReady = $derived(s?.night?.status === 'ended' && !!s.night.recapDone);
   const countdown = $derived.by(() => {
     const until = s?.night?.pauseUntil;
     if (!until) return null;
@@ -199,6 +206,8 @@
       <p class="center pad muted">Connecting…</p>
     {:else if !s.night || !s.me}
       <p class="center pad muted">No session in progress.</p>
+    {:else if statementReady}
+      <Statement />
     {:else if locked === 'paused' && funApp(lockApp)}
       {@const F = funApp(lockApp)!.component}
       <div class="appbar spread">

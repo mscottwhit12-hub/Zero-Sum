@@ -12,6 +12,8 @@ export interface NightInfo {
   tickSeconds: number;
   serverTime: number;
   pauseUntil: number | null;
+  recapUntil: number | null;
+  recapDone: boolean;
   rules: { feeFrac: number; investCapH: number; lockoutMinutes: number; minTradeH: number; endSellProfitFeeFrac: number };
 }
 export interface PlayerInfo {
@@ -92,6 +94,49 @@ export interface PublicState {
   feed: FeedItem[];
   vote?: { quarter: number; open: boolean; windowEndsNms: number | null } | null;
   minter?: { leaderboard: { playerId: number; minted: number }[] };
+  finale?: Finale | null;
+}
+export type RecapSlide =
+  | { id: 'top_trade' | 'best_investment' | 'worst_investment'; playerId: number; ticker: string; profitH: number }
+  | { id: 'most_predicted'; playerId: number; votes: number }
+  | { id: 'long_reigns'; count: number }
+  | { id: 'mood'; cheeriest: number; moodiest: number }
+  | { id: 'hours'; leaders: { playerId: number; hours: number }[] }
+  | { id: 'espionage'; sent: number; accepted: number; completed: number; exposed: number }
+  | { id: 'minter'; playerId: number; minted: number }
+  | { id: 'achievements'; items: { playerId: number; type: string }[] };
+export interface Finale {
+  podium: { playerId: number; goldH: number; rank: number }[];
+  slides: RecapSlide[];
+  timing: { collapseSeconds: number; podiumStepSeconds: number; recapSlideSeconds: number };
+}
+export interface StatementTrade {
+  at: number;
+  side: 'buy' | 'sell';
+  ticker: string;
+  sharesH: number;
+  price: number;
+  cashH: number;
+  feeH: number;
+  profitH: number | null;
+  forced: boolean;
+}
+export interface Statement {
+  night: { name: string; date: string };
+  player: { id: number; displayName: string; ticker: string };
+  goldH: number;
+  rank: number | null;
+  players: number;
+  rankStart: number | null;
+  rankBest: number | null;
+  bestTrade: StatementTrade | null;
+  worstTrade: StatementTrade | null;
+  tradingResultH: number;
+  correctVotes: number;
+  votesCast: number;
+  achievements: string[];
+  nftsMinted: number;
+  trades: StatementTrade[];
 }
 export interface SeatingTable {
   id: number;
@@ -143,6 +188,7 @@ export interface GmExtras {
   seating: SeatingTable[];
   sounds: SoundInfo[];
   ambient: { current: Ambient | null; off: boolean };
+  prompts: { closeTradingAt: number | null; endNight: boolean };
 }
 export interface VoteInfo {
   quarter: number;

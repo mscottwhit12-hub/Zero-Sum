@@ -167,7 +167,24 @@
     "peek_none": "No trades on record.",
     "espionage_success": "Assignment complete. Check Messages.",
     "espionage_fail": "You've been exposed.",
-    "achievement_new": "Achievement: {achievement}"
+    "achievement_new": "Achievement: {achievement}",
+    "trading_closed_toast": "Trading closed. Your holdings auto-sell at the end; {fee}% fee on profits only.",
+    "statement": {
+      "title": "Final Account Statement",
+      "gold": "Final gold",
+      "rank": "Rank {rank} of {players}",
+      "movement": "Rank movement: {start} → {end} (best {best})",
+      "trading": "Trading result",
+      "best": "Best trade",
+      "worst": "Worst trade",
+      "votes": "Correct quarter picks",
+      "nfts": "NFTs minted",
+      "achievements": "Achievements",
+      "none": "None",
+      "download": "Download PDF",
+      "trades": "Trades",
+      "loading": "Preparing your statement…"
+    }
   },
   "trade_errors": {
     "market_closed": "Trading is closed right now.",
@@ -201,7 +218,37 @@
       "> BNN terminal v0.7",
       "> connecting to exchange…",
       "> feeds online"
-    ]
+    ],
+    "special_report": "SPECIAL REPORT",
+    "collapse": "THE MARKET HAS COLLAPSED. ONLY GOLD REMAINS.",
+    "podium": "Final standings",
+    "place": {
+      "1": "1st",
+      "2": "2nd",
+      "3": "3rd"
+    },
+    "recap": {
+      "top_trade": "Trade of the night",
+      "top_trade_body": "{player} sold {ticker} for {gold} gold profit.",
+      "best_investment": "Best investment",
+      "best_investment_body": "{player} made {gold} gold on {ticker}.",
+      "worst_investment": "Worst investment",
+      "worst_investment_body": "{player} lost {gold} gold on {ticker}. Compliance has been notified.",
+      "most_predicted": "Most predicted associate",
+      "most_predicted_body": "{player} was picked {votes} times in the quarterly polls.",
+      "long_reigns": "Long reigns ended",
+      "long_reigns_body": "{count} long-standing leads collapsed tonight.",
+      "mood": "Morale report",
+      "mood_body": "Cheeriest: {cheeriest}. Moodiest: {moodiest}.",
+      "hours": "Most hours at the table",
+      "espionage": "Confidential memos",
+      "espionage_body": "{sent} sent · {accepted} accepted · {completed} completed · {exposed} exposed",
+      "minter": "Top NFT minter",
+      "minter_body": "{player} minted {minted} NFTs. Their value is unchanged: zero.",
+      "achievements": "Achievements"
+    },
+    "statements_ready": "Final Account Statements are now on your phones.",
+    "trading_closed_banner": "Trading desks are closed. Holdings auto-sell at the end of the night; {fee}% fee on profits only."
   },
   "minter": {
     "loading": "Booting minting rig…",
@@ -216,5 +263,10 @@
     "nobody": "No one has minted yet.",
     "lock_open": "Open NFT Minter",
     "lock_close": "Back to lock screen"
+  },
+  "gm": {
+    "prompt_close": "Close trading? The last scheduled game ends at {time}.",
+    "prompt_end": "Every scheduled game has a result. End the night?",
+    "not_yet": "Not yet"
   }
 }

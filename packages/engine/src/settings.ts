@@ -138,6 +138,12 @@ export interface Settings {
   prompts: {
     tradingCloseMinutesBefore: number;
   };
+  /** End-of-night TV sequence timing (seconds). Phones unlock when it finishes. */
+  finale: {
+    collapseSeconds: number;
+    podiumStepSeconds: number;
+    recapSlideSeconds: number;
+  };
   minter: {
     /** Mint rate multiplier while the night is paused. */
     pauseMultiplier: number;
@@ -212,6 +218,7 @@ export const DEFAULT_SETTINGS: Settings = {
     gold: { first_blood: 2, hat_trick: 5, regular: 2, oracle: 1 },
   },
   prompts: { tradingCloseMinutesBefore: 15 },
+  finale: { collapseSeconds: 10, podiumStepSeconds: 5, recapSlideSeconds: 8 },
   minter: { pauseMultiplier: 2, tvCrawlMinutes: 10 },
 };
 
@@ -317,6 +324,9 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   need(s.espionage.revealDelayMaxSec >= s.espionage.revealDelayMinSec, 'espionage.revealDelayMaxSec', 'must be ≥ min');
   for (const [id, g] of Object.entries(s.achievements.gold)) nonNeg(g, `achievements.gold.${id}`);
   nonNeg(s.prompts.tradingCloseMinutesBefore, 'prompts.tradingCloseMinutesBefore');
+  pos(s.finale.collapseSeconds, 'finale.collapseSeconds');
+  pos(s.finale.podiumStepSeconds, 'finale.podiumStepSeconds');
+  pos(s.finale.recapSlideSeconds, 'finale.recapSlideSeconds');
   need(s.minter.pauseMultiplier >= 1, 'minter.pauseMultiplier', 'must be ≥ 1');
   pos(s.minter.tvCrawlMinutes, 'minter.tvCrawlMinutes');
   return issues;

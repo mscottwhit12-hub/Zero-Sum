@@ -12,6 +12,7 @@
   import Sparkline from '@shared/Sparkline.svelte';
   import type { FeedItem, TvState } from '@shared/types';
   import { cueTone } from './tones';
+  import Finale from './Finale.svelte';
 
   // ---- boot sequence (terminal touch)
   const BOOT: string[] = (copy as unknown as { tv: { boot: string[] } }).tv.boot;
@@ -74,11 +75,24 @@
       if (x.kind === 'minter') addCrawl(t('tv.minter_crawl', { ticker: x.ticker, minted: x.minted.toLocaleString() }));
     },
     'sound:play': (d) => playSound(d as { cue?: string; url?: string | null }),
+    'finale:replay': () => (replayFrom = Date.now() + skew),
+    'night:update': (d) => {
+      const x = d as { tradingClosed?: boolean; status?: string };
+      if (x.tradingClosed && s?.night && !s.night.tradingClosed && x.status !== 'ended')
+        pushBanner(t('tv.trading_closed_banner', { fee: Math.round(s.night.rules.endSellProfitFeeFrac * 100) }));
+    },
   });
+  let replayFrom = $state<number | null>(null);
   const u1 = live.state.subscribe((v) => (s = v));
   const u2 = live.connected.subscribe((v) => (connected = v));
   let now = $state(Date.now());
-  const timer = setInterval(() => (now = Date.now()), 1000);
+  const timer = setInterval(() => (now = Date.now()), 250);
+  // Server clock estimate for the finale (TV and server clocks may differ).
+  let skew = 0;
+  $effect(() => {
+    if (s?.night) skew = s.night.serverTime - Date.now();
+  });
+  const serverNow = $derived(now + skew);
 
   // Dethronings → lower-third (from the public feed; ids only increase).
   let lastFeedId = -1;
@@ -282,6 +296,10 @@
         {/each}
       </div>
     </div>
+  {/if}
+
+  {#if s?.night?.status === 'ended' && s.finale}
+    <Finale {s} now={serverNow} {replayFrom} />
   {/if}
 
   {#if banner}

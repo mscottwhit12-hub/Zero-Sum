@@ -11,6 +11,11 @@ import { createRule, deleteRule, listRules, updateRule } from '../services/rules
 import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '../services/seating';
 import { deleteSound, listSounds, playSound, soundFileMime, uploadSound } from '../services/sounds';
 import { minterGet, minterSync } from '../services/minter';
+import { dismissPrompt } from '../services/prompts';
+import { statement } from '../services/recap';
+import { statementPdf } from '../services/pdf';
+import { CSV_KINDS, exportNightCsv, exportNightJson, listNights } from '../services/exports';
+import { replayFinale, skipFinale } from '../services/night';
 import { createChallenge, readChallenge, reassignChallenge, resolveChallenge, respondChallenge, usePeek } from '../services/espionage';
 import { auditTail } from '../services/audit';
 import {
@@ -52,6 +57,11 @@ import {
 } from '../services/games';
 
 type Body = Record<string, unknown>;
+/** User-facing text (copy/en.json) for server-rendered output such as the PDF statement. */
+const COPY = JSON.parse(readFileSync(new URL('../../../../copy/en.json', import.meta.url), 'utf8')) as {
+  brand: { company: string; tagline: string };
+  achievements: Record<string, { name: string }>;
+};
 const NIGHT_ACTIONS: Record<string, NightAction> = {
   'open-joins': 'openJoins',
   start: 'start',
@@ -325,4 +335,27 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   // Phase 7 — NFT Minter (player device; fun only)
   app.get('/api/minter', async (req) => minterGet(ctx, device(req)));
   app.post('/api/minter/sync', async (req) => minterSync(ctx, device(req), b(req.body)));
+
+  // Phase 8 — prompts, finale, statements, exports, archive
+  app.post('/api/night/prompts/dismiss', async (req) => dismissPrompt(ctx, requireGm(ctx, req), b(req.body).prompt));
+  app.post('/api/night/finale/skip', async (req) => skipFinale(ctx, requireGm(ctx, req, { master: true })));
+  app.post('/api/night/finale/replay', async (req) => replayFinale(ctx, requireGm(ctx, req, { master: true })));
+  app.get('/api/me/statement', async (req) => statement(ctx, device(req)));
+  app.get('/api/me/statement.pdf', async (req, reply) => {
+    const s = statement(ctx, device(req));
+    const pdf = await statementPdf(s, { firm: COPY.brand.company, title: 'Final Account Statement', footer: COPY.brand.tagline }, (type) => COPY.achievements[type]?.name ?? type);
+    const file = `statement-${s.night.date}-${s.player.ticker}.pdf`;
+    return reply.header('content-type', 'application/pdf').header('content-disposition', `attachment; filename="${file}"`).send(pdf);
+  });
+  app.get('/api/nights', async (req) => ({ nights: listNights(ctx, requireGm(ctx, req)) }));
+  app.get<{ Querystring: { night?: string } }>('/api/export/night.json', async (req, reply) => {
+    const data = exportNightJson(ctx, requireGm(ctx, req, { master: true }), req.query.night);
+    const file = `${data.night.date}-${data.night.name.replace(/[^\w-]+/g, '_')}.json`;
+    return reply.header('content-type', 'application/json').header('content-disposition', `attachment; filename="${file}"`).send(JSON.stringify(data, null, 2));
+  });
+  app.get<{ Params: { kind: string }; Querystring: { night?: string } }>('/api/export/:kind.csv', async (req, reply) => {
+    if (!(CSV_KINDS as readonly string[]).includes(req.params.kind)) return reply.code(404).send({ error: 'not_found' });
+    const r = exportNightCsv(ctx, requireGm(ctx, req, { master: true }), req.params.kind, req.query.night);
+    return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="${r.name}"`).send('\uFEFF' + r.csv);
+  });
 }
