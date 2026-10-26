@@ -19,6 +19,25 @@ import { computeNightState, currentNight } from '../services/state';
 import { gmView, publicView } from '../services/views';
 import { GM_COOKIE } from '../sockets';
 import { requireGm } from './guard';
+import {
+  createLibraryGame,
+  deleteLibraryGame,
+  exportPack,
+  importPack,
+  listLibrary,
+  updateLibraryGame,
+} from '../services/library';
+import {
+  cancelGame,
+  correctResult,
+  getGame,
+  leaderTap,
+  scheduleGame,
+  startGame,
+  submitResult,
+  suggestedHours,
+  updateScheduledGame,
+} from '../services/games';
 
 type Body = Record<string, unknown>;
 const NIGHT_ACTIONS: Record<string, NightAction> = {
@@ -133,4 +152,51 @@ export function registerRoutes(app: FastifyInstance, ctx: Ctx) {
     const b = body(req.body);
     return addAdjustment(ctx, requireGm(ctx, req, { master: true }), { playerId: b.playerId, gold: b.gold, reason: b.reason });
   });
+}
+
+
+// ---------------------------------------------------------------- library, schedule, games
+export function registerGameRoutes(app: FastifyInstance, ctx: Ctx) {
+  type Id = { Params: { id: string } };
+  const b = (x: unknown) => (x ?? {}) as Record<string, unknown>;
+
+  // Library (setup → Master; anyone GM can read)
+  app.get('/api/library', async (req) => (requireGm(ctx, req), { games: listLibrary(ctx) }));
+  app.post('/api/library', async (req) => ({ game: createLibraryGame(ctx, requireGm(ctx, req, { master: true }), b(req.body) as never) }));
+  app.patch<Id>('/api/library/:id', async (req) => ({ game: updateLibraryGame(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body) as never) }));
+  app.delete<Id>('/api/library/:id', async (req) => {
+    deleteLibraryGame(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id));
+    return { ok: true };
+  });
+  app.get('/api/library/export', async (req, reply) => {
+    requireGm(ctx, req);
+    reply.header('content-disposition', 'attachment; filename="game-pack.json"');
+    return exportPack(ctx);
+  });
+  app.post('/api/library/import', async (req) => importPack(ctx, requireGm(ctx, req, { master: true }), req.body));
+
+  // Schedule (Master)
+  app.post('/api/games', async (req) => ({ game: scheduleGame(ctx, requireGm(ctx, req, { master: true }), b(req.body)) }));
+  app.patch<Id>('/api/games/:id', async (req) => ({ game: updateScheduledGame(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)) }));
+  app.post<Id>('/api/games/:id/cancel', async (req) => {
+    cancelGame(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id));
+    return { ok: true };
+  });
+
+  // Field actions (Master or Sub)
+  app.post<Id>('/api/games/:id/start', async (req) => ({ game: startGame(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body)) }));
+  app.get<Id>('/api/games/:id/prefill', async (req) => {
+    requireGm(ctx, req);
+    const g = getGame(ctx, Number(req.params.id));
+    return { suggestedHours: suggestedHours(ctx, g) ?? g.planned_duration_hours ?? 1 };
+  });
+  app.post<Id>('/api/games/:id/result', async (req) => {
+    const x = b(req.body);
+    return submitResult(ctx, requireGm(ctx, req), Number(req.params.id), { participants: x.participants, actualHours: x.actualHours, coopWon: x.coopWon });
+  });
+  app.post<Id>('/api/games/:id/correct', async (req) => {
+    const x = b(req.body);
+    return correctResult(ctx, requireGm(ctx, req), Number(req.params.id), { participants: x.participants, actualHours: x.actualHours, coopWon: x.coopWon });
+  });
+  app.post<Id>('/api/games/:id/leader', async (req) => leaderTap(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body).playerId));
 }

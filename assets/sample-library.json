@@ -1,0 +1,11 @@
+{
+  "format": "game-night-pack/1",
+  "name": "Generic examples",
+  "games": [
+    { "name": "Example: Trick-Taking Card Game", "minPlayers": 3, "maxPlayers": 6, "defaultDuration": 0.75, "mode": "competitive", "rerollsAllowed": false, "color": "#4c6ef5" },
+    { "name": "Example: Engine-Building Board Game", "minPlayers": 2, "maxPlayers": 5, "defaultDuration": 1.5, "mode": "competitive", "rerollsAllowed": true, "color": "#2f9e44" },
+    { "name": "Example: Push-Your-Luck Dice Game", "minPlayers": 2, "maxPlayers": 8, "defaultDuration": 0.5, "mode": "competitive", "rerollsAllowed": true, "color": "#e8590c" },
+    { "name": "Example: Team Word Game", "minPlayers": 4, "maxPlayers": 10, "defaultDuration": 0.75, "mode": "team", "rerollsAllowed": false, "color": "#ae3ec9" },
+    { "name": "Example: Co-op Puzzle Game", "minPlayers": 2, "maxPlayers": 5, "defaultDuration": 1.0, "mode": "coop", "rerollsAllowed": true, "color": "#1098ad" }
+  ]
+}

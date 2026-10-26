@@ -332,4 +332,7 @@ export const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL
   );
   `,
+  /* 2 — key/value bookkeeping (e.g. one-time library seed) */ `
+  CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  `,
 ];

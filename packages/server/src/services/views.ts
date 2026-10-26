@@ -5,11 +5,13 @@
  *  - Player only (own): holdings, lots, cash.
  * Views are built field-by-field from DB/engine data; nothing is spread wholesale.
  */
-import { capRemainingH, sellValueH, type GoldH } from '@gn/engine';
+import { capRemainingH, hoursPlayed, sellValueH, type GoldH } from '@gn/engine';
+import { gameViews, type GameView } from './games';
+import { listLibrary, type LibraryGame } from './library';
 import type { Ctx } from '../context';
 import { feedTail } from './feed';
 import { latestMoodTerms, priceHistory } from './market';
-import { nightOverrides, pid, type NightState } from './state';
+import { loadResults, nightOverrides, pid, type NightState } from './state';
 
 export interface PublicView {
   night: {
@@ -28,6 +30,7 @@ export interface PublicView {
   players: { id: number; displayName: string; ticker: string; color: string | null; avatarPath: string | null; left: boolean }[];
   standings: { playerId: number; netWorthH: GoldH; rank: number }[];
   market: { id: string; kind: string; ticker: string; playerId: number | null; price: number; history: number[] }[];
+  games: GameView[];
   feed: ReturnType<typeof feedTail>;
 }
 
@@ -65,6 +68,7 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
       price: s.price,
       history: hist.get(s.id) ?? [s.price],
     })),
+    games: gameViews(ctx, n.id),
     feed: feedTail(ctx, n.id, false),
   };
 }
@@ -140,6 +144,9 @@ export interface GmView extends PublicView {
     }[];
     stocks: { securityId: string; gmOffset: number; moodTerm: number }[];
     settings: { resolved: NightState['settings']; overrides: unknown };
+    library: LibraryGame[];
+    /** Hours played per player (tracked, never enforced). */
+    hours: Record<number, number>;
     tickCount: number;
     feed: ReturnType<typeof feedTail>;
   };
@@ -170,6 +177,8 @@ export function gmView(ctx: Ctx, st: NightState, base?: PublicView): GmView {
       })),
       stocks: st.securities.filter((s) => s.kind === 'player').map((s) => ({ securityId: s.id, gmOffset: s.gmOffset, moodTerm: mood.get(s.id) ?? 0 })),
       settings: { resolved: st.settings, overrides: nightOverrides(st.night) },
+      library: listLibrary(ctx),
+      hours: Object.fromEntries([...hoursPlayed(loadResults(ctx, st.night.id))].map(([k, v]) => [Number(k), Math.round(v * 100) / 100])),
       tickCount: st.night.tick_count,
       feed: feedTail(ctx, st.night.id, true),
     },

@@ -1,8 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { buildApp } from './app';
 import type { Config } from './context';
 import { openDb } from './db';
 import { startTickLoop } from './tickLoop';
+import { seedLibraryOnce } from './services/library';
 
 const config: Config = {
   port: Number(process.env.PORT ?? 8080),
@@ -14,6 +16,7 @@ const config: Config = {
 
 const db = openDb(join(config.dataDir, 'game-night.sqlite'));
 const { app, ctx } = await buildApp({ db, config, logger: true });
+seedLibraryOnce(ctx, process.env.SAMPLE_LIBRARY ?? fileURLToPath(new URL('../../../assets/sample-library.json', import.meta.url)));
 const stop = startTickLoop(ctx);
 await app.listen({ port: config.port, host: config.host });
 

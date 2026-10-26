@@ -2,7 +2,7 @@ import cookie from '@fastify/cookie';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { HttpError, nullBus, type Bus, type Config, type Ctx } from './context';
 import type { DB } from './db';
-import { registerRoutes } from './routes';
+import { registerGameRoutes, registerRoutes } from './routes';
 import { attachSockets } from './sockets';
 import type { Server } from 'socket.io';
 
@@ -36,6 +36,7 @@ export async function buildApp(opts: BuildOptions): Promise<App> {
   });
 
   registerRoutes(app, ctx);
+  registerGameRoutes(app, ctx);
 
   let io: Server | null = null;
   if (opts.sockets !== false) {
