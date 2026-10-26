@@ -1,4 +1,6 @@
 import cookie from '@fastify/cookie';
+import fastifyStatic from '@fastify/static';
+import { existsSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { HttpError, nullBus, type Bus, type Config, type Ctx } from './context';
 import type { DB } from './db';
@@ -10,6 +12,8 @@ export interface BuildOptions {
   db: DB;
   config: Config;
   now?: () => number;
+  /** Built client (packages/client/dist). Pages are served from here when it exists. */
+  clientDir?: string;
   /** Attach Socket.IO (default true). Tests of pure HTTP can skip it. */
   sockets?: boolean;
   logger?: boolean;
@@ -37,6 +41,23 @@ export async function buildApp(opts: BuildOptions): Promise<App> {
 
   registerRoutes(app, ctx);
   registerGameRoutes(app, ctx);
+
+  if (opts.clientDir && existsSync(opts.clientDir)) {
+    await app.register(fastifyStatic, { root: opts.clientDir, index: false, wildcard: false });
+    // Hashed bundles never change; pages always revalidate.
+    app.get('/assets/*', (req, reply) => {
+      reply.header('cache-control', 'public, max-age=31536000, immutable');
+      return reply.sendFile(`assets/${(req.params as { '*': string })['*']}`);
+    });
+    const page = (file: string) => (_req: unknown, reply: { header: (k: string, v: string) => unknown; sendFile: (f: string) => unknown }) => {
+      reply.header('cache-control', 'no-cache');
+      return reply.sendFile(file);
+    };
+    app.get('/', page('index.html'));
+    app.get('/gm', page('gm.html'));
+    app.get('/display', page('display.html'));
+    app.get('/play', page('play.html'));
+  }
 
   let io: Server | null = null;
   if (opts.sockets !== false) {

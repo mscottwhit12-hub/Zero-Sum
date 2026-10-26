@@ -92,7 +92,7 @@ export function attachSockets(ctx: Ctx, server: HttpServer): { io: Server; bus: 
 
 function snapshotFor(ctx: Ctx, role: Role) {
   const n = currentNight(ctx);
-  const base = { role: role.kind, ...(role.kind === 'gm' ? { gm: { name: role.auth.name, role: role.auth.role, deviceType: role.auth.deviceType, paused: role.auth.paused } } : {}) };
+  const base = { role: role.kind, ...(role.kind === 'gm' ? { whoami: { name: role.auth.name, role: role.auth.role, deviceType: role.auth.deviceType, paused: role.auth.paused } } : {}) };
   if (!n) return { ...base, night: null };
   const st = computeNightState(ctx, n.id)!;
   if (role.kind === 'gm') return { ...base, ...(role.auth.paused ? publicView(ctx, st) : gmView(ctx, st)) };

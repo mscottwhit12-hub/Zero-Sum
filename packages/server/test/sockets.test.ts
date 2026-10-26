@@ -103,8 +103,8 @@ describe('sockets', () => {
     const u = await upd;
     expect(u.gm).toBeUndefined(); // TV-style view only
     const snap = await once<Record<string, unknown>>(client({ role: 'gm' }, gm), 'snapshot');
-    expect(snap.gm).toMatchObject({ paused: true });
-    expect(snap.ledger).toBeUndefined();
+    expect(snap.whoami).toMatchObject({ paused: true });
+    expect(snap.gm).toBeUndefined();
   });
 
   it('feed events: public ones reach players, GM-only ones do not', async () => {

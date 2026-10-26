@@ -102,6 +102,17 @@ describe('night lifecycle', () => {
   });
 });
 
+describe('broadcasts', () => {
+  it('creating a night pushes an update to open screens', async () => {
+    const t = await makeApp();
+    const gm = await setupMaster(t);
+    const { bus, events } = (await import('../src/context')).recordingBus();
+    t.ctx.bus = bus;
+    await call(t, gm, 'POST', '/api/nights', { name: 'N' });
+    expect(events.some((e) => e.channel === 'refresh')).toBe(true);
+  });
+});
+
 describe('settings and gold', () => {
   it('live settings changes re-score immediately; invalid changes are rejected; null resets', async () => {
     const t = await makeApp();

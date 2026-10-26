@@ -6,6 +6,13 @@ import { readFileSync } from 'node:fs';
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit } from './audit';
 import type { GmAuth } from './gm';
+import { currentNight } from './state';
+
+/** Library changes show up in the GM view of the current night (schedule form). */
+const refresh = (ctx: Ctx) => {
+  const n = currentNight(ctx);
+  if (n) ctx.bus.refresh(n.id);
+};
 
 export type GameMode = 'competitive' | 'team' | 'coop';
 
@@ -128,12 +135,14 @@ const masterOnly = (a: GmAuth) => {
 export function createLibraryGame(ctx: Ctx, actor: GmAuth, input: LibraryGameInput): LibraryGame {
   masterOnly(actor);
   const g = normalizeGame(input);
-  return ctx.db.transaction(() => {
+  const created = ctx.db.transaction(() => {
     if (ctx.db.prepare('SELECT 1 FROM library_game WHERE name = ?').get(g.name)) throw conflict('name_taken');
     const id = insert(ctx, g);
     audit(ctx, { nightId: null, gmId: actor.gmId, action: 'library.create', entity: 'library_game', entityId: id, after: g });
     return { id, ...g };
   })();
+  refresh(ctx);
+  return created;
 }
 
 export function updateLibraryGame(ctx: Ctx, actor: GmAuth, id: number, input: LibraryGameInput): LibraryGame {
@@ -141,13 +150,15 @@ export function updateLibraryGame(ctx: Ctx, actor: GmAuth, id: number, input: Li
   const before = getLibraryGame(ctx, id);
   if (!before) throw notFound();
   const g = normalizeGame({ ...before, ...input });
-  return ctx.db.transaction(() => {
+  const updated = ctx.db.transaction(() => {
     const clash = ctx.db.prepare('SELECT id FROM library_game WHERE name = ? AND id != ?').get(g.name, id);
     if (clash) throw conflict('name_taken');
     update(ctx, id, g);
     audit(ctx, { nightId: null, gmId: actor.gmId, action: 'library.update', entity: 'library_game', entityId: id, before, after: g });
     return { id, ...g };
   })();
+  refresh(ctx);
+  return updated;
 }
 
 /** Scheduled games keep their own copy (name, mode, duration), so deleting from the library is safe. */
@@ -160,6 +171,7 @@ export function deleteLibraryGame(ctx: Ctx, actor: GmAuth, id: number): void {
     ctx.db.prepare('DELETE FROM library_game WHERE id = ?').run(id);
     audit(ctx, { nightId: null, gmId: actor.gmId, action: 'library.delete', entity: 'library_game', entityId: id, before });
   })();
+  refresh(ctx);
 }
 
 export function exportPack(ctx: Ctx, name = 'My game library') {
@@ -200,6 +212,7 @@ export function importPack(ctx: Ctx, actor: GmAuth | null, pack: unknown): { add
     }
     audit(ctx, { nightId: null, gmId: actor?.gmId ?? null, action: 'library.import', entity: 'library_game', after: { added, updated } });
   })();
+  refresh(ctx);
   return { added, updated };
 }
 

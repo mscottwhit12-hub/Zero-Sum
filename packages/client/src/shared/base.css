@@ -1,0 +1,254 @@
+/* Deliberately plain (decision: keep visuals bland for now). System fonts only — nothing to download. */
+:root {
+  --bg: #f5f5f4;
+  --panel: #ffffff;
+  --text: #1c1917;
+  --muted: #78716c;
+  --line: #e7e5e4;
+  --accent: #b08d1a; /* gold */
+  --accent-ink: #ffffff;
+  --good: #2f7d32;
+  --bad: #b3261e;
+  --warn: #9a6700;
+  --radius: 6px;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #161514;
+    --panel: #201f1d;
+    --text: #ecebe9;
+    --muted: #a8a29e;
+    --line: #34312e;
+    --accent: #d4b03c;
+    --accent-ink: #161514;
+    --good: #6bbf6e;
+    --bad: #ef6b63;
+    --warn: #d9a43a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #161514;
+  --panel: #201f1d;
+  --text: #ecebe9;
+  --muted: #a8a29e;
+  --line: #34312e;
+  --accent: #d4b03c;
+  --accent-ink: #161514;
+  --good: #6bbf6e;
+  --bad: #ef6b63;
+  --warn: #d9a43a;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 var(--font);
+}
+h1,
+h2,
+h3 {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+h1 {
+  font-size: 1.35rem;
+}
+h2 {
+  font-size: 1.1rem;
+}
+h3 {
+  font-size: 0.95rem;
+}
+a {
+  color: inherit;
+}
+.mono,
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.num {
+  text-align: right;
+}
+.muted {
+  color: var(--muted);
+}
+.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+.good {
+  color: var(--good);
+}
+.bad {
+  color: var(--bad);
+}
+.small {
+  font-size: 0.85rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.9rem;
+  margin-bottom: 0.9rem;
+}
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.spread {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.stack > * + * {
+  margin-top: 0.5rem;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.9rem;
+}
+
+button,
+.btn {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  padding: 0.45rem 0.8rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  min-height: 36px;
+}
+button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+button.danger {
+  color: var(--bad);
+}
+button.big {
+  min-height: 48px;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+}
+button.chip {
+  min-height: 40px;
+  border-radius: 999px;
+}
+button.chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.55rem;
+  min-height: 36px;
+  max-width: 100%;
+}
+label {
+  display: block;
+}
+label > span {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.15rem;
+}
+.field {
+  margin-bottom: 0.6rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  padding: 0.35rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+th {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+.scroll-x {
+  overflow-x: auto;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.badge.live {
+  color: var(--good);
+  border-color: var(--good);
+}
+.badge.warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.error {
+  color: var(--bad);
+  font-size: 0.9rem;
+}
+.bar {
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bar > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  vertical-align: middle;
+}

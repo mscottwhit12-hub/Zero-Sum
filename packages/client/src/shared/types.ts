@@ -1,0 +1,110 @@
+/** Shapes sent by the server (see packages/server/src/services/views.ts). */
+export interface NightInfo {
+  id: number;
+  name: string;
+  date: string;
+  status: 'setup' | 'joins_open' | 'live' | 'paused' | 'ended' | 'archived';
+  tradingClosed: boolean;
+  lengthMinutes: number;
+  nightMs: number;
+  currentQuarter: number | null;
+  quarters: { n: number; startMin: number; endMin: number; windowEndMin: number }[];
+  tickSeconds: number;
+  serverTime: number;
+}
+export interface PlayerInfo {
+  id: number;
+  displayName: string;
+  ticker: string;
+  color: string | null;
+  avatarPath: string | null;
+  left: boolean;
+}
+export interface Standing {
+  playerId: number;
+  netWorthH: number;
+  rank: number;
+}
+export interface Security {
+  id: string;
+  kind: 'player' | 'index' | 'crypto' | 'event' | 'dead';
+  ticker: string;
+  playerId: number | null;
+  price: number;
+  history: number[];
+}
+export interface GameInfo {
+  id: number;
+  name: string;
+  mode: 'competitive' | 'team' | 'coop';
+  status: 'scheduled' | 'active' | 'final' | 'cancelled';
+  color: string | null;
+  plannedStart: number | null;
+  plannedDurationHours: number | null;
+  startedAt: number | null;
+  endedAt: number | null;
+  hours: number | null;
+  rerollsAllowed: boolean;
+  participants: { playerId: number; placement: number | null; dnf: boolean; team: string | null }[];
+  leaderId: number | null;
+}
+export interface FeedItem {
+  id: number;
+  type: string;
+  message: string;
+  data: Record<string, unknown>;
+  gmOnly: boolean;
+  createdAt: number;
+}
+export interface LibraryGame {
+  id: number;
+  name: string;
+  minPlayers: number;
+  maxPlayers: number;
+  defaultDuration: number;
+  mode: 'competitive' | 'team' | 'coop';
+  rerollsAllowed: boolean;
+  soundTheme: string | null;
+  ruleEntryId: number | null;
+  icon: string | null;
+  color: string | null;
+}
+export interface LedgerRow {
+  playerId: number;
+  stakeH: number;
+  resultsH: number;
+  adjustmentsH: number;
+  bountiesH: number;
+  achievementsH: number;
+  tradeFlowH: number;
+  cashH: number;
+  netWorthH: number;
+}
+export interface PublicState {
+  night: NightInfo | null;
+  players: PlayerInfo[];
+  standings: Standing[];
+  market: Security[];
+  games: GameInfo[];
+  feed: FeedItem[];
+}
+export interface GmExtras {
+  ledger: LedgerRow[];
+  stocks: { securityId: string; gmOffset: number; moodTerm: number }[];
+  settings: { resolved: Record<string, unknown>; overrides: Record<string, unknown> };
+  library: LibraryGame[];
+  hours: Record<number, number>;
+  tickCount: number;
+  feed: FeedItem[];
+}
+export interface WhoAmI {
+  name: string;
+  role: 'master' | 'sub';
+  deviceType: 'phone' | 'laptop';
+  paused: boolean;
+}
+export interface GmState extends PublicState {
+  whoami?: WhoAmI;
+  /** Absent when this device is remotely paused (it then gets the public view only). */
+  gm?: GmExtras;
+}

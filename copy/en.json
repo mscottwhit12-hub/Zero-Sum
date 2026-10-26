@@ -43,5 +43,49 @@
   "tradingClose": {
     "warning": "Trading desks are closing. Positions still open at collapse will be liquidated automatically. A {pct}% compliance fee applies to profits. Losses are exempt, out of sympathy.",
     "closed": "Trading desks are closed. Please liquidate your conscience."
+  },
+  "brand": {
+    "company": "Bullion & Associates",
+    "tv": "BNN — Bullion News Network",
+    "gm": "Compliance Office",
+    "tagline": "Trust is our most liquid asset."
+  },
+  "feed": {
+    "joins_open": "Onboarding has commenced. New associates may now report to their desks.",
+    "night_live": "The market is open. Trading desks are live.",
+    "paused": "Markets suspended pending a routine review.",
+    "resumed": "Markets have resumed. Nothing to see here.",
+    "trading_closed": "Trading desks are closed. Please liquidate your conscience.",
+    "collapse": "THE MARKET HAS COLLAPSED. ONLY GOLD REMAINS.",
+    "settings_changed": "Policy amended by the Compliance Office.",
+    "adjustment": "Manual adjustment: {player} {gold} ({reason}).",
+    "game_started": "{name} has opened for business.",
+    "game_result": "{name} concluded. {winners} reports a strong quarter.",
+    "dethroned": "{to} has dethroned {from} at {name}.",
+    "kingfall": "Kingfall: {from}'s long reign at {name} has ended.",
+    "correction": "Result restated for {name} by {by}."
+  },
+  "status": {
+    "setup": "In setup",
+    "joins_open": "Onboarding",
+    "live": "Market open",
+    "paused": "Suspended",
+    "ended": "Collapsed",
+    "archived": "Archived"
+  },
+  "modes": {
+    "competitive": "Competitive",
+    "team": "Team",
+    "coop": "Co-op"
+  },
+  "landing": {
+    "title": "Bullion & Associates",
+    "subtitle": "Staff entrance",
+    "player": "Join the firm",
+    "rejoin": "Return to my desk",
+    "tv": "Main screen",
+    "gm": "Compliance Office (GM)",
+    "sub": "Assistant GM",
+    "soon": "Opens in a later build."
   }
 }

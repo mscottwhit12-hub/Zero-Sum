@@ -15,7 +15,8 @@ const config: Config = {
 };
 
 const db = openDb(join(config.dataDir, 'game-night.sqlite'));
-const { app, ctx } = await buildApp({ db, config, logger: true });
+const clientDir = process.env.CLIENT_DIR ?? fileURLToPath(new URL('../../client/dist', import.meta.url));
+const { app, ctx } = await buildApp({ db, config, logger: true, clientDir });
 seedLibraryOnce(ctx, process.env.SAMPLE_LIBRARY ?? fileURLToPath(new URL('../../../assets/sample-library.json', import.meta.url)));
 const stop = startTickLoop(ctx);
 await app.listen({ port: config.port, host: config.host });

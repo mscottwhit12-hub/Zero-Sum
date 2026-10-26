@@ -66,7 +66,7 @@ export function createNight(ctx: Ctx, actor: GmAuth, input: { name?: unknown; da
   if (!Number.isInteger(length) || length < 30 || length > 24 * 60) throw bad('bad_length', 'Night length must be 30–1440 minutes.');
   const overrides = (input.settings ?? {}) as DeepPartial<Settings>;
   checkSettings(overrides);
-  return ctx.db.transaction(() => {
+  const created = ctx.db.transaction(() => {
     if (currentNight(ctx)) throw conflict('night_in_progress', 'Archive the current night first.');
     const r = ctx.db
       .prepare("INSERT INTO night (name, date, status, length_minutes, settings, created_at) VALUES (?,?, 'setup', ?, ?, ?)")
@@ -75,6 +75,9 @@ export function createNight(ctx: Ctx, actor: GmAuth, input: { name?: unknown; da
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'night.create', entity: 'night', entityId: n.id, after: { name, date, length } });
     return n;
   })();
+  ctx.bus.all('night:update', { created: true });
+  ctx.bus.refresh(created.id);
+  return created;
 }
 
 function checkSettings(overrides: DeepPartial<Settings>): Settings {
