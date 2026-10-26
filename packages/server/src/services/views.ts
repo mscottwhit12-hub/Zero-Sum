@@ -13,6 +13,12 @@ import { listLibrary, type LibraryGame } from './library';
 import type { Ctx } from '../context';
 import { feedTail } from './feed';
 import { latestMoodTerms, priceHistory } from './market';
+import { voteGmView, voteView } from './votes';
+import { moodGmView, sentNotifications } from './field';
+import { gmChallenges, playerChallenges } from './espionage';
+import { seatingView } from './seating';
+import { ambientOff, currentAmbient, listSounds } from './sounds';
+import { minterLeaderboard } from './minter';
 import { loadResults, nightOverrides, pid, type NightState } from './state';
 
 export interface PublicView {
@@ -38,6 +44,10 @@ export interface PublicView {
   market: { id: string; kind: string; ticker: string; playerId: number | null; price: number; history: number[] }[];
   games: GameView[];
   feed: ReturnType<typeof feedTail>;
+  /** Poll status only (no tallies, no drift). */
+  vote: { quarter: number; open: boolean; windowEndsNms: number | null } | null;
+  /** NFT Minter leaderboard (fun only). */
+  minter: { leaderboard: { playerId: number; minted: number }[] };
 }
 
 export function publicView(ctx: Ctx, st: NightState): PublicView {
@@ -84,7 +94,14 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
     })),
     games: gameViews(ctx, n.id),
     feed: feedTail(ctx, n.id, false),
+    vote: ((v) => (v ? { quarter: v.quarter, open: v.open, windowEndsNms: v.windowEndsNms } : null))(voteView(ctx, st, null)),
+    minter: { leaderboard: minterLeaderboard(ctx, n.id) },
   };
+}
+
+/** TV-only extras (sent to the 'tv' room and GMs, never to players): seating map and ambient loop. */
+export function tvView(ctx: Ctx, st: NightState) {
+  return { seating: seatingView(ctx, st.night.id), ambient: currentAmbient(ctx, st.night.id) };
 }
 
 export interface PlayerView extends PublicView {
@@ -101,6 +118,8 @@ export interface PlayerView extends PublicView {
     achievements: { type: string; createdAt: number }[];
     messages: { id: number; message: string; createdAt: number; read: boolean }[];
     trades: ReturnType<typeof myTrades>;
+    vote: ReturnType<typeof voteView>;
+    challenges: ReturnType<typeof playerChallenges>;
   };
 }
 
@@ -142,6 +161,8 @@ export function playerView(ctx: Ctx, st: NightState, playerId: number, base?: Pu
       achievements: ach.map((a) => ({ type: a.type, createdAt: a.created_at })),
       messages: playerMessages(ctx, st.night.id, playerId),
       trades: myTrades(ctx, p),
+      vote: voteView(ctx, st, playerId),
+      challenges: playerChallenges(ctx, playerId, st.night.id),
     },
   };
 }
@@ -183,6 +204,15 @@ export interface GmView extends PublicView {
     tickCount: number;
     feed: ReturnType<typeof feedTail>;
     requests: PendingRequest[];
+    vote: ReturnType<typeof voteGmView>;
+    mood: ReturnType<typeof moodGmView>;
+    challenges: ReturnType<typeof gmChallenges>;
+    notifications: ReturnType<typeof sentNotifications>;
+    /** Re-roll tokens left per player. */
+    rerolls: Record<number, number>;
+    seating: ReturnType<typeof seatingView>;
+    sounds: ReturnType<typeof listSounds>;
+    ambient: { current: ReturnType<typeof currentAmbient>; off: boolean };
   };
 }
 
@@ -216,6 +246,14 @@ export function gmView(ctx: Ctx, st: NightState, base?: PublicView): GmView {
       tickCount: st.night.tick_count,
       feed: feedTail(ctx, st.night.id, true),
       requests: pendingRequests(ctx, st.night.id),
+      vote: voteGmView(ctx, st),
+      mood: moodGmView(ctx, st.night),
+      challenges: gmChallenges(ctx, st.night.id),
+      notifications: sentNotifications(ctx, st.night.id),
+      rerolls: Object.fromEntries(st.players.map((p) => [p.id, p.reroll_tokens_left])),
+      seating: seatingView(ctx, st.night.id),
+      sounds: listSounds(ctx),
+      ambient: { current: currentAmbient(ctx, st.night.id), off: ambientOff(ctx, st.night.id) },
     },
   };
 }

@@ -138,3 +138,8 @@ export function unlockWithPin(ctx: Ctx, auth: GmAuth, pin: unknown): void {
   audit(ctx, { nightId: null, gmId: auth.gmId, action: 'gm.pin_unlock', entity: 'gm_session', entityId: auth.sessionId });
   ctx.bus.gmSession(auth.sessionId, 'gm:device_pause', { paused: false });
 }
+
+/** Setup actions (library, rulebook, seating, sounds, settings) are Master only. */
+export function masterOnly(a: GmAuth): void {
+  if (a.role !== 'master') throw forbidden('master_only');
+}

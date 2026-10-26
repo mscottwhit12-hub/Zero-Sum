@@ -65,6 +65,14 @@
           <span class="muted">· {quarterLabel}</span>
           <span class="muted">· {gs?.players.length ?? 0} players</span>
         </div>
+        {#if gs?.gm?.vote}
+          {@const v = gs.gm.vote}
+          <div class="row small" style="margin-top:.3rem">
+            <span class="badge" class:live={v.open}>Q{v.quarter} poll {v.open ? 'open' : 'closed'}</span>
+            <span class="mono">{v.ballotsCast}/{v.eligible} voted</span>
+            {#if v.open && v.windowEndsNms != null}<span class="muted mono">closes in {clock(v.windowEndsNms - nightNow(night, now))}</span>{/if}
+          </div>
+        {/if}
       </div>
       {#if master}
         <div class="row">

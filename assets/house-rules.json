@@ -1,0 +1,33 @@
+{
+  "format": "game-night-rules/1",
+  "entries": [
+    {
+      "title": "How you earn gold",
+      "body": "Gold comes from finishing games.\n\n- Gold for a game = hours played × players at the table × your placement multiplier.\n- 1st place earns the full multiplier, 2nd half, 3rd a quarter, and so on.\n- Team games: everyone on a team gets the team's placement gold.\n- Co-op games pay everyone on a win, and a small consolation on a loss.\n- Did not finish? You still count toward the table size, but score nothing.\n\nThe GM enters the result and the actual time played. Paused time doesn't count."
+    },
+    {
+      "title": "Net worth and standings",
+      "body": "Standings rank everyone by **net worth**: your gold plus what your shares would sell for right now.\n\nThe leader everywhere in the app is the net-worth leader."
+    },
+    {
+      "title": "The market",
+      "body": "Every associate is listed as a stock. There's also an index, a crypto coin, and a few other securities.\n\n- Buy anything, including yourself, with gold.\n- Each trade pays a small fee and nudges the price.\n- Shares are locked for a few minutes after you buy them.\n- There's a cap on how much gold you can have invested at once.\n- One trade per stock per market tick.\n- Trading freezes during a pause and closes before the night ends.\n- At the end, all holdings auto-sell. Profitable positions pay a small fee on the profit; losing ones pay nothing.\n\nYour holdings are private."
+    },
+    {
+      "title": "Quarterly polls",
+      "body": "A few times a night the Compliance Office calls every phone.\n\nVote who will lead the firm at the end of the quarter. Correct picks win gold. You can vote for yourself."
+    },
+    {
+      "title": "Re-rolls",
+      "body": "Each associate gets a few re-roll tokens per night.\n\n- Only usable in games the GM has flagged.\n- Tell the GM when you spend one; they log it.\n- Unused tokens are worth nothing at the end."
+    },
+    {
+      "title": "Confidential memos",
+      "body": "Sometimes an associate receives an encrypted memo with a covert assignment.\n\n- Accept or reject it. Rejecting costs nothing.\n- Pull it off and you get the reward. Only you will know.\n- Get caught and the whole firm hears about it."
+    },
+    {
+      "title": "Pauses and the end of the night",
+      "body": "When the GM pauses the night, phones lock and the market stops. The NFT Minter still works.\n\nWhen the night ends, the market collapses, everything auto-sells, and the podium is decided by gold."
+    }
+  ]
+}

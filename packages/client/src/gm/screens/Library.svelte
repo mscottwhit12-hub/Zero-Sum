@@ -3,7 +3,7 @@
   import { del, get, patch, post } from '@shared/api';
   import { t } from '@shared/copy';
   import { run, toast } from '@shared/ui';
-  import type { GmState, LibraryGame, WhoAmI } from '@shared/types';
+  import type { GmState, LibraryGame, RuleEntry, WhoAmI } from '@shared/types';
   let { whoami }: { gs: GmState | null; whoami: WhoAmI } = $props();
   const master = $derived(whoami.role === 'master');
   // Loaded directly so the library is manageable before any night exists.
@@ -12,15 +12,19 @@
     const r = await run(() => get<{ games: LibraryGame[] }>('/api/library'));
     if (r) games = r.games;
   };
-  onMount(load);
+  let rules = $state<RuleEntry[]>([]);
+  onMount(() => {
+    load();
+    get<{ rules: RuleEntry[] }>('/api/rules').then((r) => (rules = r.rules)).catch(() => {});
+  });
 
-  const blank = { name: '', minPlayers: 2, maxPlayers: 6, defaultDuration: 1, mode: 'competitive' as const, rerollsAllowed: false, color: '#888888', icon: '' };
-  let form = $state<Omit<LibraryGame, 'id' | 'soundTheme' | 'ruleEntryId' | 'color' | 'icon'> & { color: string; icon: string }>({ ...blank });
+  const blank = { name: '', minPlayers: 2, maxPlayers: 6, defaultDuration: 1, mode: 'competitive' as const, rerollsAllowed: false, color: '#888888', icon: '', soundTheme: '', ruleEntryId: '' };
+  let form = $state<Omit<LibraryGame, 'id' | 'soundTheme' | 'ruleEntryId' | 'color' | 'icon'> & { color: string; icon: string; soundTheme: string; ruleEntryId: string }>({ ...blank });
   let editing = $state<number | null>(null);
 
   function edit(g: LibraryGame) {
     editing = g.id;
-    form = { name: g.name, minPlayers: g.minPlayers, maxPlayers: g.maxPlayers, defaultDuration: g.defaultDuration, mode: g.mode, rerollsAllowed: g.rerollsAllowed, color: g.color ?? '#888888', icon: g.icon ?? '' };
+    form = { name: g.name, minPlayers: g.minPlayers, maxPlayers: g.maxPlayers, defaultDuration: g.defaultDuration, mode: g.mode, rerollsAllowed: g.rerollsAllowed, color: g.color ?? '#888888', icon: g.icon ?? '', soundTheme: g.soundTheme ?? '', ruleEntryId: g.ruleEntryId == null ? '' : String(g.ruleEntryId) };
   }
   function reset() {
     editing = null;
@@ -67,6 +71,13 @@
       <label class="field"><span>Max players</span><input type="number" min="1" max="30" bind:value={form.maxPlayers} /></label>
       <label class="field"><span>Default length (hours)</span><input type="number" step="any" min="0.1" max="8" bind:value={form.defaultDuration} /></label>
       <label class="field"><span>Colour</span><input type="color" bind:value={form.color} /></label>
+      <label class="field"><span>Sound theme (ambient)</span><input bind:value={form.soundTheme} maxlength="40" placeholder="e.g. tavern" /></label>
+      <label class="field"><span>Rulebook entry</span>
+        <select bind:value={form.ruleEntryId}>
+          <option value="">—</option>
+          {#each rules as r (r.id)}<option value={String(r.id)}>{r.title}</option>{/each}
+        </select>
+      </label>
       <label class="field row"><input type="checkbox" bind:checked={form.rerollsAllowed} /> Re-rolls allowed by default</label>
     </div>
     <div class="row">

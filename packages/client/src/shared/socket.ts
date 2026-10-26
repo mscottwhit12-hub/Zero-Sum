@@ -22,6 +22,9 @@ export function connectLive<T extends object>(role: Role, auth: Record<string, u
   socket.on('disconnect', () => connected.set(false));
   socket.on('snapshot', (s: T) => state.set(s));
   socket.on('state:update', (u: Partial<T>) => state.update((cur) => (cur ? { ...cur, ...u } : (u as T))));
+  // Players: private `me` updates live in the same store so later public updates don't revert them.
+  socket.on('player:update', (me: unknown) => state.update((cur) => (cur ? ({ ...cur, me } as T) : cur)));
+  socket.on('minter:leaderboard', (d: { leaderboard: unknown }) => state.update((cur) => (cur ? ({ ...cur, minter: { leaderboard: d.leaderboard } } as T) : cur)));
   for (const [ev, fn] of Object.entries(on)) socket.on(ev, fn);
   return { state, connected, socket, close: () => socket.close() };
 }

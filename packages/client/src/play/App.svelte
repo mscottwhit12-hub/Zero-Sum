@@ -4,7 +4,9 @@
   import { gold } from '@shared/format';
   import { connectLive, type Live } from '@shared/socket';
   import Toasts from '@shared/Toasts.svelte';
-  import type { Me, PlayerState } from '@shared/types';
+  import { toast } from '@shared/ui';
+  import { signedGold } from '@shared/format';
+  import type { PlayerState } from '@shared/types';
   import Feed from './apps/Feed.svelte';
   import Market from './apps/Market.svelte';
   import Messages from './apps/Messages.svelte';
@@ -12,6 +14,8 @@
   import Rules from './apps/Rules.svelte';
   import Standings from './apps/Standings.svelte';
   import Wallet from './apps/Wallet.svelte';
+  import Vote from './apps/Vote.svelte';
+  import { FUN_APPS } from './fun';
   import { dapi, deviceToken, pendingToken, setDeviceToken, setPendingToken, store } from './device';
   import Join from './Join.svelte';
 
@@ -30,6 +34,7 @@
 
   const BOOT: string[] = (copy as { phone: { boot: string[] } }).phone.boot;
   const APPS = [
+    { id: 'vote', icon: '☎' },
     { id: 'wallet', icon: '◎' },
     { id: 'market', icon: '↗' },
     { id: 'standings', icon: '≡' },
@@ -37,7 +42,10 @@
     { id: 'feed', icon: '☰' },
     { id: 'rules', icon: '§' },
     { id: 'profile', icon: '☺' },
-  ] as const;
+    ...FUN_APPS.map((f) => ({ id: f.id, icon: f.icon })),
+  ];
+  const funApp = (id: string | null) => FUN_APPS.find((f) => f.id === id) ?? null;
+  let lockApp = $state<string | null>(null);
 
   function route() {
     stopPoll();
@@ -66,7 +74,12 @@
     live?.close();
     unsub.forEach((u) => u());
     live = connectLive<PlayerState>('player', { deviceToken: deviceToken() }, {
-      'player:update': (me) => s && (s = { ...s, me: me as Me }),
+      'vote:bounty': (d) => toast(t('phone.vote_bounty', { gold: signedGold((d as { goldH: number }).goldH) })),
+      'espionage:result': (d) => toast((d as { success: boolean }).success ? t('phone.espionage_success') : t('phone.espionage_fail'), (d as { success: boolean }).success ? 'ok' : 'error'),
+      'achievement:new': (d) => {
+        const a = d as { playerId: number; type: string };
+        if (a.playerId === s?.me?.id) toast(t('phone.achievement_new', { achievement: t(`achievements.${a.type}.name`) }));
+      },
       connect_error: (e) => {
         if ((e as Error).message === 'unknown_device') {
           live?.close();
@@ -106,12 +119,34 @@
 
   // ---- badges (no banners, red counts only) + vibration on new items
   let feedSeen = $state(Number(store.get('gn_feed_seen') ?? 0));
-  const unreadMessages = $derived(s?.me?.messages.filter((m) => !m.read).length ?? 0);
+  const unreadMessages = $derived((s?.me?.messages.filter((m) => !m.read).length ?? 0) + (s?.me?.challenges.filter((c) => c.status === 'sent').length ?? 0));
+  const vote = $derived(s?.me?.vote ?? null);
+  const voteOpen = $derived(!!vote?.open && s?.night?.status === 'live');
+  const voteBadge = $derived(voteOpen && vote?.myTarget == null ? 1 : 0);
+  const apps = $derived(APPS.filter((a) => a.id !== 'vote' || voteOpen));
+  // Incoming call: once per quarter until answered or declined (decline = snooze; the badge stays).
+  let callDone = $state(store.get('gn_call_done') ?? '');
+  const callKey = $derived(vote && s?.night ? `${s.night.id}:${vote.quarter}` : '');
+  const ringing = $derived(voteOpen && vote != null && vote.myTarget == null && callDone !== callKey && app !== 'vote');
+  function endCall(answer: boolean) {
+    callDone = callKey;
+    store.set('gn_call_done', callDone);
+    if (answer) openApp('vote');
+  }
+  $effect(() => {
+    if (!ringing) return;
+    navigator.vibrate?.([400, 200, 400, 200, 400]);
+    const h = setInterval(() => navigator.vibrate?.([400, 200, 400]), 3000);
+    return () => clearInterval(h);
+  });
+  $effect(() => {
+    if (app === 'vote' && !voteOpen && vote == null) app = null;
+  });
   const unseenFeed = $derived((s?.feed ?? []).filter((f) => f.id > feedSeen).length);
-  const badges = $derived<Record<string, number>>({ messages: unreadMessages, feed: unseenFeed });
+  const badges = $derived<Record<string, number>>({ messages: unreadMessages, feed: unseenFeed, vote: voteBadge });
   let lastTotal = -1;
   $effect(() => {
-    const total = unreadMessages + unseenFeed;
+    const total = unreadMessages + unseenFeed + voteBadge;
     if (lastTotal >= 0 && total > lastTotal) navigator.vibrate?.(60);
     lastTotal = total;
   });
@@ -164,6 +199,13 @@
       <p class="center pad muted">Connecting…</p>
     {:else if !s.night || !s.me}
       <p class="center pad muted">No session in progress.</p>
+    {:else if locked === 'paused' && funApp(lockApp)}
+      {@const F = funApp(lockApp)!.component}
+      <div class="appbar spread">
+        <button onclick={() => (lockApp = null)}>‹ {t('minter.lock_close')}</button>
+        <span class="small muted">{countdown ?? ''}</span>
+      </div>
+      <div class="appbody"><F {s} /></div>
     {:else if locked}
       <!-- Lock screen: pause (spec §15.3) / collapse stand-by. Inputs frozen. -->
       <div class="lock">
@@ -171,6 +213,22 @@
         <h2>{locked === 'paused' ? t('phone.paused_title') : t('phone.ended_title')}</h2>
         <p class="muted">{locked === 'paused' ? t('phone.paused_body') : t('phone.ended_body')}</p>
         {#if locked === 'paused' && countdown}<p class="mono countdown">{countdown}</p>{/if}
+        {#if locked === 'paused'}
+          {#each FUN_APPS.filter((f) => f.onLockScreen) as f (f.id)}
+            <button class="primary" onclick={() => (lockApp = f.id)}>{t('minter.lock_open')}</button>
+          {/each}
+        {/if}
+      </div>
+    {:else if ringing && vote}
+      <!-- Full-screen incoming call (spec §9 / §15.2). -->
+      <div class="call">
+        <div class="muted small">{t('phone.call_title')}</div>
+        <div class="call-from">{t('phone.call_from')}</div>
+        <div class="muted">{t('phone.call_body', { quarter: vote.quarter })}</div>
+        <div class="call-actions">
+          <button class="decline" onclick={() => endCall(false)}>{t('phone.call_decline')}</button>
+          <button class="answer" onclick={() => endCall(true)}>{t('phone.call_accept')}</button>
+        </div>
       </div>
     {:else if app}
       <div class="appbar spread">
@@ -179,13 +237,17 @@
         <span style="width:60px"></span>
       </div>
       <div class="appbody">
-        {#if app === 'wallet'}<Wallet {s} />
+        {#if app === 'vote'}<Vote {s} {now} />
+        {:else if app === 'wallet'}<Wallet {s} />
         {:else if app === 'market'}<Market {s} />
         {:else if app === 'standings'}<Standings {s} />
         {:else if app === 'messages'}<Messages {s} />
         {:else if app === 'feed'}<Feed {s} />
         {:else if app === 'rules'}<Rules {s} />
         {:else if app === 'profile'}<Profile {s} onsignout={() => { live?.close(); route(); }} />
+        {:else if funApp(app)}
+          {@const F = funApp(app)!.component}
+          <F {s} />
         {/if}
       </div>
     {:else}
@@ -196,7 +258,7 @@
           <div class="muted small">net worth · rank {s.me.rank ?? '—'}</div>
         </div>
         <div class="grid">
-          {#each APPS as a (a.id)}
+          {#each apps as a (a.id)}
             <button class="icon" onclick={() => openApp(a.id)}>
               <span class="glyph">{a.icon}</span>
               {#if badges[a.id]}<span class="badge-count">{badges[a.id]}</span>{/if}
@@ -347,5 +409,37 @@
   }
   .countdown {
     font-size: 1.6rem;
+  }
+  .call {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+  }
+  .call-from {
+    font-size: 1.8rem;
+  }
+  .call-actions {
+    display: flex;
+    gap: 3rem;
+    margin-top: 3rem;
+  }
+  .call-actions button {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    color: #fff;
+    border: none;
+    font-size: 0.8rem;
+  }
+  .answer {
+    background: var(--good);
+  }
+  .decline {
+    background: var(--bad);
   }
 </style>

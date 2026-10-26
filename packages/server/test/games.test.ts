@@ -75,7 +75,8 @@ describe('schedule and results', () => {
     // gold = 1h × 4 players × mult × 3
     expect(res.json().gold.map((x: { goldH: number }) => x.goldH)).toEqual([1200, 600, 300, 0]);
     const st = computeNightState(t.ctx, currentNight(t.ctx)!.id)!;
-    expect(st.standings[0]).toMatchObject({ playerId: String(ids[0]), netWorthH: 3200, rank: 1 });
+    // 3200 + first_blood achievement (skill, 2 gold)
+    expect(st.standings[0]).toMatchObject({ playerId: String(ids[0]), netWorthH: 3400, rank: 1 });
     const pub = publicView(t.ctx, st);
     expect(pub.games[0]).toMatchObject({ status: 'final', hours: 1 });
     expect(pub.feed[0]).toMatchObject({ type: 'result', message: 'feed.game_result' });

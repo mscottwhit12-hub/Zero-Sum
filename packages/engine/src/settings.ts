@@ -124,6 +124,13 @@ export interface Settings {
   rerolls: {
     perPlayer: number;
   };
+  espionage: {
+    /** Default gold reward for a successful challenge (the GM can set any amount per challenge). */
+    goldReward: number;
+    /** TV reveals "accepted/rejected" after a random delay in this range (seconds). */
+    revealDelayMinSec: number;
+    revealDelayMaxSec: number;
+  };
   achievements: {
     /** Gold per achievement id. */
     gold: Record<string, number>;
@@ -200,6 +207,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   mood: { moodMax: 0.06, decayPerTick: 0.01 },
   rerolls: { perPlayer: 3 },
+  espionage: { goldReward: 3, revealDelayMinSec: 15, revealDelayMaxSec: 45 },
   achievements: {
     gold: { first_blood: 2, hat_trick: 5, regular: 2, oracle: 1 },
   },
@@ -304,6 +312,9 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   frac(s.mood.moodMax, 'mood.moodMax');
   frac(s.mood.decayPerTick, 'mood.decayPerTick');
   need(Number.isInteger(s.rerolls.perPlayer) && s.rerolls.perPlayer >= 0, 'rerolls.perPlayer', 'must be a whole number ≥ 0');
+  nonNeg(s.espionage.goldReward, 'espionage.goldReward');
+  nonNeg(s.espionage.revealDelayMinSec, 'espionage.revealDelayMinSec');
+  need(s.espionage.revealDelayMaxSec >= s.espionage.revealDelayMinSec, 'espionage.revealDelayMaxSec', 'must be ≥ min');
   for (const [id, g] of Object.entries(s.achievements.gold)) nonNeg(g, `achievements.gold.${id}`);
   nonNeg(s.prompts.tradingCloseMinutesBefore, 'prompts.tradingCloseMinutesBefore');
   need(s.minter.pauseMultiplier >= 1, 'minter.pauseMultiplier', 'must be ≥ 1');

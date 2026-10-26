@@ -2,6 +2,7 @@
  * Night schedule, game lifecycle, the result wizard backend, corrections, and leader taps (crowns).
  * Results are the source of truth: gold is always re-derived from them.
  */
+import { awardAchievements } from './achievements';
 import {
   EMPTY_CROWN,
   kingfallImpulse,
@@ -98,6 +99,14 @@ export interface ScheduleInput {
   participants?: unknown;
 }
 
+/** Optional table (seating plan) for a game; must belong to this night. */
+function tableOf(ctx: Ctx, nightId: number, v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const id = Number(v);
+  if (!ctx.db.prepare('SELECT 1 FROM game_table WHERE id = ? AND night_id = ?').get(id, nightId)) throw bad('bad_table');
+  return id;
+}
+
 export function scheduleGame(ctx: Ctx, actor: GmAuth, input: ScheduleInput): GameRow {
   masterOnly(actor);
   const n = requireNight(ctx, ['setup', 'joins_open', 'live', 'paused']);
@@ -118,7 +127,7 @@ export function scheduleGame(ctx: Ctx, actor: GmAuth, input: ScheduleInput): Gam
       .prepare(
         "INSERT INTO game (night_id, library_game_id, name, table_id, mode, planned_start, planned_duration_hours, status, rerolls_allowed) VALUES (?,?,?,?,?,?,?, 'scheduled', ?)",
       )
-      .run(n.id, lib?.id ?? null, name, input.tableId == null || input.tableId === '' ? null : Number(input.tableId), mode, plannedStart, duration, rerolls ? 1 : 0);
+      .run(n.id, lib?.id ?? null, name, tableOf(ctx, n.id, input.tableId), mode, plannedStart, duration, rerolls ? 1 : 0);
     const id = Number(r.lastInsertRowid);
     setParticipants(ctx, id, parts);
     const g = getGame(ctx, id);
@@ -140,7 +149,7 @@ export function updateScheduledGame(ctx: Ctx, actor: GmAuth, id: number, input: 
   if (duration != null && (!Number.isFinite(duration) || duration < 0.1 || duration > 8)) throw bad('bad_duration');
   const plannedStart = input.plannedStart === undefined ? before.planned_start : input.plannedStart == null || input.plannedStart === '' ? null : Number(input.plannedStart);
   const rerolls = input.rerollsAllowed === undefined ? before.rerolls_allowed : input.rerollsAllowed ? 1 : 0;
-  const tableId = input.tableId === undefined ? before.table_id : input.tableId == null || input.tableId === '' ? null : Number(input.tableId);
+  const tableId = input.tableId === undefined ? before.table_id : tableOf(ctx, n.id, input.tableId);
   return ctx.db.transaction(() => {
     ctx.db
       .prepare('UPDATE game SET name=?, mode=?, planned_duration_hours=?, planned_start=?, rerolls_allowed=?, table_id=? WHERE id=?')
@@ -259,6 +268,7 @@ export function submitResult(ctx: Ctx, actor: GmAuth, id: number, input: ResultI
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.result', entity: 'game', entityId: id, after: result });
   })();
   snapshotStandings(ctx, n.id);
+  awardAchievements(ctx, n.id);
   const winners = scored.rows.filter((r) => r.mult === Math.max(...scored.rows.map((x) => x.mult)) && r.goldH > 0).map((r) => Number(r.playerId));
   pushFeed(ctx, n.id, 'result', 'feed.game_result', { gameId: id, name: g.name, winners, gold: scored.rows.map((r) => ({ playerId: Number(r.playerId), goldH: r.goldH })) });
   ctx.bus.all('game:update', { id, status: 'final' });
@@ -288,6 +298,7 @@ export function correctResult(ctx: Ctx, actor: GmAuth, id: number, input: Result
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.correct', entity: 'game', entityId: id, before, after: result });
   })();
   snapshotStandings(ctx, n.id);
+  awardAchievements(ctx, n.id);
   pushFeed(ctx, n.id, 'correction', 'feed.correction', { gameId: id, name: g.name, by: actor.name }, true);
   ctx.bus.all('game:update', { id, status: 'final' });
   ctx.bus.refresh(n.id);
@@ -359,6 +370,7 @@ export interface GameView {
   rerollsAllowed: boolean;
   participants: { playerId: number; placement: number | null; dnf: boolean; team: string | null }[];
   leaderId: number | null;
+  tableId: number | null;
 }
 
 export function gameViews(ctx: Ctx, nightId: number): GameView[] {
@@ -389,5 +401,6 @@ export function gameViews(ctx: Ctx, nightId: number): GameView[] {
       team: p.team_label,
     })),
     leaderId: g.status === 'active' ? ((v) => (v ? Number(v) : null))(crownOf(ctx, g.id).leaderId) : null,
+    tableId: g.table_id,
   }));
 }

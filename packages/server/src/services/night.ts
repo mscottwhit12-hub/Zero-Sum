@@ -1,3 +1,5 @@
+import { awardAchievements } from './achievements';
+import { playCue } from './sounds';
 import {
   createSecurities,
   endNight as engineEndNight,
@@ -159,6 +161,15 @@ export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction, o
 
   const n = result.night;
   if (result.feed) pushFeed(ctx, n.id, result.feed.type, result.feed.message);
+  // Final achievements (incl. vote-based ones from the force-resolved quarter); re-snapshot if any landed.
+  if (action === 'end' && awardAchievements(ctx, n.id) > 0) {
+    const st = computeNightState(ctx, n.id)!;
+    ctx.db
+      .prepare('INSERT INTO standings_snapshot (night_id, data, created_at) VALUES (?,?,?)')
+      .run(n.id, j.str(st.standings.map((r) => ({ playerId: Number(r.playerId), goldH: r.netWorthH, rank: r.rank }))), ctx.now());
+  }
+  if (action === 'pause') playCue(ctx, 'intermission');
+  if (action === 'end') playCue(ctx, 'night_end');
   const event = { pause: 'night:paused', resume: 'night:resumed', end: 'night:ended' }[action as string] ?? 'night:update';
   ctx.bus.all(event, { status: n.status, tradingClosed: !!n.trading_closed });
   ctx.bus.refresh(n.id);

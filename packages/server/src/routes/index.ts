@@ -5,6 +5,13 @@ import { HttpError, type Ctx } from '../context';
 import { decideRequest, join, joinInfo, requestRejoin, requestStatus } from '../services/join';
 import { markLeft, overrideTicker, playerFromDevice } from '../services/players';
 import { playerBuy, playerSell } from '../services/trading';
+import { castBallot } from '../services/votes';
+import { logReroll, recordMood, sendNotification, setOffset } from '../services/field';
+import { createRule, deleteRule, listRules, updateRule } from '../services/rules';
+import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '../services/seating';
+import { deleteSound, listSounds, playSound, soundFileMime, uploadSound } from '../services/sounds';
+import { minterGet, minterSync } from '../services/minter';
+import { createChallenge, readChallenge, reassignChallenge, resolveChallenge, respondChallenge, usePeek } from '../services/espionage';
 import { auditTail } from '../services/audit';
 import {
   createSubGm,
@@ -268,4 +275,54 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
     overrideTicker(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body).ticker);
     return { ok: true };
   });
+
+  // Phase 6 — player actions
+  app.post('/api/vote', async (req) => castBallot(ctx, device(req), b(req.body).targetId));
+  app.post<Id>('/api/me/challenges/:id/read', async (req) => readChallenge(ctx, device(req), Number(req.params.id)));
+  app.post<Id>('/api/me/challenges/:id/respond', async (req) => respondChallenge(ctx, device(req), Number(req.params.id), b(req.body).accept === true));
+  app.post<Id>('/api/me/challenges/:id/peek', async (req) => usePeek(ctx, device(req), Number(req.params.id), b(req.body).targetPlayerId));
+
+  // Phase 6 — GM field actions (any GM) and Master-only market offset
+  app.post('/api/mood', async (req) => recordMood(ctx, requireGm(ctx, req), b(req.body) as never));
+  app.post('/api/rerolls', async (req) => logReroll(ctx, requireGm(ctx, req), b(req.body) as never));
+  app.post('/api/notifications', async (req) => sendNotification(ctx, requireGm(ctx, req), b(req.body) as never));
+  app.patch<Id>('/api/securities/:id/offset', async (req) => setOffset(ctx, requireGm(ctx, req, { master: true }), decodeURIComponent(req.params.id), b(req.body).offset));
+  app.post('/api/challenges', async (req) => createChallenge(ctx, requireGm(ctx, req), b(req.body) as never));
+  app.post<Id>('/api/challenges/:id/reassign', async (req) => reassignChallenge(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body).playerId));
+  app.post<Id>('/api/challenges/:id/resolve', async (req) => resolveChallenge(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body).success === true));
+
+  // Phase 7 — rulebook (read: anyone; edit: Master)
+  app.get('/api/rules', async () => ({ rules: listRules(ctx) }));
+  app.post('/api/rules', async (req) => createRule(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
+  app.patch<Id>('/api/rules/:id', async (req) => updateRule(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
+  app.delete<Id>('/api/rules/:id', async (req) => deleteRule(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id)));
+
+  // Phase 7 — seating (Master; GM + TV only)
+  app.post('/api/tables', async (req) => createTable(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
+  app.patch<Id>('/api/tables/:id', async (req) => updateTable(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
+  app.delete<Id>('/api/tables/:id', async (req) => deleteTable(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id)));
+  app.post<Id>('/api/tables/:id/seat', async (req) => assignSeat(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
+  app.post('/api/seats/clear', async (req) => clearSeats(ctx, requireGm(ctx, req, { master: true })));
+
+  // Phase 7 — sounds (upload: Master; soundboard: any GM). Files are local (MEDIA_DIR/sounds).
+  app.get('/api/sounds', async (req) => (requireGm(ctx, req), { sounds: listSounds(ctx) }));
+  app.post('/api/sounds', { bodyLimit: 12 * 1024 * 1024 }, async (req) => uploadSound(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
+  app.delete<Id>('/api/sounds/:id', async (req) => deleteSound(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id)));
+  app.post('/api/sounds/play', async (req) => playSound(ctx, requireGm(ctx, req), b(req.body)));
+  app.get<{ Params: { file: string } }>('/media/sounds/:file', async (req, reply) => {
+    const f = req.params.file;
+    if (!/^[a-f0-9]{24}\.(mp3|ogg|wav|m4a)$/.test(f)) return reply.code(404).send();
+    const mime = soundFileMime(ctx, f);
+    if (!mime) return reply.code(404).send();
+    try {
+      const data = readFileSync(joinPath(ctx.config.mediaDir, 'sounds', f));
+      return reply.header('content-type', mime).header('cache-control', 'public, max-age=31536000, immutable').send(data);
+    } catch {
+      return reply.code(404).send();
+    }
+  });
+
+  // Phase 7 — NFT Minter (player device; fun only)
+  app.get('/api/minter', async (req) => minterGet(ctx, device(req)));
+  app.post('/api/minter/sync', async (req) => minterSync(ctx, device(req), b(req.body)));
 }

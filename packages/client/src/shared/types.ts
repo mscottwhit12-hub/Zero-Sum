@@ -49,6 +49,7 @@ export interface GameInfo {
   rerollsAllowed: boolean;
   participants: { playerId: number; placement: number | null; dnf: boolean; team: string | null }[];
   leaderId: number | null;
+  tableId: number | null;
 }
 export interface FeedItem {
   id: number;
@@ -89,6 +90,41 @@ export interface PublicState {
   market: Security[];
   games: GameInfo[];
   feed: FeedItem[];
+  vote?: { quarter: number; open: boolean; windowEndsNms: number | null } | null;
+  minter?: { leaderboard: { playerId: number; minted: number }[] };
+}
+export interface SeatingTable {
+  id: number;
+  name: string;
+  seats: number;
+  x: number;
+  y: number;
+  assignments: { seat: number; playerId: number }[];
+  gameId: number | null;
+}
+export interface SoundInfo {
+  id: number;
+  name: string;
+  kind: 'ambient' | 'cue' | 'soundboard';
+  theme: string | null;
+  url: string;
+}
+export interface Ambient {
+  url: string;
+  theme: string;
+  gameId: number;
+}
+export interface TvState extends PublicState {
+  tv?: { seating: SeatingTable[]; ambient: Ambient | null };
+}
+export interface RuleEntry {
+  id: number;
+  gameName: string | null;
+  title: string;
+  body: string;
+  link: string | null;
+  updatedAt: number;
+  games: { id: number; name: string }[];
 }
 export interface GmExtras {
   ledger: LedgerRow[];
@@ -99,6 +135,52 @@ export interface GmExtras {
   tickCount: number;
   feed: FeedItem[];
   requests: PendingRequest[];
+  vote: (VoteInfo & { ballotsCast: number; eligible: number }) | null;
+  mood: { playerId: number; mood: number; selfAssessment: number; bias: number }[];
+  challenges: GmChallenge[];
+  notifications: { id: number; to: string; message: string; readCount: number; createdAt: number }[];
+  rerolls: Record<number, number>;
+  seating: SeatingTable[];
+  sounds: SoundInfo[];
+  ambient: { current: Ambient | null; off: boolean };
+}
+export interface VoteInfo {
+  quarter: number;
+  open: boolean;
+  windowEndsNms: number | null;
+  quarterEndsNms: number | null;
+  myTarget: number | null;
+}
+export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom';
+export interface Reward {
+  type: RewardType;
+  gold?: number;
+  text?: string;
+}
+export type ChallengeStatus = 'sent' | 'read' | 'accepted' | 'rejected' | 'succeeded' | 'failed' | 'reassigned';
+export interface GmChallenge {
+  id: number;
+  playerId: number;
+  status: ChallengeStatus;
+  text: string;
+  reward: Reward;
+  createdAt: number;
+  reassignedFrom: number | null;
+}
+export interface PeekTrade {
+  securityId: string;
+  side: string;
+  sharesH: number;
+  price: number;
+  createdAt: number;
+}
+export interface MyChallenge {
+  id: number;
+  status: ChallengeStatus;
+  text: string;
+  reward: Reward;
+  createdAt: number;
+  peek: { used: boolean; targetId: number | null; trades: PeekTrade[] } | null;
 }
 export interface WhoAmI {
   name: string;
@@ -132,6 +214,8 @@ export interface Me {
   achievements: { type: string; createdAt: number }[];
   messages: { id: number; message: string; createdAt: number; read: boolean }[];
   trades: { securityId: string; side: 'buy' | 'sell'; sharesH: number; price: number; cashH: number; feeH: number; forced: number; createdAt: number }[];
+  vote: VoteInfo | null;
+  challenges: MyChallenge[];
 }
 export interface PlayerState extends PublicState {
   me?: Me;

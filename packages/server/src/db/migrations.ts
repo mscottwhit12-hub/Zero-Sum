@@ -338,4 +338,24 @@ export const MIGRATIONS: string[] = [
   /* 3 — pause countdown */ `
   ALTER TABLE night ADD COLUMN pause_until INTEGER;
   `,
+  /* 4 — espionage bookkeeping */ `
+  ALTER TABLE challenge ADD COLUMN reveal_at INTEGER;
+  ALTER TABLE challenge ADD COLUMN revealed INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE challenge ADD COLUMN reassigned_from INTEGER;
+  ALTER TABLE challenge ADD COLUMN peek_target INTEGER;
+  ALTER TABLE challenge ADD COLUMN read_at INTEGER;
+  `,
+  /* 5 — seating, minter bookkeeping, sound metadata */ `
+  CREATE TABLE seat_assignment (
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    table_id INTEGER NOT NULL REFERENCES game_table(id) ON DELETE CASCADE,
+    seat INTEGER NOT NULL,
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    PRIMARY KEY (night_id, player_id),
+    UNIQUE (table_id, seat)
+  );
+  ALTER TABLE minter_state ADD COLUMN taps INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE sound ADD COLUMN mime TEXT;
+  ALTER TABLE sound ADD COLUMN created_at INTEGER;
+  `,
 ];

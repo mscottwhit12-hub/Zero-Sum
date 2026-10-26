@@ -102,6 +102,9 @@ export function normalizeGame(input: LibraryGameInput): Omit<LibraryGame, 'id'> 
   };
 }
 
+/** Rule links are local ids: drop dangling ones (e.g. from a pack exported on another server). */
+const ruleRef = (ctx: Ctx, id: number | null) => (id != null && ctx.db.prepare('SELECT 1 FROM rule_entry WHERE id = ?').get(id) ? id : null);
+
 export function listLibrary(ctx: Ctx): LibraryGame[] {
   return (ctx.db.prepare('SELECT * FROM library_game ORDER BY name').all() as Row[]).map(toGame);
 }
@@ -116,7 +119,7 @@ function insert(ctx: Ctx, g: Omit<LibraryGame, 'id'>): number {
     .prepare(
       'INSERT INTO library_game (name, min_players, max_players, default_duration, mode, rerolls_allowed, sound_theme, rule_entry_id, icon, color) VALUES (?,?,?,?,?,?,?,?,?,?)',
     )
-    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, g.ruleEntryId, g.icon, g.color);
+    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color);
   return Number(r.lastInsertRowid);
 }
 
@@ -125,7 +128,7 @@ function update(ctx: Ctx, id: number, g: Omit<LibraryGame, 'id'>) {
     .prepare(
       'UPDATE library_game SET name=?, min_players=?, max_players=?, default_duration=?, mode=?, rerolls_allowed=?, sound_theme=?, rule_entry_id=?, icon=?, color=? WHERE id=?',
     )
-    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, g.ruleEntryId, g.icon, g.color, id);
+    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color, id);
 }
 
 const masterOnly = (a: GmAuth) => {

@@ -17,6 +17,13 @@
   import ResultWizard from './screens/ResultWizard.svelte';
   import Settings from './screens/Settings.svelte';
   import Setup from './screens/Setup.svelte';
+  import Mood from './screens/Mood.svelte';
+  import Espionage from './screens/Espionage.svelte';
+  import Notify from './screens/Notify.svelte';
+  import Market from './screens/Market.svelte';
+  import Rulebook from './screens/Rulebook.svelte';
+  import Seating from './screens/Seating.svelte';
+  import Sounds from './screens/Sounds.svelte';
 
   type Phase = 'loading' | 'setup' | 'login' | 'ready';
   let phase = $state<Phase>('loading');
@@ -29,13 +36,22 @@
   const ROUTES = [
     { id: 'dashboard', label: 'Dashboard', field: true },
     { id: 'games', label: 'Games', field: true },
+    { id: 'mood', label: 'Mood', field: true },
+    { id: 'espionage', label: 'Espionage', field: true },
+    { id: 'notify', label: 'Messages', field: true },
     { id: 'players', label: 'Players', field: true },
+    { id: 'market', label: 'Market', field: false },
+    { id: 'seating', label: 'Seating', field: false },
+    { id: 'sounds', label: 'Soundboard', field: false },
+    { id: 'rules', label: 'Rulebook', field: false },
     { id: 'library', label: 'Library', field: false },
     { id: 'settings', label: 'Settings', field: false },
     { id: 'devices', label: 'Devices & GMs', field: false },
     { id: 'audit', label: 'Audit log', field: false },
   ] as const;
   type Route = (typeof ROUTES)[number]['id'];
+  /** Phone bottom bar: the first four field actions; everything else under More. */
+  const BAR = ROUTES.filter((r) => r.field).slice(0, 4);
   const readRoute = (): Route => {
     const h = location.hash.replace(/^#\/?/, '') as Route;
     return ROUTES.some((r) => r.id === h) ? h : 'dashboard';
@@ -134,6 +150,13 @@
       {#if route === 'dashboard'}<Dashboard gs={gmState} {whoami} onresult={(g) => openWizard(g)} />
       {:else if route === 'games'}<Games gs={gmState} {whoami} onresult={openWizard} />
       {:else if route === 'players'}<Players gs={gmState} {whoami} />
+      {:else if route === 'mood'}<Mood gs={gmState} />
+      {:else if route === 'espionage'}<Espionage gs={gmState} />
+      {:else if route === 'notify'}<Notify gs={gmState} />
+      {:else if route === 'market'}<Market gs={gmState} {whoami} />
+      {:else if route === 'seating'}<Seating gs={gmState} {whoami} />
+      {:else if route === 'sounds'}<Sounds gs={gmState} {whoami} />
+      {:else if route === 'rules'}<Rulebook {whoami} />
       {:else if route === 'library'}<Library gs={gmState} {whoami} />
       {:else if route === 'settings'}<Settings gs={gmState} {whoami} />
       {:else if route === 'devices'}<Devices {whoami} onlogout={() => { live?.close(); phase = 'login'; }} ondevice={(d) => whoami && (whoami = { ...whoami, deviceType: d })} />
@@ -144,14 +167,14 @@
     {#if layout === 'phone'}
       <!-- Field actions first on the phone (spec §16). -->
       <nav class="bottom">
-        {#each ROUTES.filter((r) => r.field) as r (r.id)}
+        {#each BAR as r (r.id)}
           <button class:on={route === r.id} onclick={() => go(r.id)}>{r.label}</button>
         {/each}
-        <button class:on={moreOpen || !ROUTES.find((r) => r.id === route)?.field} onclick={() => (moreOpen = !moreOpen)}>More</button>
+        <button class:on={moreOpen || !BAR.some((r) => r.id === route)} onclick={() => (moreOpen = !moreOpen)}>More</button>
       </nav>
       {#if moreOpen}
         <div class="more panel">
-          {#each ROUTES.filter((r) => !r.field) as r (r.id)}
+          {#each ROUTES.filter((r) => !BAR.some((x) => x.id === r.id)) as r (r.id)}
             <button class="big" onclick={() => go(r.id)}>{r.label}</button>
           {/each}
         </div>
@@ -212,7 +235,7 @@
     left: 0;
     right: 0;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     background: var(--panel);
     border-top: 1px solid var(--line);
     padding: 0.4rem;

@@ -67,7 +67,16 @@
     "joined": "{player} has joined the firm.",
     "late_join": "{player} has been onboarded mid-session.",
     "left": "{player} has left the building. Their stock remains listed.",
-    "returned": "{player} is back at their desk."
+    "returned": "{player} is back at their desk.",
+    "vote_open": "Quarter {quarter} poll is open. Compliance is calling every associate.",
+    "vote_resolved": "Quarter {quarter} closed. {leaders} led the firm; {correct} associates called it.",
+    "achievement": "{player} earned {achievement}.",
+    "reroll": "{player} spent a re-roll at {name}.",
+    "memo": "BREAKING: an associate has received a confidential memo.",
+    "memo_accepted": "The confidential memo has been accepted.",
+    "memo_rejected": "The confidential memo has been declined.",
+    "espionage_fail": "EXPOSED: {player} was caught on a covert assignment.",
+    "espionage_success_gm": "{player} completed a covert assignment."
   },
   "status": {
     "setup": "In setup",
@@ -122,7 +131,43 @@
     "waiting": "Awaiting Compliance approval…",
     "denied": "Request declined by Compliance.",
     "closed": "Onboarding is closed. Ask the GM.",
-    "rules_soon": "The rulebook arrives in a later build."
+    "rules_soon": "The rulebook arrives in a later build.",
+    "call_title": "Incoming call",
+    "call_from": "Compliance Office",
+    "call_body": "Quarter {quarter} poll",
+    "call_accept": "Answer",
+    "call_decline": "Decline",
+    "vote_title": "Quarter {quarter} poll",
+    "vote_prompt": "Who will lead the firm at the end of this quarter? Correct picks win gold.",
+    "vote_closes": "Poll closes in {time}",
+    "vote_closed": "Poll closed. Results at quarter end.",
+    "vote_saved": "Vote recorded.",
+    "vote_bounty": "Your quarter pick was right: {gold} gold.",
+    "memo_title": "ENCRYPTED MEMO",
+    "memo_tap": "Tap to decrypt",
+    "memo_decrypting": "Decrypting…",
+    "memo_reward": "Reward",
+    "memo_accept": "Accept",
+    "memo_reject": "Reject",
+    "memo_status": {
+      "accepted": "Accepted. Report to the Compliance Office when done.",
+      "rejected": "Declined. This memo will self-destruct.",
+      "succeeded": "Assignment complete. Reward granted.",
+      "failed": "Assignment failed. You have been exposed."
+    },
+    "rewards": {
+      "gold": "{gold} gold",
+      "reroll": "1 extra re-roll",
+      "peek": "One look at an associate's trade history",
+      "dead_clue": "A tip on the market",
+      "custom": "{text}"
+    },
+    "dead_clue": "A tip from Logistics: the near-dead stock trades thin. A few determined buyers could move it a long way.",
+    "peek_pick": "Choose one associate to investigate. One look only.",
+    "peek_none": "No trades on record.",
+    "espionage_success": "Assignment complete. Check Messages.",
+    "espionage_fail": "You've been exposed.",
+    "achievement_new": "Achievement: {achievement}"
   },
   "trade_errors": {
     "market_closed": "Trading is closed right now.",
@@ -133,5 +178,43 @@
     "too_small": "That amount buys less than 0.01 shares.",
     "no_shares": "You don't hold that many shares.",
     "locked": "Those shares are still locked."
+  },
+  "tv": {
+    "memo": "BREAKING — An associate has received a confidential memo",
+    "memo_accepted": "UPDATE — The confidential memo has been accepted",
+    "memo_rejected": "UPDATE — The confidential memo has been declined",
+    "memo_failed": "EXPOSED — {player} was caught on a covert assignment",
+    "achievement": "{player} earned {achievement}",
+    "vote_open": "Quarter {quarter} poll is open — check your phones",
+    "minter_crawl": "> {ticker} mints {minted} NFTs",
+    "standings": "Standings",
+    "now_playing": "Now playing",
+    "up_next": "Up next",
+    "market": "Market board",
+    "seating": "Seating",
+    "minters": "Top NFT minters",
+    "polls_open": "POLLS ARE OPEN — Q{quarter} — check your phones",
+    "intermission": "INTERMISSION",
+    "intermission_body": "Markets suspended pending a routine review.",
+    "trading_closed": "TRADING CLOSED",
+    "boot": [
+      "> BNN terminal v0.7",
+      "> connecting to exchange…",
+      "> feeds online"
+    ]
+  },
+  "minter": {
+    "loading": "Booting minting rig…",
+    "minted": "NFTs minted tonight",
+    "credits": "credits",
+    "mint": "MINT",
+    "closed": "Minting closed",
+    "bonus": "Intermission bonus: {mult}× minting",
+    "exclusive": "intermission only",
+    "shop": "Hardware",
+    "leaderboard": "Top minters",
+    "nobody": "No one has minted yet.",
+    "lock_open": "Open NFT Minter",
+    "lock_close": "Back to lock screen"
   }
 }

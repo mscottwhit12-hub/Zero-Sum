@@ -4,7 +4,7 @@ import type { Bus, Ctx } from '../context';
 import { authFromToken, type GmAuth } from '../services/gm';
 import { playerFromDevice } from '../services/players';
 import { computeNightState, currentNight } from '../services/state';
-import { gmView, playerView, publicView } from '../services/views';
+import { gmView, playerView, publicView, tvView } from '../services/views';
 
 export const GM_COOKIE = 'gn_gm';
 
@@ -56,11 +56,14 @@ export function attachSockets(ctx: Ctx, server: HttpServer): { io: Server; bus: 
     socket.emit('snapshot', snapshotFor(ctx, role));
   });
 
-  // Coalesce refreshes: many writes in one tick → one broadcast.
+  // Coalesce refreshes: many writes → one broadcast, at most one per THROTTLE_MS (wall clock).
+  const THROTTLE_MS = 250;
   const pending = new Set<number>();
   let scheduled = false;
+  let lastFlush = 0;
   const flush = () => {
     scheduled = false;
+    lastFlush = Date.now();
     for (const nightId of pending) broadcastState(ctx, io, nightId);
     pending.clear();
   };
@@ -81,10 +84,11 @@ export function attachSockets(ctx: Ctx, server: HttpServer): { io: Server; bus: 
     },
     refresh: (nightId) => {
       pending.add(nightId);
-      if (!scheduled) {
-        scheduled = true;
-        setImmediate(flush);
-      }
+      if (scheduled) return;
+      scheduled = true;
+      const wait = lastFlush + THROTTLE_MS - Date.now();
+      if (wait > 0) setTimeout(flush, wait);
+      else setImmediate(flush);
     },
   };
   return { io, bus };
@@ -97,7 +101,7 @@ function snapshotFor(ctx: Ctx, role: Role) {
   const st = computeNightState(ctx, n.id)!;
   if (role.kind === 'gm') return { ...base, ...(role.auth.paused ? publicView(ctx, st) : gmView(ctx, st)) };
   if (role.kind === 'player') return { ...base, ...(playerView(ctx, st, role.playerId) ?? publicView(ctx, st)) };
-  return { ...base, ...publicView(ctx, st) };
+  return { ...base, ...publicView(ctx, st), tv: tvView(ctx, st) };
 }
 
 /** One state computation, three filtered audiences. */
@@ -106,6 +110,7 @@ function broadcastState(ctx: Ctx, io: Server, nightId: number) {
   if (!st) return;
   const pub = publicView(ctx, st);
   io.to('public').emit('state:update', pub);
+  io.to('tv').emit('state:update', { tv: tvView(ctx, st) });
   io.to('gm').emit('state:update', gmView(ctx, st, pub));
   for (const p of st.players) {
     const room = io.sockets.adapter.rooms.get(`player:${p.id}`);

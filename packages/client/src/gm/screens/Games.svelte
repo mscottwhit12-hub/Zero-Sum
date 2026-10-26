@@ -19,6 +19,7 @@
   let start = $state('');
   let duration = $state(1);
   let rerolls = $state(false);
+  let tableId = $state('');
   let picked = $state<number[]>([]);
 
   function pickLibrary(id: string) {
@@ -39,6 +40,7 @@
     start = epochToTime(g.plannedStart);
     duration = g.plannedDurationHours ?? 1;
     rerolls = g.rerollsAllowed;
+    tableId = g.tableId == null ? '' : String(g.tableId);
     picked = g.participants.map((p) => p.playerId);
   }
   function reset() {
@@ -49,6 +51,7 @@
     start = '';
     duration = 1;
     rerolls = false;
+    tableId = '';
     picked = [];
   }
   async function save(e: Event) {
@@ -60,6 +63,7 @@
       plannedStart: start ? timeToEpoch(start) : null,
       plannedDurationHours: Number(duration),
       rerollsAllowed: rerolls,
+      tableId: tableId || null,
       participants: picked,
     };
     const r = editing ? await run(() => patch(`/api/games/${editing}`, body), 'Game updated') : await run(() => post('/api/games', body), 'Game scheduled');
@@ -91,6 +95,12 @@
       </label>
       <label class="field"><span>Planned start (optional)</span><input type="time" bind:value={start} /></label>
       <label class="field"><span>Planned length (hours)</span><input type="number" step="any" min="0.1" max="8" bind:value={duration} /></label>
+      <label class="field"><span>Table (optional)</span>
+        <select bind:value={tableId}>
+          <option value="">—</option>
+          {#each gs?.gm?.seating ?? [] as tb (tb.id)}<option value={String(tb.id)}>{tb.name}</option>{/each}
+        </select>
+      </label>
       <label class="field row"><input type="checkbox" bind:checked={rerolls} /> Re-rolls allowed</label>
     </div>
     <p class="small muted">Players (optional — can be set when the result is entered)</p>
@@ -146,3 +156,18 @@
   </div>
   {#if !games.length}<p class="muted">Nothing scheduled yet.</p>{/if}
 </section>
+
+{#each games.filter((g) => g.status === 'active' && g.rerollsAllowed) as g (g.id)}
+  <section class="panel">
+    <h2>Re-rolls · {g.name}</h2>
+    <p class="small muted">Tap when a player spends a re-roll.</p>
+    <div class="row">
+      {#each g.participants.length ? g.participants.map((p) => p.playerId) : activePlayers(gs).map((p) => p.id) as id (id)}
+        {@const left = gs?.gm?.rerolls[id] ?? 0}
+        <button class="big" disabled={left <= 0} onclick={() => run(() => post('/api/rerolls', { gameId: g.id, playerId: id }), `Re-roll logged for ${playerName(gs, id)}`)}>
+          {playerName(gs, id)} <span class="muted small">({left} left)</span>
+        </button>
+      {/each}
+    </div>
+  </section>
+{/each}
