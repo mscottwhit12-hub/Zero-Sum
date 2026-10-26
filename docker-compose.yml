@@ -1,0 +1,15 @@
+services:
+  zero-sum:
+    build: .
+    image: zero-sum:latest
+    container_name: zero-sum
+    restart: unless-stopped
+    ports:
+      - "${ZS_PORT:-8080}:8080"
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      # Database, avatars and generated statements. Back this folder up.
+      - ./data:/data
+      # Your media: uploaded sounds live here (MEDIA_DIR/sounds).
+      - ./media:/media
