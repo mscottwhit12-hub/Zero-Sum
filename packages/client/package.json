@@ -1,0 +1,23 @@
+{
+  "name": "@gn/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json --threshold error"
+  },
+  "dependencies": {
+    "@gn/engine": "*",
+    "socket.io-client": "4.8.1"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "5.1.1",
+    "svelte": "5.57.1",
+    "svelte-check": "4.1.4",
+    "typescript": "5.6.3",
+    "vite": "6.4.4"
+  }
+}

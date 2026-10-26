@@ -26,11 +26,11 @@ export async function buildApp(opts: BuildOptions): Promise<App> {
   await app.register(cookie);
   const ctx: Ctx = { db: opts.db, now: opts.now ?? Date.now, bus: nullBus as Bus, config: opts.config };
 
-  app.setErrorHandler((err, _req, reply) => {
+  app.setErrorHandler((error, _req, reply) => {
+    const err = error as Error & { validation?: unknown; statusCode?: number };
     if (err instanceof HttpError) return reply.code(err.status).send({ error: err.code, message: err.message });
-    if ((err as { validation?: unknown }).validation) return reply.code(400).send({ error: 'bad_request', message: err.message });
-    if ((err as { statusCode?: number }).statusCode && (err as { statusCode: number }).statusCode < 500)
-      return reply.code((err as { statusCode: number }).statusCode).send({ error: 'bad_request', message: err.message });
+    if (err.validation) return reply.code(400).send({ error: 'bad_request', message: err.message });
+    if (err.statusCode && err.statusCode < 500) return reply.code(err.statusCode).send({ error: 'bad_request', message: err.message });
     app.log.error(err);
     return reply.code(500).send({ error: 'server_error' });
   });

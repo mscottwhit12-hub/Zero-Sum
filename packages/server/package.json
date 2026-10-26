@@ -10,18 +10,19 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@fastify/cookie": "^9.4.0",
+    "@fastify/cookie": "11.1.2",
+    "@fastify/static": "10.1.4",
     "@gn/engine": "*",
-    "better-sqlite3": "^11.7.0",
-    "fastify": "^4.28.1",
-    "socket.io": "^4.8.1"
+    "better-sqlite3": "11.7.0",
+    "fastify": "5.12.5",
+    "socket.io": "4.8.1"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
-    "@types/node": "^22.10.2",
-    "socket.io-client": "^4.8.1",
-    "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.8"
+    "@types/better-sqlite3": "7.6.12",
+    "@types/node": "22.10.2",
+    "socket.io-client": "4.8.1",
+    "tsx": "4.23.15",
+    "typescript": "5.6.3",
+    "vitest": "5.0.3"
   }
 }
