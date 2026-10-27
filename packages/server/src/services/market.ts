@@ -86,30 +86,53 @@ export function runTick(ctx: Ctx, nightId: number): boolean {
   return done;
 }
 
+/** Per database, per night: the last `points` prices per security, rebuilt only when a new tick lands. */
+const historyCache = new WeakMap<object, Map<number, { tick: number; points: number; hist: Map<string, { ticks: number[]; prices: number[] }> }>>();
+
+/**
+ * Recent price history per security (for sparklines), with the tick of each point.
+ * Cached per night and rebuilt once per market tick with one small indexed read per security
+ * (the old window query ranked every price row of the night on every broadcast).
+ */
+export function priceHistoryPoints(ctx: Ctx, nightId: number, points = 60): Map<string, { ticks: number[]; prices: number[] }> {
+  const tickRow = ctx.db.prepare('SELECT tick_count FROM night WHERE id = ?').get(nightId) as { tick_count: number } | undefined;
+  const tick = tickRow?.tick_count ?? 0;
+  let perDb = historyCache.get(ctx.db);
+  if (!perDb) historyCache.set(ctx.db, (perDb = new Map()));
+  const hit = perDb.get(nightId);
+  if (hit && hit.tick === tick && hit.points === points) return hit.hist;
+  const ids = (ctx.db.prepare('SELECT id FROM security WHERE night_id = ?').all(nightId) as { id: string }[]).map((r) => r.id);
+  const q = ctx.db.prepare('SELECT tick, price FROM price WHERE night_id = ? AND security_id = ? ORDER BY tick DESC LIMIT ?');
+  const hist = new Map<string, { ticks: number[]; prices: number[] }>();
+  for (const id of ids) {
+    const rows = (q.all(nightId, id, points) as { tick: number; price: number }[]).reverse();
+    if (rows.length) hist.set(id, { ticks: rows.map((r) => r.tick), prices: rows.map((r) => r.price) });
+  }
+  perDb.set(nightId, { tick, points, hist });
+  return hist;
+}
+
 /** Recent public price history per security (for sparklines). */
 export function priceHistory(ctx: Ctx, nightId: number, points = 60): Map<string, number[]> {
-  const rows = ctx.db
-    .prepare(
-      `SELECT security_id, price FROM (
-         SELECT security_id, price, tick, ROW_NUMBER() OVER (PARTITION BY security_id ORDER BY tick DESC) AS rn
-         FROM price WHERE night_id = ?
-       ) WHERE rn <= ? ORDER BY security_id, tick`,
-    )
-    .all(nightId, points) as { security_id: string; price: number }[];
-  const out = new Map<string, number[]>();
-  for (const r of rows) (out.get(r.security_id) ?? out.set(r.security_id, []).get(r.security_id)!).push(r.price);
-  return out;
+  return new Map([...priceHistoryPoints(ctx, nightId, points)].map(([k, v]) => [k, v.prices]));
 }
 
 /** Latest mood term per player stock (GM-visible impact). Drift and impulses are never exposed. */
+const moodCache = new WeakMap<object, Map<number, { tick: number; terms: Map<string, number> }>>();
 export function latestMoodTerms(ctx: Ctx, nightId: number): Map<string, number> {
-  const rows = ctx.db
-    .prepare(
-      `SELECT p.security_id, p.causes FROM price p
-       JOIN (SELECT security_id, MAX(tick) t FROM price WHERE night_id = ? GROUP BY security_id) m
-         ON m.security_id = p.security_id AND m.t = p.tick
-       WHERE p.night_id = ? AND p.security_id LIKE 'p:%'`,
-    )
-    .all(nightId, nightId) as { security_id: string; causes: string }[];
-  return new Map(rows.map((r) => [r.security_id, j.parse<{ mood?: number }>(r.causes, {}).mood ?? 0]));
+  const tick = (ctx.db.prepare('SELECT tick_count FROM night WHERE id = ?').get(nightId) as { tick_count: number } | undefined)?.tick_count ?? 0;
+  let perDb = moodCache.get(ctx.db);
+  if (!perDb) moodCache.set(ctx.db, (perDb = new Map()));
+  const hit = perDb.get(nightId);
+  if (hit && hit.tick === tick) return hit.terms;
+  // One indexed read per player stock (the latest price row), instead of a GROUP BY over every price row.
+  const ids = (ctx.db.prepare("SELECT id FROM security WHERE night_id = ? AND kind = 'player'").all(nightId) as { id: string }[]).map((r) => r.id);
+  const q = ctx.db.prepare('SELECT causes FROM price WHERE night_id = ? AND security_id = ? ORDER BY tick DESC LIMIT 1');
+  const terms = new Map<string, number>();
+  for (const id of ids) {
+    const r = q.get(nightId, id) as { causes: string } | undefined;
+    if (r) terms.set(id, j.parse<{ mood?: number }>(r.causes, {}).mood ?? 0);
+  }
+  perDb.set(nightId, { tick, terms });
+  return terms;
 }

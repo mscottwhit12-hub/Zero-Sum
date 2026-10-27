@@ -51,6 +51,8 @@ export interface PublicView {
   standings: { playerId: number; netWorthH: GoldH; rank: number }[];
   market: { id: string; kind: string; ticker: string; playerId: number | null; price: number; history: number[] }[];
   games: GameView[];
+  /** Market tick the price histories run up to (clients append later ticks from update tails). */
+  marketTick: number;
   feed: ReturnType<typeof feedTail>;
   /** Poll status only (no tallies, no drift). */
   vote: { quarter: number; open: boolean; windowEndsNms: number | null } | null;
@@ -105,6 +107,7 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
       history: hist.get(s.id) ?? [s.price],
     })),
     games: gameViews(ctx, n.id),
+    marketTick: n.tick_count,
     feed: feedTail(ctx, n.id, false),
     vote: ((v) => (v ? { quarter: v.quarter, open: v.open, windowEndsNms: v.windowEndsNms } : null))(voteView(ctx, st, null)),
     minter: { leaderboard: minterLeaderboard(ctx, n.id) },

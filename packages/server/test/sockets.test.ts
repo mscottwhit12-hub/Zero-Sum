@@ -123,3 +123,47 @@ describe('sockets', () => {
     expect(seenByPlayer.some((f) => (f as { type: string }).type === 'adjustment')).toBe(false);
   });
 });
+
+describe('lean broadcasts (performance)', () => {
+  it('updates carry only changed parts; market history comes as tails the client can append', async () => {
+    const { t, gm, client } = await boot(3);
+    const tv = client({ role: 'tv' });
+    const snap = await once<Record<string, any>>(tv, 'snapshot');
+    expect(snap.marketTick).toBe(0);
+    expect(Array.isArray(snap.market[0].history)).toBe(true);
+    // The snapshot matches the last broadcast, so the next update only carries the clock; a tick adds the market.
+    t.ctx.bus.refresh(currentNight(t.ctx)!.id);
+    const u1 = await once<Record<string, any>>(tv, 'state:update');
+    t.clock.advance(21_000);
+    runTick(t.ctx, currentNight(t.ctx)!.id);
+    let u2 = await once<Record<string, any>>(tv, 'state:update');
+    if (!u2.market) u2 = await once<Record<string, any>>(tv, 'state:update');
+    expect(u2.marketTick).toBe(1);
+    expect(u2.market[0].history).toBeUndefined();
+    expect(u2.market[0].tail.at(-1)[0]).toBe(1);
+    expect(u2.standings).toBeUndefined(); // unchanged
+    expect(u2.night).toBeDefined(); // clock always
+    expect(Object.keys(u1).sort()).toEqual(['marketTick', 'night']);
+    noHidden(u2, GM_ONLY_KEYS);
+    // GM: extras only when changed.
+    const gs = client({ role: 'gm' }, gm);
+    await once(gs, 'snapshot');
+    await call(t, gm, 'POST', '/api/notifications', { to: { all: true }, message: 'hi' });
+    const g1 = await once<Record<string, any>>(gs, 'state:update');
+    expect(g1.gm).toBeDefined();
+    await call(t, gm, 'POST', '/api/notifications', { to: { all: true }, message: 'again' });
+    const g2 = await once<Record<string, any>>(gs, 'state:update');
+    expect(g2.gm.notifications).toBeDefined();
+    expect(g2.gm.library).toBeUndefined();
+    expect(g2.gm.settings).toBeUndefined();
+  });
+
+  it('reconnect snapshots reuse cached views but keep the clock current', async () => {
+    const { t, client } = await boot(2);
+    const a = await once<Record<string, any>>(client({ role: 'tv' }), 'snapshot');
+    t.clock.advance(1500);
+    const b = await once<Record<string, any>>(client({ role: 'tv' }), 'snapshot');
+    expect(b.night.serverTime - a.night.serverTime).toBe(1500);
+    expect(b.night.nightMs).toBeGreaterThan(a.night.nightMs);
+  });
+});
