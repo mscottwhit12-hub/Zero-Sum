@@ -37,10 +37,20 @@
   const requests = $derived(gs?.gm?.requests ?? []);
   const decide = (id: number, ok: boolean) => run(() => post(`/api/requests/${id}/${ok ? 'approve' : 'deny'}`), ok ? 'Approved' : 'Denied');
   const tap = (g: GameInfo, playerId: number) => run(() => post(`/api/games/${g.id}/leader`, { playerId }));
+  const endConfirm = $derived.by(() => {
+    const open = (gs?.games ?? []).filter((g) => g.status === 'active' || g.status === 'scheduled').length;
+    return `End the night? Holdings auto-sell and the market collapses.${open ? ` ${open} game${open === 1 ? ' has' : 's have'} no result and will be cancelled (no gold).` : ''}`;
+  });
   const dismiss = (prompt: string) => run(() => post('/api/night/prompts/dismiss', { prompt }));
   /** The prompt fires N minutes before the planned end; show the end time itself. */
   const promptLead = $derived((((gs?.gm?.settings.resolved as { prompts?: { tradingCloseMinutesBefore: number } })?.prompts?.tradingCloseMinutesBefore) ?? 15) * 60_000);
-  const start = (g: GameInfo) => run(() => post(`/api/games/${g.id}/start`), `${g.name} started`);
+  let starting = $state<number | null>(null);
+  const start = async (g: GameInfo) => {
+    if (starting === g.id) return;
+    starting = g.id;
+    await run(() => post(`/api/games/${g.id}/start`), `${g.name} started`);
+    starting = null;
+  };
 </script>
 
 {#if !night}
@@ -93,7 +103,7 @@
             <button onclick={() => act('close-trading', 'Trading closed', 'Close trading for the rest of the night?')}>Close trading</button>
           {/if}
           {#if night.status === 'live' || night.status === 'paused'}
-            <button class="danger" onclick={() => act('end', 'Night ended', 'End the night? Holdings auto-sell and the market collapses.')}>End night</button>
+            <button class="danger" onclick={() => act('end', 'Night ended', endConfirm)}>End night</button>
           {/if}
           {#if night.status === 'ended'}<button onclick={() => act('archive', 'Archived', 'Archive this night? You can then create a new one.')}>Archive</button>{/if}
         </div>
@@ -114,7 +124,7 @@
     <section class="panel prompt">
       <strong>{t('gm.prompt_end')}</strong>
       <div class="actions">
-        <button class="danger" onclick={() => act('end', 'Night ended', 'End the night? Holdings auto-sell and the market collapses.')}>End night</button>
+        <button class="danger" onclick={() => act('end', 'Night ended', endConfirm)}>End night</button>
         <button onclick={() => dismiss('endNight')}>{t('gm.not_yet')}</button>
       </div>
     </section>
@@ -194,7 +204,7 @@
             <td class="muted small">{timeOfDay(g.plannedStart)}</td>
             <td class="muted small">{g.participants.map((p) => playerName(gs, p.playerId)).join(', ') || 'No players yet'}</td>
             <td class="actions">
-              <button disabled={night.status !== 'live'} onclick={() => start(g)}>Start</button>
+              <button disabled={night.status !== 'live' || starting === g.id} onclick={() => start(g)}>Start</button>
               <button onclick={() => onresult(g)}>Result</button>
             </td>
           </tr>

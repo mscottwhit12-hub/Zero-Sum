@@ -23,7 +23,7 @@ import { getLibraryGame, leadLabelOf, leadModeOf, type GameMode } from './librar
 import { hintsForResult } from './hints';
 import { handicapAfterCorrection } from './handicap';
 import { queueImpulse } from './market';
-import { computeNightState, currentNight, loadSecurities, nightMs, nightSettings, pauses, pid, type NightRow } from './state';
+import { computeNightState, currentNight, loadResults, loadSecurities, nightMs, nightSettings, pauses, pid, type NightRow } from './state';
 
 export type GameStatus = 'scheduled' | 'active' | 'final' | 'cancelled';
 
@@ -200,6 +200,8 @@ export function startGame(ctx: Ctx, actor: GmAuth, id: number, input: { particip
   const n = requireNight(ctx, ['live']);
   const g = getGame(ctx, id);
   if (g.night_id !== n.id) throw notFound('game_not_found');
+  // Idempotent: a second tap (or a second GM device) on an already-running game is a no-op, not an error.
+  if (g.status === 'active') return g;
   if (g.status !== 'scheduled') throw conflict('game_not_scheduled');
   const parts = input.participants === undefined ? null : checkPlayers(ctx, n.id, input.participants);
   ctx.db.transaction(() => {
@@ -275,6 +277,17 @@ export function submitResult(ctx: Ctx, actor: GmAuth, id: number, input: ResultI
   const n = requireNight(ctx, ['live', 'paused']);
   const g = getGame(ctx, id);
   if (g.night_id !== n.id) throw notFound('game_not_found');
+  if (g.status === 'final') {
+    // Idempotent: the same result submitted twice (double tap, two GM devices) is a no-op success.
+    const again = parseResult(ctx, g, input);
+    const stored = loadResults(ctx, n.id).find((r) => r.id === String(id));
+    const key = (r: GameResult) =>
+      JSON.stringify([r.actualHours, r.coopWon ?? null, [...r.participants].map((p) => [String(p.playerId), p.dnf ? null : p.placement ?? null, !!p.dnf, p.team ?? null]).sort()]);
+    if (stored && key(stored) === key({ ...again, id: String(id) })) {
+      const sc = scoreGame(stored, nightSettings(n));
+      return { gameId: id, gold: sc.rows.map((r) => ({ playerId: Number(r.playerId), goldH: r.goldH, mult: r.mult })) };
+    }
+  }
   if (g.status !== 'active' && g.status !== 'scheduled') throw conflict('game_not_open', 'Use “correct result” for finished games.');
   const result = parseResult(ctx, g, input);
   const settings = nightSettings(n);
@@ -408,7 +421,8 @@ export function enterScores(ctx: Ctx, actor: GmAuth, gameId: number, input: { sc
     const p = Number(e?.playerId);
     const v = Number(e?.score);
     if (!eligible(p)) throw bad('not_a_participant');
-    if (e?.score === '' || e?.score == null || !Number.isFinite(v) || Math.abs(v) > 1e6) throw bad('bad_score', 'Scores must be numbers.');
+    if (e?.score === '' || e?.score == null || !Number.isFinite(v)) throw bad('bad_score', 'Scores must be numbers.');
+    if (Math.abs(v) > 1e6) throw bad('bad_score', 'Scores must be between −1,000,000 and 1,000,000.');
     return { p, v };
   });
   const at = nightMs(ctx, n);

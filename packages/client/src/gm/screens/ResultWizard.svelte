@@ -103,13 +103,17 @@
     }
   });
 
+  let submitting = $state(false);
   async function submit() {
+    if (submitting) return;
+    submitting = true;
     const body = {
       actualHours: Number(hoursPlayed),
       coopWon: game.mode === 'coop' ? coopWon : undefined,
       participants: result.participants.map((p) => ({ playerId: Number(p.playerId), placement: p.placement, dnf: p.dnf, team: p.team })),
     };
     const r = await run(() => post(`/api/games/${game.id}/${correction ? 'correct' : 'result'}`, body), correction ? 'Result corrected' : 'Result saved');
+    submitting = false;
     if (r) onclose();
   }
 </script>
@@ -187,7 +191,7 @@
     {/if}
     <div class="row foot">
       <button onclick={() => (step = 2)}>Back</button>
-      <button class="primary big" disabled={!preview} onclick={submit}>{correction ? 'Save correction' : 'Submit result'}</button>
+      <button class="primary big" disabled={!preview || submitting} onclick={submit}>{correction ? 'Save correction' : 'Submit result'}</button>
     </div>
   {/if}
 </div>

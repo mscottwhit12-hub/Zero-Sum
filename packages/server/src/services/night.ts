@@ -68,7 +68,7 @@ export function createNight(ctx: Ctx, actor: GmAuth, input: { name?: unknown; da
   const length = Number(input.lengthMinutes ?? 300);
   if (!Number.isInteger(length) || length < 30 || length > 24 * 60) throw bad('bad_length', 'Night length must be 30–1440 minutes.');
   const overrides = (input.settings ?? {}) as DeepPartial<Settings>;
-  checkSettings(overrides);
+  checkSettings(overrides, length);
   const created = ctx.db.transaction(() => {
     if (currentNight(ctx)) throw conflict('night_in_progress', 'Archive the current night first.');
     const r = ctx.db
@@ -83,15 +83,26 @@ export function createNight(ctx: Ctx, actor: GmAuth, input: { name?: unknown; da
   return created;
 }
 
-function checkSettings(overrides: DeepPartial<Settings>): Settings {
+function checkSettings(overrides: DeepPartial<Settings>, lengthMinutes?: number): Settings {
   let resolved: Settings;
   try {
     resolved = resolveSettings(overrides);
   } catch {
     throw bad('bad_settings');
   }
-  const issues = validateSettings(resolved);
+  let issues: ReturnType<typeof validateSettings>;
+  try {
+    issues = validateSettings(resolved);
+  } catch {
+    throw bad('bad_settings', 'One of those settings has the wrong shape.');
+  }
   if (issues.length) throw bad('bad_settings', issues.map((i) => `${i.path}: ${i.message}`).join('; '));
+  if (lengthMinutes != null) {
+    const v = resolved.votes;
+    const quarter = (lengthMinutes * (1 - 2 * v.bufferFrac)) / v.quarterCount;
+    if (v.windowMinutes > quarter)
+      throw bad('bad_settings', `votes.windowMinutes: the poll window (${v.windowMinutes} min) must fit inside a quarter (${Math.floor(quarter)} min for this night).`);
+  }
   return resolved;
 }
 
@@ -149,6 +160,12 @@ export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction, o
         break;
       case 'end':
         if (n.status === 'paused') closeOpenPause(ctx, n.id, now);
+        // Games with no result can't pay anymore: cancel them so nothing shows as "running" after the collapse.
+        {
+          const open = ctx.db.prepare("SELECT id, name FROM game WHERE night_id = ? AND status IN ('active','scheduled')").all(n.id) as { id: number; name: string }[];
+          for (const g of open) ctx.db.prepare("UPDATE game SET status = 'cancelled', ended_at = COALESCE(ended_at, ?) WHERE id = ?").run(now, g.id);
+          if (open.length) audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.cancel_at_end', entity: 'night', entityId: n.id, after: { games: open } });
+        }
         finishNight(ctx, n, now);
         feed = { type: 'night', message: 'feed.collapse' };
         break;
@@ -162,6 +179,7 @@ export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction, o
 
   const n = result.night;
   if (result.feed) pushFeed(ctx, n.id, result.feed.type, result.feed.message);
+  if (action === 'archive') ctx.bus.all('night:archived', { id: n.id });
   // Final achievements (incl. vote-based ones from the force-resolved quarter); re-snapshot if any landed.
   if (action === 'end' && awardAchievements(ctx, n.id) > 0) {
     const st = computeNightState(ctx, n.id)!;
@@ -253,7 +271,7 @@ export function updateSettings(ctx: Ctx, actor: GmAuth, patch: unknown): NightRo
   const n = requireNight(ctx);
   const before = nightOverrides(n);
   const merged = mergeDeep(before, patch as Record<string, unknown>);
-  checkSettings(merged as DeepPartial<Settings>);
+  checkSettings(merged as DeepPartial<Settings>, n.length_minutes);
   ctx.db.transaction(() => {
     ctx.db.prepare('UPDATE night SET settings = ? WHERE id = ?').run(j.str(merged), n.id);
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'night.settings', entity: 'night', entityId: n.id, before, after: merged });
@@ -282,7 +300,8 @@ export function updateNightInfo(ctx: Ctx, actor: GmAuth, input: { name?: unknown
   const name = input.name === undefined ? n.name : String(input.name).trim().slice(0, 80);
   const length = input.lengthMinutes === undefined ? n.length_minutes : Number(input.lengthMinutes);
   if (!name) throw bad('bad_name');
-  if (!Number.isInteger(length) || length < 30 || length > 24 * 60) throw bad('bad_length');
+  if (!Number.isInteger(length) || length < 30 || length > 24 * 60) throw bad('bad_length', 'Night length must be 30–1440 minutes.');
+  checkSettings(nightOverrides(n) as DeepPartial<Settings>, length);
   ctx.db.transaction(() => {
     ctx.db.prepare('UPDATE night SET name = ?, length_minutes = ? WHERE id = ?').run(name, length, n.id);
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'night.update', entity: 'night', entityId: n.id, before: { name: n.name, length: n.length_minutes }, after: { name, length } });

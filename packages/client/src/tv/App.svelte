@@ -76,8 +76,14 @@
     },
     'sound:play': (d) => playSound(d as { cue?: string; url?: string | null }),
     'finale:replay': () => (replayFrom = Date.now() + skew),
+    // A night was archived or a new one created: start fresh.
+    'night:archived': () => location.reload(),
     'night:update': (d) => {
-      const x = d as { tradingClosed?: boolean; status?: string };
+      const x = d as { tradingClosed?: boolean; status?: string; created?: boolean };
+      if (x.created) {
+        location.reload();
+        return;
+      }
       if (x.tradingClosed && s?.night && !s.night.tradingClosed && x.status !== 'ended')
         pushBanner(t('tv.trading_closed_banner', { fee: Math.round(s.night.rules.endSellProfitFeeFrac * 100) }));
     },

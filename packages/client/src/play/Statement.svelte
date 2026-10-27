@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { t } from '@shared/copy';
   import { gold, signedGold } from '@shared/format';
-  import { toast } from '@shared/ui';
+  import { toast, errorText } from '@shared/ui';
   import type { Statement } from '@shared/types';
   import { dapi, deviceToken } from './device';
 
@@ -13,7 +13,7 @@
     try {
       s = await dapi<Statement>('GET', '/api/me/statement');
     } catch (e) {
-      err = (e as Error).message;
+      err = errorText(e);
     }
   });
   let busy = $state(false);
@@ -29,7 +29,7 @@
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (e) {
-      toast(String((e as Error).message), 'error');
+      toast(errorText(e), 'error');
     } finally {
       busy = false;
     }

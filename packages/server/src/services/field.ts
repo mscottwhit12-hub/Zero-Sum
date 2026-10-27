@@ -94,13 +94,13 @@ export function sendNotification(ctx: Ctx, actor: GmAuth, input: { to: unknown; 
     recipients = nightPlayers;
   } else if (to.gameId != null) {
     recipients = (ctx.db.prepare('SELECT player_id FROM game_participant gp JOIN game g ON g.id = gp.game_id WHERE g.id = ? AND g.night_id = ?').all(Number(to.gameId), n.id) as { player_id: number }[]).map((r) => r.player_id);
-    if (!recipients.length) throw bad('no_recipients');
+    if (!recipients.length) throw bad('no_recipients', 'Nobody to send that to.');
     target = `players:${recipients.join(',')}`;
   } else if (Array.isArray(to.players) && to.players.length) {
     recipients = [...new Set(to.players.map(Number))].filter((id) => nightPlayers.includes(id));
-    if (!recipients.length) throw bad('no_recipients');
+    if (!recipients.length) throw bad('no_recipients', 'Nobody to send that to.');
     target = recipients.length === 1 ? `player:${recipients[0]}` : `players:${recipients.join(',')}`;
-  } else throw bad('no_recipients');
+  } else throw bad('no_recipients', 'Nobody to send that to.');
   const id = ctx.db.transaction(() => {
     const r = ctx.db.prepare("INSERT INTO notification (night_id, target, message, sent_by_gm_id, read_by, created_at) VALUES (?,?,?,?, '[]', ?)").run(n.id, target, message, actor.gmId, ctx.now());
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'notify.send', entity: 'notification', entityId: Number(r.lastInsertRowid), after: { target, message } });

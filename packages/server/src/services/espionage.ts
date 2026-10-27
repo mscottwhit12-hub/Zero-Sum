@@ -142,7 +142,9 @@ export function respondChallenge(ctx: Ctx, player: PlayerRow, id: number, accept
   const n = liveNight(ctx);
   const c = getChallenge(ctx, id);
   if (c.player_id !== player.id || c.night_id !== n.id) throw notFound('challenge_not_found');
-  if (c.status !== 'sent' && c.status !== 'read') throw conflict('already_answered');
+  // Idempotent: the same answer twice (double tap) is fine; changing your answer is not.
+  if ((c.status === 'accepted' && accept) || (c.status === 'rejected' && !accept)) return { status: c.status };
+  if (c.status !== 'sent' && c.status !== 'read') throw conflict('already_answered', 'You already answered that memo.');
   const s = nightSettings(n).espionage;
   const delay = (s.revealDelayMinSec + Math.random() * (s.revealDelayMaxSec - s.revealDelayMinSec)) * 1000;
   ctx.db.prepare('UPDATE challenge SET status = ?, read_at = COALESCE(read_at, ?), reveal_at = ? WHERE id = ?').run(accept ? 'accepted' : 'rejected', ctx.now(), ctx.now() + Math.round(delay), id);

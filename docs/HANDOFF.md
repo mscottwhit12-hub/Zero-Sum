@@ -1,6 +1,6 @@
 # Zero-Sum — Engineering Handoff
 
-**As of:** Oct 26 2026 · **Repo:** `github.com/mscottwhit12-hub/Zero-Sum` (public, MIT) · **Branch:** `main` @ `ffeafeb`
+**As of:** Oct 27 2026 · **Repo:** `github.com/mscottwhit12-hub/Zero-Sum` (public, MIT) · **Branch:** `main`
 **Status:** Build plan Phases 0–8 complete. First real Docker install on the user's server is in progress (see §13). No real-device test night yet.
 
 This document is the complete context for the next lead engineer. Read §1–§5 before touching anything. The original spec ("Game Night Platform — Build Spec v1") and the "Decisions Log" live in the claude.ai Project **GAME_NIGHT**. Where this document and the spec disagree, **this document and the Decisions Log win** (they record later, user-approved decisions).
@@ -80,6 +80,13 @@ From the concerns review and later phases (mirrors the project's Decisions Log):
 16. Phase 7 = **option A** (placeholder TV broadcast and Minter, no fancy graphics).
 17. **License MIT**; repo `Zero-Sum`; testing starts only once it installs from GitHub.
 18. **Score entry is the default crown** (Oct 26 2026). Each game has a lead mode: `high` (highest score leads), `low` (lowest leads) or `manual` (GM crown taps). The library game / pack sets it (`leadMode`, `leadLabel`); if unset, the GM picks when scheduling (default `high`). Locked once the game starts. A tie at the top keeps the current holder. Scores only move the crown (kingfall and dethroning unchanged); gold stays placement-based.
+19. **Payout curve = linear** (Oct 27): 1st 1×, 2nd 0.5×, then even steps down to `scoring.floorMult` 0.10 at last place, never below the classic curve (`scoring.curve` 'linear' | 'classic'). 6 players: 100/50/40/30/20/10.
+20. **Index growth (hidden from players, GM sees it):** base = average player stock (flat, zero-sum). Grows only while games run, by gold earned per night player (`market.index.growthPerGold` 0.23 ≈ +10–15% a night). A game's start dips the index by its expected gold per player × `startDropPerGold` 0.15; returned at its end; cancel removes its growth. Gentle mean-reverting wobble (`noiseFrac` 0.01). Derived from results every tick.
+21. **Crypto downward trend:** `market.crypto.driftPerHour` −0.03; volatility unchanged; holding all night loses.
+22. **Hint rewards ("anonymous tips"):** tiers common/rarer/rarest by how secret the mechanic is. Sources: game win + last place (≥15 min with 4+ players or ≥30 min with 2–3; >90 min rarer; >4 h rarest), two correct quarter picks in a row (rarer), first Server Rack/Data Center/Orbital Array (common/rarer/rarest), memo reward type `hint`, GM send (any GM), buy with gold (`hints.buy.enabled` off by default), trade one re-roll token for a common tip (once per 120 night-min). No repeats inside a tier; then next tier down; then repeats. Delivered in Messages as "Anonymous tip". Pool v1 (10 tips) in `engine/src/hints.ts` + `copy.hints`; more tips wanted (common tier especially).
+23. **Handicaps (Master only, players never see them):** `handicap.autoEnabled` off by default. Hourly (night clock) auto level: top 50% = 1, bottom 50% = 2–5 by gap to the median on a composite (40% net-worth rank, 35% placements, 25% trajectory vs table); idle players −1 (min 2); running team games average their members. Effective = auto + Master's manual offset (−4..+4; the auto never removes it). Help per interval = gain(level) × projected night gold × interval/night length (gains 0/5/12/20/30%): 30% as an **anonymous gift** (adjustment kind `gift`, counts toward rank), 70% as hint credit spent on tips (value 2/4/8 gold). Help given stays. Corrections re-evaluate levels. GM Handicaps screen + log; GM export only.
+24. **Poll window must fit inside a quarter** (server refuses otherwise).
+25. **Games without a result at End are cancelled** (they paid nothing anyway); the End confirmation says how many.
 
 ### Rejected (spec §21, do not re-propose)
 Fork an existing project · multiple apps · raw-score normalization · planned duration as a scoring input · ×100 display scaling · GM pre-creates players · per-second market · player-side seating · web push to locked phones · copying official rulebooks · ranking by gold only (net worth instead) · manual withdrawal before collapse · per-game/per-table stocks · event stocks for ties/dethrones/pauses/mood average (only re-roll + espionage) · **revealing hidden mechanics at the end** · auto-generated tickers · joining before the GM opens joins · rejoin by typing a username · public espionage success · gold-linear or blended fair price (rank-based chosen) · multiplicative drift/mood (additive, band units) · tab navigation on phones · notification banners (badges only) · auto-detecting GM device type · auto-lock on idle · auto night end or auto trading close · PNG statement (PDF) · rounding gold per payout (integer hundredths).
@@ -105,14 +112,11 @@ Fork an existing project · multiple apps · raw-score normalization · planned 
 | 8 | Prompts, collapse/podium/recap, statements + PDF, exports, archive, join QR | `ffeafeb` |
 
 ### Immediately next
-1. **Get the user's install working** (§13). Last known blocker: their compose block mapped `6969:6969`. It must be `6969:8080`. They were told; not yet confirmed fixed.
-2. **First real test night** on real phones and the TV (Android vibration, incoming-call screen, iOS Safari, TV audio). Nothing has been tested on physical devices.
-3. Waiting on the user: real achievement list, final brand/stock names, any visual theme.
-4. After a real night: tune settings from what happened (no code changes needed).
-5. Housekeeping: bump Fastify `5.12.5 → 5.12.7` once it's ≥2 weeks old (released Oct 13 2026, so from Oct 27). It fixes a low advisory in header-schema validation, which is unused here.
-6. A 20-player server load test (recompute-per-refresh cost) before a big night.
-
----
+1. **Install confirmed** on the user's server (Oct 26; port mapping `6969:8080`).
+2. Oct 27 build (see decisions 18–25): score entry, linear payout curve, index growth, crypto drift, hint rewards, handicaps. Verified by a 60× simulated night and 10 rounds of human-behaviour bug testing (scripts in the session scratchpad, not committed).
+3. **First real test night** on physical phones and the TV is still the biggest unknown (vibration, iOS Safari, audio).
+4. Open design items: more tips for the pool (especially common).
+5. Waiting on the user: real achievement list, final brand/stock names, visual theme.
 
 ## 5. Architecture
 
@@ -122,7 +126,7 @@ Fork an existing project · multiple apps · raw-score normalization · planned 
 - Server runs TypeScript directly via **tsx** (a runtime dependency); there is no server compile step.
 
 ### Exact pinned versions
-fastify 5.12.5 · @fastify/static 10.1.4 · @fastify/cookie 11.1.2 · socket.io 4.8.1 · socket.io-client 4.8.1 · better-sqlite3 11.7.0 · pdfkit 0.20.2 (@types/pdfkit 0.17.6) · tsx 4.23.15 · typescript 5.6.3 · vitest 5.0.3 · svelte 5.57.1 · vite 6.4.4 · @sveltejs/vite-plugin-svelte 5.1.1 · svelte-check 4.1.4 · qrcode 1.5.4 (@types/qrcode 1.5.6) · @types/node 22.10.2 · @types/better-sqlite3 7.6.12.
+fastify 5.12.7 · @fastify/static 10.1.4 · @fastify/cookie 11.1.2 · socket.io 4.8.1 · socket.io-client 4.8.1 · better-sqlite3 11.7.0 · pdfkit 0.20.2 (@types/pdfkit 0.17.6) · tsx 4.23.15 · typescript 5.6.3 · vitest 5.0.3 · svelte 5.57.1 · vite 6.4.4 · @sveltejs/vite-plugin-svelte 5.1.1 · svelte-check 4.1.4 · qrcode 1.5.4 (@types/qrcode 1.5.6) · @types/node 22.10.2 · @types/better-sqlite3 7.6.12.
 `.npmrc` has `legacy-peer-deps=true`, a workaround for an npm arborist crash ("Cannot read properties of null (reading 'edgesOut')"). Keep it.
 
 ### Monorepo (npm workspaces)
@@ -286,6 +290,7 @@ Migrations run in order:
 5. `seat_assignment` (night, table, seat, player; unique per player and per table seat), `minter_state.taps`, `sound.mime`, `sound.created_at`.
 6. `night.recap_until`, `night.recap_done`.
 7. `library_game.lead_mode/lead_label` (null = GM picks), `game.lead_mode` (existing rows `manual`) / `lead_label`, `game_score` (append-only history; latest per player counts).
+8. `adjustment` rebuilt with kind `gift` + `read_at`; `hint_grant` (unique per player+source+ref, `cost_h` for purchases), `handicap_manual`, `handicap_eval` (levels, reasons, gifts, tips, credit), `player.hint_tradein_nms`.
 
 Night states: `setup → joins_open → live ⇄ paused → ended → archived`. `trading_closed` is a flag; End force-closes trading. The current night = the newest non-archived night.
 
@@ -325,6 +330,7 @@ Auto sound cues: pause → intermission; End → collapse; finale finished → n
 - **Library/games:** library CRUD + `export`/`import`; games CRUD, `start`, `prefill`, `result`, `correct`, `leader` (manual games only), `scores` (`{scores:[{playerId, score}]}`, any GM, scored games only).
 - **Field (any GM):** `/api/requests/:id/approve|deny`, `POST /api/mood`, `/api/rerolls`, `/api/notifications`, `/api/challenges` (+ `/reassign`, `/resolve`), `POST /api/sounds/play`.
 - **Master setup:** `/api/players/:id/leave`, `PATCH /api/players/:id` (ticker), `PATCH /api/securities/:id/offset`, rules CRUD, tables CRUD + `/seat`, `/api/seats/clear`, sound upload/delete, `GET /api/export/night.json?night=`, `GET /api/export/{standings|results|trades}.csv?night=`.
+- **Tips/handicaps:** `POST /api/tips` {playerId, tier} (any GM), `PATCH /api/handicap/:playerId` {offset} (Master). Player: `POST /api/me/tips/:id/read`, `/api/me/gifts/:id/read`, `/api/me/tips/buy` {tier}, `/api/me/tips/trade-reroll`.
 - **Player (device token):** `GET /api/me`, `POST /api/trade/buy|sell`, `POST /api/me/messages/:id/read`, `POST /api/vote`, `POST /api/me/challenges/:id/read|respond|peek`, `GET /api/minter`, `POST /api/minter/sync`, `GET /api/me/statement`, `GET /api/me/statement.pdf`.
 
 ### Sockets
@@ -383,7 +389,8 @@ Top-level keys: securities, achievements, brand, feed, status, modes, landing, p
 |---|---|
 | **Players and GM** | Vote-share drift · gold paid for "cosmetic" vote-based achievements · espionage stock nudges (±3% agent stock, SHDW bump) |
 | **Players only** (GM console shows) | Mood-driven price impact per player · GM price offsets · kingfall → crypto spike |
-| **Hinted only** | What drives the event stocks |
+| **Players only** (GM sees) | Index growth from games and start dips (`gm.indexTerms`) · crypto downward drift · handicaps (levels, gifts are "anonymous gifts", tips look like any tip) |
+| **Hinted only** | What drives the event stocks (and anything a tip reveals to its recipient) |
 
 - Never revealed at the end. Not in the recap, statements, PDF or exports.
 - **Enforcement:** `services/views.ts` builds every view field by field; never spread DB rows into a view.
@@ -415,7 +422,7 @@ Top-level keys: securities, achievements, brand, feed, status, modes, landing, p
 
 ## 12. Testing
 
-- **Counts:** engine 94, server 63, sim 4 (161 total), all passing. `npm run typecheck` is clean (0 errors, the 3 known warnings).
+- **Counts:** engine 112, server 72, sim 4 (188 total), all passing. `npm run typecheck` is clean (0 errors, the 3 known warnings).
 - **Server test helpers:**
   - `makeApp()` builds an in-memory DB with a fake clock (`t.clock.advance(ms)`).
   - `liveNight(t, n)` returns the Master cookie plus device tokens.
@@ -472,7 +479,7 @@ cd zero-sum && docker compose up -d --build
   - Docker Hub is blocked in the sandbox, so the Docker build can't be tested there.
   - `.npmrc legacy-peer-deps` is required.
   - Don't commit e2e scripts with absolute machine paths.
-- **Dependency:** one low Fastify advisory (GHSA-389g-gv7q-r4x8, header-schema case sensitivity, a feature not used here). Fix by upgrading to 5.12.7 after Oct 27 2026 (the two-week rule).
+- **Dependency:** Fastify bumped to 5.12.7 on Oct 27 2026 (fixes the low header-schema advisory).
 
 ---
 

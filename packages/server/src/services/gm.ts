@@ -133,7 +133,7 @@ export function setSessionPaused(ctx: Ctx, auth: GmAuth, sessionId: number, paus
 /** PIN unlock on the paused device itself. */
 export function unlockWithPin(ctx: Ctx, auth: GmAuth, pin: unknown): void {
   const row = ctx.db.prepare('SELECT pin_hash FROM game_master WHERE id = ?').get(auth.gmId) as { pin_hash: string };
-  if (typeof pin !== 'string' || !verifySecret(pin, row.pin_hash)) throw new HttpError(401, 'bad_pin');
+  if (typeof pin !== 'string' || !verifySecret(pin, row.pin_hash)) throw new HttpError(401, 'bad_pin', 'Wrong PIN.');
   ctx.db.prepare('UPDATE gm_session SET paused = 0 WHERE id = ?').run(auth.sessionId);
   audit(ctx, { nightId: null, gmId: auth.gmId, action: 'gm.pin_unlock', entity: 'gm_session', entityId: auth.sessionId });
   ctx.bus.gmSession(auth.sessionId, 'gm:device_pause', { paused: false });

@@ -326,8 +326,11 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   const nonNeg = (v: number, path: string) => need(Number.isFinite(v) && v >= 0, path, 'must be ≥ 0');
   const pos = (v: number, path: string) => need(Number.isFinite(v) && v > 0, path, 'must be > 0');
 
-  need(s.scoring.placementMults.length > 0, 'scoring.placementMults', 'needs at least one value');
-  s.scoring.placementMults.forEach((m, i) => nonNeg(m, `scoring.placementMults.${i}`));
+  if (!Array.isArray(s.scoring.placementMults)) need(false, 'scoring.placementMults', 'must be a list of numbers');
+  else {
+    need(s.scoring.placementMults.length > 0, 'scoring.placementMults', 'needs at least one value');
+    s.scoring.placementMults.forEach((m, i) => nonNeg(m, `scoring.placementMults.${i}`));
+  }
   frac(s.scoring.tailFactor, 'scoring.tailFactor');
   need(['average', 'best', 'worst'].includes(s.scoring.tieRule), 'scoring.tieRule', 'unknown rule');
   nonNeg(s.scoring.dnfMult, 'scoring.dnfMult');

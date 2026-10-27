@@ -80,6 +80,13 @@
         if (x.tradingClosed && s?.night && !s.night.tradingClosed && s.night.status !== 'ended')
           toast(t('phone.trading_closed_toast', { fee: Math.round(s.night.rules.endSellProfitFeeFrac * 100) }));
       },
+      // The GM archived this night: this phone's identity is gone. Back to the join screen.
+      'night:archived': () => {
+        setDeviceToken(null);
+        setPendingToken(null);
+        live?.close();
+        route();
+      },
       'vote:bounty': (d) => toast(t('phone.vote_bounty', { gold: signedGold((d as { goldH: number }).goldH) })),
       'espionage:result': (d) => toast((d as { success: boolean }).success ? t('phone.espionage_success') : t('phone.espionage_fail'), (d as { success: boolean }).success ? 'ok' : 'error'),
       'achievement:new': (d) => {
@@ -267,6 +274,7 @@
     {:else}
       <div class="home">
         <div class="wall">
+          {#if s.players.find((p) => p.id === s?.me?.id)?.left}<p class="notice small">{t('phone.left_notice')}</p>{/if}
           <div class="muted small">{s.night.name}</div>
           <div class="mono hero">{gold(s.me.netWorthH)}</div>
           <div class="muted small">net worth · rank {s.me.rank ?? '—'}</div>

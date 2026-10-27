@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { get, post } from '@shared/api';
   import { t } from '@shared/copy';
-  import { run, toast } from '@shared/ui';
+  import { run, toast, errorText } from '@shared/ui';
   import { prepareAvatar, setDeviceToken, setPendingToken } from './device';
 
   let { ondone, rejoin: startRejoin = false }: { ondone: () => void; rejoin?: boolean } = $props();
@@ -17,9 +17,19 @@
   let busy = $state(false);
   const COLORS = ['#4c6ef5', '#2f9e44', '#e8590c', '#ae3ec9', '#1098ad', '#c92a2a', '#5c940d', '#495057'];
 
-  onMount(async () => {
+  onMount(() => {
     rejoin = startRejoin;
-    info = (await run(() => get<Info>('/api/join'))) ?? null;
+    const load = async () => {
+      try {
+        info = await get<Info>('/api/join');
+      } catch {
+        /* offline: keep the last info, try again shortly */
+      }
+    };
+    load();
+    // The GM may open joins (or start the night) while this screen is up: keep it current.
+    const h = setInterval(load, 4000);
+    return () => clearInterval(h);
   });
   $effect(() => {
     if (!tickerTouched) ticker = name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase();
@@ -31,7 +41,8 @@
     try {
       avatar = await prepareAvatar(f);
     } catch (err) {
-      toast((err as Error).message, 'error');
+      avatar = null;
+      toast(t('phone.photo_failed'), 'error');
     }
   }
   async function submit(e: Event) {

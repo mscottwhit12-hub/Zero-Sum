@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { ApiError } from './api';
+import { t } from './copy';
 
 export interface Toast {
   id: number;
@@ -23,7 +24,21 @@ export async function run<T>(fn: () => Promise<T>, ok?: string): Promise<T | und
     if (ok) toast(ok);
     return r;
   } catch (e) {
-    toast(e instanceof ApiError ? e.message || e.code : String(e), 'error');
+    toast(errorText(e), 'error');
     return undefined;
   }
+}
+
+/** A sentence for any failure: the server's message, else copy errors.<code>, else a generic line. Never a raw code. */
+export function errorText(e: unknown): string {
+  if (e instanceof ApiError) {
+    const msg = e.message?.trim();
+    if (msg && msg !== e.code && e.code !== 'bad_request' && !/^[a-z_]+$/.test(msg)) return msg;
+    const known = t(`errors.${e.code}`);
+    if (known !== `errors.${e.code}`) return known;
+    if (e.status === 0) return t('errors.network');
+    return t('errors.generic');
+  }
+  if (e instanceof TypeError) return t('errors.network');
+  return t('errors.generic');
 }
