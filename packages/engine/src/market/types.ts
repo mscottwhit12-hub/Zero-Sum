@@ -13,6 +13,8 @@ export interface SecurityState {
   price: number;
   /** Crypto/event: internal baseline. Dead uses the settings baseline. */
   baseline?: number;
+  /** Index: current wobble (fraction of price) around the trend. */
+  noise?: number;
   /** GM offset in band units. Applies to player stocks only (locked #6). */
   gmOffset: number;
   /** Last computed fair (player stocks). */

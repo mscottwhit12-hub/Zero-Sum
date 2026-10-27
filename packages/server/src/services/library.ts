@@ -3,6 +3,7 @@
  * Format: { format: "game-night-pack/1", name, games: LibraryGameInput[] }.
  */
 import { readFileSync } from 'node:fs';
+import { LEAD_MODES, type LeadMode } from '@gn/engine';
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit } from './audit';
 import type { GmAuth } from './gm';
@@ -28,6 +29,10 @@ export interface LibraryGame {
   ruleEntryId: number | null;
   icon: string | null;
   color: string | null;
+  /** How the crown is decided. null = not set by the library/pack: the GM picks when scheduling. */
+  leadMode: LeadMode | null;
+  /** What the score is called, e.g. "Victory points". */
+  leadLabel: string | null;
 }
 
 export interface LibraryGameInput {
@@ -41,6 +46,8 @@ export interface LibraryGameInput {
   ruleEntryId?: unknown;
   icon?: unknown;
   color?: unknown;
+  leadMode?: unknown;
+  leadLabel?: unknown;
 }
 
 const PACK_FORMAT = 'game-night-pack/1';
@@ -57,6 +64,8 @@ interface Row {
   rule_entry_id: number | null;
   icon: string | null;
   color: string | null;
+  lead_mode: LeadMode | null;
+  lead_label: string | null;
 }
 
 const toGame = (r: Row): LibraryGame => ({
@@ -71,7 +80,17 @@ const toGame = (r: Row): LibraryGame => ({
   ruleEntryId: r.rule_entry_id,
   icon: r.icon,
   color: r.color,
+  leadMode: r.lead_mode,
+  leadLabel: r.lead_label,
 });
+
+/** null/'' = unset (GM picks per game). */
+export function leadModeOf(v: unknown): LeadMode | null {
+  if (v == null || v === '') return null;
+  if (!LEAD_MODES.includes(v as LeadMode)) throw bad('bad_lead_mode', 'Lead mode must be high, low or manual.');
+  return v as LeadMode;
+}
+export const leadLabelOf = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 24) : null);
 
 /** Validates and normalizes one entry. */
 export function normalizeGame(input: LibraryGameInput): Omit<LibraryGame, 'id'> {
@@ -99,6 +118,8 @@ export function normalizeGame(input: LibraryGameInput): Omit<LibraryGame, 'id'> 
     ruleEntryId: Number.isInteger(ruleEntryId) ? ruleEntryId : null,
     icon: str(input.icon, 16),
     color,
+    leadMode: leadModeOf(input.leadMode),
+    leadLabel: leadLabelOf(input.leadLabel),
   };
 }
 
@@ -117,18 +138,18 @@ export function getLibraryGame(ctx: Ctx, id: number): LibraryGame | null {
 function insert(ctx: Ctx, g: Omit<LibraryGame, 'id'>): number {
   const r = ctx.db
     .prepare(
-      'INSERT INTO library_game (name, min_players, max_players, default_duration, mode, rerolls_allowed, sound_theme, rule_entry_id, icon, color) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO library_game (name, min_players, max_players, default_duration, mode, rerolls_allowed, sound_theme, rule_entry_id, icon, color, lead_mode, lead_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
     )
-    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color);
+    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color, g.leadMode, g.leadLabel);
   return Number(r.lastInsertRowid);
 }
 
 function update(ctx: Ctx, id: number, g: Omit<LibraryGame, 'id'>) {
   ctx.db
     .prepare(
-      'UPDATE library_game SET name=?, min_players=?, max_players=?, default_duration=?, mode=?, rerolls_allowed=?, sound_theme=?, rule_entry_id=?, icon=?, color=? WHERE id=?',
+      'UPDATE library_game SET name=?, min_players=?, max_players=?, default_duration=?, mode=?, rerolls_allowed=?, sound_theme=?, rule_entry_id=?, icon=?, color=?, lead_mode=?, lead_label=? WHERE id=?',
     )
-    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color, id);
+    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color, g.leadMode, g.leadLabel, id);
 }
 
 const masterOnly = (a: GmAuth) => {

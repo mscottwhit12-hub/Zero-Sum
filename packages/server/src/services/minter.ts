@@ -4,6 +4,7 @@
  * Playable on the pause lock screen with the intermission bonus (locked decision #5).
  */
 import { applyMinterSync, emptyMinter, MINTER_TIERS, minterRate, tierCost, type MinterState } from '@gn/engine';
+import { hintsForMinter } from './hints';
 import { j } from '../db';
 import { conflict, type Ctx } from '../context';
 import { currentNight, nightSettings, type NightRow, type PlayerRow } from './state';
@@ -62,6 +63,8 @@ export function minterSync(ctx: Ctx, player: PlayerRow, input: { taps?: unknown;
     )
     .run(player.id, n.id, r.state.minted, r.state.credits, j.str(r.state.tiers), r.state.taps, now);
   scheduleLeaderboard(ctx, n.id);
+  const firsts = Object.keys(r.state.tiers).filter((t) => ((r.state.tiers as Record<string, number>)[t] ?? 0) > 0 && !(((s.tiers as Record<string, number>)[t] ?? 0) > 0));
+  if (firsts.length) hintsForMinter(ctx, n, player.id, firsts);
   return { ...view(n, r.state), rejected: r.rejected };
 }
 

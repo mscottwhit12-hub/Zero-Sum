@@ -7,6 +7,7 @@
   import { run } from '@shared/ui';
   import type { GameInfo, GmState, WhoAmI } from '@shared/types';
   import { playerName } from '../lib';
+  import ScoreEntry from './ScoreEntry.svelte';
 
   let { gs, whoami, onresult }: { gs: GmState | null; whoami: WhoAmI; onresult: (g: GameInfo) => void } = $props();
   const master = $derived(whoami.role === 'master');
@@ -157,19 +158,23 @@
             <strong>{g.name}</strong>
             <span class="muted small mono">{hours(g.hours)}{g.plannedDurationHours ? ` / ${hours(g.plannedDurationHours)}` : ''}</span>
           </div>
-          <p class="small muted">Tap the current leader</p>
-          <div class="row">
-            {#each g.participants as p (p.playerId)}
-              <button class="chip" class:on={g.leaderId === p.playerId} onclick={() => tap(g, p.playerId)}>
-                {g.leaderId === p.playerId ? '♛ ' : ''}{playerName(gs, p.playerId)}
-              </button>
-            {/each}
-            {#if !g.participants.length}
-              {#each gs?.players.filter((p) => !p.left) ?? [] as p (p.id)}
-                <button class="chip" class:on={g.leaderId === p.id} onclick={() => tap(g, p.id)}>{playerName(gs, p.id)}</button>
+          {#if g.leadMode === 'manual'}
+            <p class="small muted">Tap the current leader</p>
+            <div class="row">
+              {#each g.participants as p (p.playerId)}
+                <button class="chip" class:on={g.leaderId === p.playerId} onclick={() => tap(g, p.playerId)}>
+                  {g.leaderId === p.playerId ? '♛ ' : ''}{playerName(gs, p.playerId)}
+                </button>
               {/each}
-            {/if}
-          </div>
+              {#if !g.participants.length}
+                {#each gs?.players.filter((p) => !p.left) ?? [] as p (p.id)}
+                  <button class="chip" class:on={g.leaderId === p.id} onclick={() => tap(g, p.id)}>{playerName(gs, p.id)}</button>
+                {/each}
+              {/if}
+            </div>
+          {:else}
+            <ScoreEntry {gs} {g} />
+          {/if}
           <div class="row" style="margin-top:.6rem">
             <button class="primary big" onclick={() => onresult(g)}>Enter result</button>
           </div>

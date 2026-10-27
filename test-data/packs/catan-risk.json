@@ -1,0 +1,28 @@
+{
+  "format": "game-night-pack/1",
+  "name": "Test pack: Catan + Risk",
+  "games": [
+    {
+      "name": "Catan",
+      "minPlayers": 3,
+      "maxPlayers": 4,
+      "defaultDuration": 1.5,
+      "mode": "competitive",
+      "rerollsAllowed": true,
+      "color": "#d9480f",
+      "leadMode": "high",
+      "leadLabel": "Victory points"
+    },
+    {
+      "name": "Risk",
+      "minPlayers": 2,
+      "maxPlayers": 6,
+      "defaultDuration": 4,
+      "mode": "competitive",
+      "rerollsAllowed": true,
+      "color": "#c92a2a",
+      "leadMode": "high",
+      "leadLabel": "Territories"
+    }
+  ]
+}

@@ -52,7 +52,12 @@ export interface GameInfo {
   participants: { playerId: number; placement: number | null; dnf: boolean; team: string | null }[];
   leaderId: number | null;
   tableId: number | null;
+  leadMode: LeadMode;
+  leadLabel: string | null;
+  scores: Record<number, number>;
+  leadFixed: boolean;
 }
+export type LeadMode = 'high' | 'low' | 'manual';
 export interface FeedItem {
   id: number;
   type: string;
@@ -73,6 +78,8 @@ export interface LibraryGame {
   ruleEntryId: number | null;
   icon: string | null;
   color: string | null;
+  leadMode: LeadMode | null;
+  leadLabel: string | null;
 }
 export interface LedgerRow {
   playerId: number;
@@ -174,6 +181,7 @@ export interface RuleEntry {
 export interface GmExtras {
   ledger: LedgerRow[];
   stocks: { securityId: string; gmOffset: number; moodTerm: number }[];
+  indexTerms?: { growth: number; drop: number; extra: number };
   settings: { resolved: Record<string, unknown>; overrides: Record<string, unknown> };
   library: LibraryGame[];
   hours: Record<number, number>;
@@ -189,6 +197,14 @@ export interface GmExtras {
   sounds: SoundInfo[];
   ambient: { current: Ambient | null; off: boolean };
   prompts: { closeTradingAt: number | null; endNight: boolean };
+  tips: { id: number; playerId: number; hintId: string; tier: TipTier; source: string; costH: number; nightMs: number; createdAt: number; read: boolean }[];
+  handicap: {
+    autoEnabled: boolean;
+    intervalMinutes: number;
+    nextEvalNms: number;
+    players: { playerId: number; auto: number; offset: number; effective: number; reasons: Record<string, unknown> | null; lastNms: number | null }[];
+    log: { id: number; playerId: number; nightMs: number; auto: number; offset: number; effective: number; trigger: string; reasons: Record<string, unknown>; giftH: number; tips: string[] }[];
+  };
 }
 export interface VoteInfo {
   quarter: number;
@@ -197,11 +213,13 @@ export interface VoteInfo {
   quarterEndsNms: number | null;
   myTarget: number | null;
 }
-export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom';
+export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint';
+export type TipTier = 'common' | 'rarer' | 'rarest';
 export interface Reward {
   type: RewardType;
   gold?: number;
   text?: string;
+  tier?: TipTier;
 }
 export type ChallengeStatus = 'sent' | 'read' | 'accepted' | 'rejected' | 'succeeded' | 'failed' | 'reassigned';
 export interface GmChallenge {
@@ -262,6 +280,9 @@ export interface Me {
   trades: { securityId: string; side: 'buy' | 'sell'; sharesH: number; price: number; cashH: number; feeH: number; forced: number; createdAt: number }[];
   vote: VoteInfo | null;
   challenges: MyChallenge[];
+  tips: { id: number; hintId: string; vars: Record<string, string | number>; createdAt: number; read: boolean }[];
+  gifts: { id: number; goldH: number; createdAt: number; read: boolean }[];
+  tipShop: { buy: Record<TipTier, number> | null; tradeIn: { tokens: number; nextAtNms: number | null } | null };
 }
 export interface PlayerState extends PublicState {
   me?: Me;

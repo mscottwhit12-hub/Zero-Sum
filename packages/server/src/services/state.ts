@@ -122,7 +122,11 @@ export function loadLedgerInput(ctx: Ctx, nightId: number): LedgerInput {
       'SELECT b.player_id, b.gold_h FROM bounty_payout b JOIN vote_round v ON v.id = b.vote_round_id WHERE v.night_id = ?',
     ).map((r) => ({ playerId: pid(r.player_id), goldH: r.gold_h })),
     achievements: q<{ player_id: number; gold_h: number }>('SELECT player_id, gold_h FROM achievement WHERE night_id = ?').map((r) => ({ playerId: pid(r.player_id), goldH: r.gold_h })),
-    tradeFlows: q<{ player_id: number; cash_h: number }>('SELECT player_id, cash_h FROM trade WHERE night_id = ?').map((r) => ({ playerId: pid(r.player_id), cashH: r.cash_h })),
+    tradeFlows: [
+      ...q<{ player_id: number; cash_h: number }>('SELECT player_id, cash_h FROM trade WHERE night_id = ?').map((r) => ({ playerId: pid(r.player_id), cashH: r.cash_h })),
+      // Tip purchases leave cash like a trade (not earned gold, so they don't move the buyer's own stock).
+      ...q<{ player_id: number; cost_h: number }>('SELECT player_id, cost_h FROM hint_grant WHERE night_id = ? AND cost_h > 0').map((r) => ({ playerId: pid(r.player_id), cashH: -r.cost_h })),
+    ],
   };
 }
 
@@ -148,6 +152,7 @@ export function loadSecurities(ctx: Ctx, nightId: number): SecurityState[] {
       gmOffset: r.gm_offset,
       driver: st.driver ?? null,
       baseline: st.baseline,
+      noise: st.noise,
       lastFair: st.lastFair,
       left: st.left,
       leaverFair: st.leaverFair,
@@ -156,7 +161,7 @@ export function loadSecurities(ctx: Ctx, nightId: number): SecurityState[] {
 }
 
 export function securityStateJson(s: SecurityState): string {
-  return j.str({ driver: s.driver ?? null, baseline: s.baseline, lastFair: s.lastFair, left: s.left, leaverFair: s.leaverFair });
+  return j.str({ driver: s.driver ?? null, baseline: s.baseline, noise: s.noise, lastFair: s.lastFair, left: s.left, leaverFair: s.leaverFair });
 }
 
 export function upsertSecurities(ctx: Ctx, nightId: number, secs: SecurityState[]): void {

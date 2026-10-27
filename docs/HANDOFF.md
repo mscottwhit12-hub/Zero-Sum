@@ -79,6 +79,7 @@ From the concerns review and later phases (mirrors the project's Decisions Log):
 15. **Library is modular data** (JSON packs, import/export).
 16. Phase 7 = **option A** (placeholder TV broadcast and Minter, no fancy graphics).
 17. **License MIT**; repo `Zero-Sum`; testing starts only once it installs from GitHub.
+18. **Score entry is the default crown** (Oct 26 2026). Each game has a lead mode: `high` (highest score leads), `low` (lowest leads) or `manual` (GM crown taps). The library game / pack sets it (`leadMode`, `leadLabel`); if unset, the GM picks when scheduling (default `high`). Locked once the game starts. A tie at the top keeps the current holder. Scores only move the crown (kingfall and dethroning unchanged); gold stays placement-based.
 
 ### Rejected (spec §21, do not re-propose)
 Fork an existing project · multiple apps · raw-score normalization · planned duration as a scoring input · ×100 display scaling · GM pre-creates players · per-second market · player-side seating · web push to locked phones · copying official rulebooks · ranking by gold only (net worth instead) · manual withdrawal before collapse · per-game/per-table stocks · event stocks for ties/dethrones/pauses/mood average (only re-roll + espionage) · **revealing hidden mechanics at the end** · auto-generated tickers · joining before the GM opens joins · rejoin by typing a username · public espionage success · gold-linear or blended fair price (rank-based chosen) · multiplicative drift/mood (additive, band units) · tab navigation on phones · notification banners (badges only) · auto-detecting GM device type · auto-lock on idle · auto night end or auto trading close · PNG statement (PDF) · rounding gold per payout (integer hundredths).
@@ -135,6 +136,7 @@ packages/sim            headless simulator + reports (@gn/sim)
 packages/server         Fastify + Socket.IO + SQLite (@gn/server)
 packages/client         Svelte, 4 entries: index (landing), play, gm, display (@gn/client)
 docs/HANDOFF.md         this file
+test-data/packs/        test-only library packs (catan-risk.json); not bundled or seeded
 ```
 Root scripts: `npm run build` (client), `npm start` (server via tsx), `npm test` (all workspaces), `npm run typecheck`. Sim: `npm run sim -w @gn/sim`. Client dev: `npm run dev -w @gn/client` (Vite on :5173, proxies `/api` and `/socket.io` to :8080).
 
@@ -185,7 +187,7 @@ All functions are pure; the server and sim both call them. 87 tests (`test/fixtu
 Two 1–5 ratings (mood, perceived self-assessment) → `centeredMood` → bias `moodMax × centered` (6% max) in band units, decaying `decayPerTick` 1% per tick.
 
 ### Kingfall (`kingfall.ts`)
-`tapLeader`: a leader who held ≥ `kingfallHoldMinutes` 15 and gets displaced → crypto impulse. The dethroning is public; the kingfall/crypto link is hidden from players (the GM sees it).
+`leaderFromScores(scores, 'high'|'low', current)` picks the leader from entered scores (ties keep the holder). `tapLeader`: a leader who held ≥ `kingfallHoldMinutes` 15 and gets displaced → crypto impulse. The dethroning is public; the kingfall/crypto link is hidden from players (the GM sees it).
 
 ### Late join (`lateJoin.ts`)
 Stake = `goldFraction 0.75 × avg earned gold of active players − goldPenalty 2` (floored at 0). Start price = average player price − `stockPenalty 0.05` × band width.
@@ -264,6 +266,7 @@ GM → Settings is **auto-generated** from this structure, so new settings appea
 
   Market randomness is deterministic per night and tick (restart-safe).
 - `context.ts`: `Ctx {db, now, bus, config}`. `Bus {all, gm, tv, player, gmSession, refresh}`. HttpError helpers `bad`/`forbidden`/`notFound`/`conflict`. `recordingBus()` for tests.
+- **Test-only** `ZS_TIME_SCALE` (default 1, range 1–1000): `src/timeScale.ts` scales `ctx.now()`, so the whole server runs N× real time, and the tick loop steps every max(50 ms, 1000/N). It isn't a GM setting, isn't shown in the app and isn't in the README. Never use it on a real night's DB: it stamps future times. Client countdowns and animations stay real-time. The socket throttle and minter leaderboard use the real clock.
 - Env vars: `PORT` (8080), `HOST` (0.0.0.0), `DATA_DIR` (Docker: /data), `MEDIA_DIR` (/media), `CLIENT_DIR`, `SAMPLE_LIBRARY`, `HOUSE_RULES`, `NAME_BLOCKLIST`, `SECURE_COOKIES=1` (HTTPS only).
 - Body limit 1 MB, except sound uploads at 12 MB.
 - `main.ts` on boot: opens the DB (migrations run automatically), seeds the sample library once and the house rules once (meta flags), loads the name blocklist, and starts the tick loop.
@@ -282,6 +285,7 @@ Migrations run in order:
 4. Challenge: `reveal_at`, `revealed`, `reassigned_from`, `peek_target`, `read_at`.
 5. `seat_assignment` (night, table, seat, player; unique per player and per table seat), `minter_state.taps`, `sound.mime`, `sound.created_at`.
 6. `night.recap_until`, `night.recap_done`.
+7. `library_game.lead_mode/lead_label` (null = GM picks), `game.lead_mode` (existing rows `manual`) / `lead_label`, `game_score` (append-only history; latest per player counts).
 
 Night states: `setup → joins_open → live ⇄ paused → ended → archived`. `trading_closed` is a flag; End force-closes trading. The current night = the newest non-archived night.
 
@@ -318,7 +322,7 @@ Auto sound cues: pause → intermission; End → collapse; finale finished → n
 - **Setup/GM auth:** `POST /api/setup`, `POST /api/gm/login|logout|device-type|unlock`, `GET /api/gm/me`, sessions + pause/resume, sub-GM CRUD, `GET /api/gm/audit`.
 - **Night (Master):** `POST /api/nights`, `PATCH /api/night`, `POST /api/night/:action` (open-joins, start, pause {minutes}, resume, close-trading, end, archive), `PATCH /api/night/settings`, `POST /api/night/adjustments`, `POST /api/night/finale/skip|replay`.
 - **Any GM:** `POST /api/night/prompts/dismiss`, `GET /api/nights` (archive).
-- **Library/games:** library CRUD + `export`/`import`; games CRUD, `start`, `prefill`, `result`, `correct`, `leader`.
+- **Library/games:** library CRUD + `export`/`import`; games CRUD, `start`, `prefill`, `result`, `correct`, `leader` (manual games only), `scores` (`{scores:[{playerId, score}]}`, any GM, scored games only).
 - **Field (any GM):** `/api/requests/:id/approve|deny`, `POST /api/mood`, `/api/rerolls`, `/api/notifications`, `/api/challenges` (+ `/reassign`, `/resolve`), `POST /api/sounds/play`.
 - **Master setup:** `/api/players/:id/leave`, `PATCH /api/players/:id` (ticker), `PATCH /api/securities/:id/offset`, rules CRUD, tables CRUD + `/seat`, `/api/seats/clear`, sound upload/delete, `GET /api/export/night.json?night=`, `GET /api/export/{standings|results|trades}.csv?night=`.
 - **Player (device token):** `GET /api/me`, `POST /api/trade/buy|sell`, `POST /api/me/messages/:id/read`, `POST /api/vote`, `POST /api/me/challenges/:id/read|respond|peek`, `GET /api/minter`, `POST /api/minter/sync`, `GET /api/me/statement`, `GET /api/me/statement.pdf`.
@@ -411,7 +415,7 @@ Top-level keys: securities, achievements, brand, feed, status, modes, landing, p
 
 ## 12. Testing
 
-- **Counts:** engine 87, server 56, sim 4 (147 total), all passing. `npm run typecheck` is clean (0 errors, the 3 known warnings).
+- **Counts:** engine 94, server 63, sim 4 (161 total), all passing. `npm run typecheck` is clean (0 errors, the 3 known warnings).
 - **Server test helpers:**
   - `makeApp()` builds an in-memory DB with a fake clock (`t.clock.advance(ms)`).
   - `liveNight(t, n)` returns the Master cookie plus device tokens.

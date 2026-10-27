@@ -125,7 +125,12 @@
 
   // ---- badges (no banners, red counts only) + vibration on new items
   let feedSeen = $state(Number(store.get('gn_feed_seen') ?? 0));
-  const unreadMessages = $derived((s?.me?.messages.filter((m) => !m.read).length ?? 0) + (s?.me?.challenges.filter((c) => c.status === 'sent').length ?? 0));
+  const unreadMessages = $derived(
+    (s?.me?.messages.filter((m) => !m.read).length ?? 0) +
+      (s?.me?.challenges.filter((c) => c.status === 'sent').length ?? 0) +
+      (s?.me?.tips?.filter((x) => !x.read).length ?? 0) +
+      (s?.me?.gifts?.filter((x) => !x.read).length ?? 0),
+  );
   const vote = $derived(s?.me?.vote ?? null);
   const voteOpen = $derived(!!vote?.open && s?.night?.status === 'live');
   const voteBadge = $derived(voteOpen && vote?.myTarget == null ? 1 : 0);

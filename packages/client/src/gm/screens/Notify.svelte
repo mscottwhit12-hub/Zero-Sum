@@ -3,6 +3,7 @@
   import { run } from '@shared/ui';
   import type { GmState } from '@shared/types';
   import { activePlayers, playerName } from '../lib';
+  import { clock } from '@shared/format';
 
   let { gs }: { gs: GmState | null } = $props();
   let mode = $state<'all' | 'players' | 'game'>('all');
@@ -17,12 +18,52 @@
     const r = await run(() => post('/api/notifications', { to, message }), 'Sent');
     if (r) message = '';
   }
+  let tipPlayer = $state('');
+  let tipTier = $state<'common' | 'rarer' | 'rarest'>('common');
+  let tipBusy = $state(false);
+  async function sendTip(e: Event) {
+    e.preventDefault();
+    if (tipBusy) return;
+    tipBusy = true;
+    try {
+      await run(() => post('/api/tips', { playerId: Number(tipPlayer), tier: tipTier }), 'Tip sent');
+    } finally {
+      tipBusy = false;
+    }
+  }
+  const SOURCE: Record<string, string> = { game_win: 'game win', game_last: 'last place', streak: 'poll streak', minter: 'minter milestone', memo: 'memo reward', buy: 'bought', reroll_trade: 're-roll trade-in', gm: 'sent by GM', handicap: 'handicap' };
   function who(to: string) {
     if (to === 'all') return 'Everyone';
     const ids = to.replace(/^players?:/, '').split(',').map(Number);
     return ids.map((id) => playerName(gs, id)).join(', ');
   }
 </script>
+
+<form class="panel" onsubmit={sendTip}>
+  <h2>Send a tip</h2>
+  <p class="small muted">An anonymous tip about a hidden mechanic, drawn from the tier (no repeats until the tier runs out).</p>
+  <div class="row">
+    <label class="field"><span>Player</span>
+      <select bind:value={tipPlayer} required>
+        <option value="">—</option>
+        {#each activePlayers(gs) as p (p.id)}<option value={String(p.id)}>{p.displayName}</option>{/each}
+      </select>
+    </label>
+    <label class="field"><span>Tier</span>
+      <select bind:value={tipTier}><option value="common">Common</option><option value="rarer">Rarer</option><option value="rarest">Rarest</option></select>
+    </label>
+    <button class="primary" type="submit" disabled={!tipPlayer || tipBusy}>Send tip</button>
+  </div>
+</form>
+
+<section class="panel">
+  <h2>Tips given tonight</h2>
+  {#each gs?.gm?.tips ?? [] as x (x.id)}
+    <div class="line small"><span class="mono">{clock(x.nightMs)}</span> · <strong>{playerName(gs, x.playerId)}</strong> · {x.tier} · {SOURCE[x.source] ?? x.source} · <span class="muted">{x.hintId}</span>{x.read ? '' : ' · unread'}</div>
+  {:else}
+    <p class="muted small">None yet.</p>
+  {/each}
+</section>
 
 <form class="panel" onsubmit={send}>
   <h2>Send a message</h2>

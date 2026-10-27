@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { buyHint, gmSendHint, readHint, tradeRerollForHint } from '../services/hints';
+import { readGift, setHandicapOffset } from '../services/handicap';
 import { readFileSync } from 'node:fs';
 import { join as joinPath } from 'node:path';
 import { HttpError, type Ctx } from '../context';
@@ -49,6 +51,7 @@ import {
   correctResult,
   getGame,
   leaderTap,
+  enterScores,
   scheduleGame,
   startGame,
   submitResult,
@@ -221,6 +224,7 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx) {
     return correctResult(ctx, requireGm(ctx, req), Number(req.params.id), { participants: x.participants, actualHours: x.actualHours, coopWon: x.coopWon });
   });
   app.post<Id>('/api/games/:id/leader', async (req) => leaderTap(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body).playerId));
+  app.post<Id>('/api/games/:id/scores', async (req) => enterScores(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body)));
 }
 
 // ---------------------------------------------------------------- players: join, devices, trading
@@ -289,6 +293,18 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   // Phase 6 — player actions
   app.post('/api/vote', async (req) => castBallot(ctx, device(req), b(req.body).targetId));
   app.post<Id>('/api/me/challenges/:id/read', async (req) => readChallenge(ctx, device(req), Number(req.params.id)));
+  app.post<Id>('/api/me/tips/:id/read', async (req) => (readHint(ctx, device(req), Number(req.params.id)), { ok: true }));
+  app.post<Id>('/api/me/gifts/:id/read', async (req) => {
+    const p = device(req);
+    readGift(ctx, p.id, p.night_id, Number(req.params.id));
+    return { ok: true };
+  });
+  app.post('/api/me/tips/buy', async (req) => {
+    const p = device(req);
+    const st = computeNightState(ctx, p.night_id)!;
+    return buyHint(ctx, p, { tier: b(req.body).tier, cashH: st.ledger.get(String(p.id))?.cashH ?? 0 });
+  });
+  app.post('/api/me/tips/trade-reroll', async (req) => tradeRerollForHint(ctx, device(req)));
   app.post<Id>('/api/me/challenges/:id/respond', async (req) => respondChallenge(ctx, device(req), Number(req.params.id), b(req.body).accept === true));
   app.post<Id>('/api/me/challenges/:id/peek', async (req) => usePeek(ctx, device(req), Number(req.params.id), b(req.body).targetPlayerId));
 
@@ -298,6 +314,8 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/notifications', async (req) => sendNotification(ctx, requireGm(ctx, req), b(req.body) as never));
   app.patch<Id>('/api/securities/:id/offset', async (req) => setOffset(ctx, requireGm(ctx, req, { master: true }), decodeURIComponent(req.params.id), b(req.body).offset));
   app.post('/api/challenges', async (req) => createChallenge(ctx, requireGm(ctx, req), b(req.body) as never));
+  app.post('/api/tips', async (req) => gmSendHint(ctx, requireGm(ctx, req), b(req.body)));
+  app.patch<Id>('/api/handicap/:id', async (req) => setHandicapOffset(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
   app.post<Id>('/api/challenges/:id/reassign', async (req) => reassignChallenge(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body).playerId));
   app.post<Id>('/api/challenges/:id/resolve', async (req) => resolveChallenge(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body).success === true));
 

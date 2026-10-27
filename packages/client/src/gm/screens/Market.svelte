@@ -50,6 +50,19 @@
 </section>
 
 <section class="panel">
+  <h2>Index (hidden from players)</h2>
+  <p class="small muted">Base = average player stock. Grows while games run, by gold earned per player; dips when a game starts and gets it back when it ends.</p>
+  {#if gs?.gm?.indexTerms}
+    {@const it = gs.gm.indexTerms}
+    <div class="row small mono">
+      <span>Growth +{it.growth.toFixed(2)}</span>
+      <span>Running-game dips −{it.drop.toFixed(2)}</span>
+      <span>Net {it.extra >= 0 ? '+' : '−'}{Math.abs(it.extra).toFixed(2)}</span>
+    </div>
+  {/if}
+</section>
+
+<section class="panel">
   <h2>Kingfall</h2>
   <p class="small muted">Displaced long-reigning leaders. Each spikes crypto (never announced).</p>
   {#each kingfalls as f (f.id)}

@@ -5,6 +5,7 @@
  *  - Quarter end: bounty pays everyone who picked the net-worth leader (or top 2 at large party sizes).
  */
 import { ballotWeight, quarterAt, rankBy, resolveQuarter, voteDrift, type Ballot } from '@gn/engine';
+import { hintsForStreak } from './hints';
 import { j } from '../db';
 import { conflict, notFound, bad, type Ctx } from '../context';
 import { awardAchievements } from './achievements';
@@ -49,6 +50,7 @@ function resolve(ctx: Ctx, n: NightRow, round: RoundRow, st: NightState) {
   for (const p of res.payouts) ctx.bus.player(Number(p.playerId), 'vote:bounty', { quarter: round.quarter, goldH: p.goldH });
   ctx.bus.all('vote:update', { quarter: round.quarter, status: 'resolved' });
   awardAchievements(ctx, n.id);
+  hintsForStreak(ctx, n, round.quarter, res.payouts.map((p) => Number(p.playerId)));
 }
 
 /** One step of the voting clock. Called by the tick loop every second while the night is live. */

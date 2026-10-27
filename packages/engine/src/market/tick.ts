@@ -18,6 +18,8 @@ export interface TickContext {
   mood: Map<string, number>;
   /** Impulses queued since the last tick (trades, espionage, kingfall, re-rolls). */
   impulses: Impulse[];
+  /** Hidden index growth minus running games' start drops, price units (see indexExtra). */
+  indexExtra?: number;
 }
 
 export interface TickResult {
@@ -58,7 +60,7 @@ export function tickMarket(securities: SecurityState[], ctx: TickContext, settin
   }
   const playerPrices = [...out.values()].map((r) => r.sec.price);
   for (const sec of securities) {
-    if (sec.kind === 'index') out.set(sec.id, tickIndex(sec, playerPrices, settings));
+    if (sec.kind === 'index') out.set(sec.id, tickIndex(sec, playerPrices, settings, ctx.indexExtra ?? 0, rng));
     else if (sec.kind === 'crypto') out.set(sec.id, tickCrypto(sec, imp(sec.id), settings, rng));
     else if (sec.kind === 'event') out.set(sec.id, tickEvent(sec, imp(sec.id), settings));
     else if (sec.kind === 'dead') out.set(sec.id, tickDead(sec, imp(sec.id), settings));

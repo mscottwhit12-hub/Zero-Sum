@@ -160,7 +160,8 @@
       "reroll": "1 extra re-roll",
       "peek": "One look at an associate's trade history",
       "dead_clue": "A tip on the market",
-      "custom": "{text}"
+      "custom": "{text}",
+      "hint": "An anonymous {tier} tip"
     },
     "dead_clue": "A tip from Logistics: the near-dead stock trades thin. A few determined buyers could move it a long way.",
     "peek_pick": "Choose one associate to investigate. One look only.",
@@ -184,6 +185,18 @@
       "download": "Download PDF",
       "trades": "Trades",
       "loading": "Preparing your statement…"
+    },
+    "tip_from": "Anonymous tip",
+    "gift_from": "Anonymous gift",
+    "gift_body": "Another associate sent you {gold} gold. They asked to stay anonymous.",
+    "tip_shop": "Tip line",
+    "tip_buy": "Buy a {tier} tip · {price} gold",
+    "tip_trade": "Trade a re-roll token for a tip",
+    "tip_trade_wait": "Next trade-in at {time}",
+    "tip_tiers": {
+      "common": "common",
+      "rarer": "rare",
+      "rarest": "very rare"
     }
   },
   "trade_errors": {
@@ -268,5 +281,24 @@
     "prompt_close": "Close trading? The last scheduled game ends at {time}.",
     "prompt_end": "Every scheduled game has a result. End the night?",
     "not_yet": "Not yet"
+  },
+  "lead": {
+    "high": "Score: highest leads",
+    "low": "Score: lowest leads",
+    "manual": "Manual crown taps",
+    "unset": "GM picks per game",
+    "score": "Score"
+  },
+  "hints": {
+    "trade_impact": "Every buy pushes the price up a little. Every sale pushes it down.",
+    "index_dip": "The index flinches when a game begins, and gets it back when the game ends.",
+    "scic_driver": "Second Chance Insurance does well when people buy second chances.",
+    "shdw_driver": "Shadow Logistics profits when an operation succeeds.",
+    "event_decay": "Event stocks bleed slowly whenever nothing is happening.",
+    "dead_memory": "DEAD moves hard when bought, and it's slow to forget.",
+    "coin_leak": "COIN is chaos with a slow leak. Holding it for long rarely pays.",
+    "mood": "How you seem to be feeling shows up in your stock, and the effect fades with time.",
+    "kingfall": "If a game leader holds the crown for {holdMinutes} minutes and is then overthrown, COIN jumps on the next update.",
+    "index_scale": "Bigger games make the index grow faster, and make it flinch harder at the start."
   }
 }

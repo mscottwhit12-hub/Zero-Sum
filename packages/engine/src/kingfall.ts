@@ -27,3 +27,26 @@ export function tapLeader(state: CrownState, playerId: string, now: number, sett
     kingfall: heldMs >= settings.market.crypto.kingfallHoldMinutes * 60_000,
   };
 }
+
+/** How a game's crown is decided: by entered scores (higher or lower wins) or by manual GM taps. */
+export type LeadMode = 'high' | 'low' | 'manual';
+export const LEAD_MODES: readonly LeadMode[] = ['high', 'low', 'manual'];
+
+/**
+ * Leader from the latest entered scores. Players with no score are ignored.
+ * A tie at the top keeps the current holder if they are in the tie; otherwise nobody new takes the crown (returns current).
+ */
+export function leaderFromScores(scores: ReadonlyMap<string, number>, mode: 'high' | 'low', current: string | null): string | null {
+  let best: number | null = null;
+  let top: string[] = [];
+  for (const [id, s] of scores) {
+    if (!Number.isFinite(s)) continue;
+    if (best === null || (mode === 'high' ? s > best : s < best)) {
+      best = s;
+      top = [id];
+    } else if (s === best) top.push(id);
+  }
+  if (!top.length) return current;
+  if (top.length === 1) return top[0]!;
+  return current;
+}

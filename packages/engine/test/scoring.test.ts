@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hoursPlayed, placeMult, scoreGame, ScoringError, type GameResult } from '../src';
+import { hoursPlayed, placeMult, resolveSettings, scoreGame, ScoringError, type GameResult } from '../src';
 import { spec } from './fixtures';
 
 // Worked examples use the original spec values (game gold ×1).
@@ -235,5 +235,17 @@ describe('hours played', () => {
     ]);
     expect(h.get('a')).toBe(1.5);
     expect(h.get('b')).toBe(1);
+  });
+});
+
+describe('linear payout curve', () => {
+  const L = resolveSettings({}).scoring;
+  it('defaults to linear with a 10% floor', () => expect([L.curve, L.floorMult]).toEqual(['linear', 0.1]));
+  it('6 players: 100/50/40/30/20/10', () => expect([1, 2, 3, 4, 5, 6].map((p) => placeMult(p, L, 6))).toEqual([1, 0.5, 0.4, 0.3, 0.2, 0.1]));
+  it('4 players never below classic: 1/0.5/0.3/0.125', () => expect([1, 2, 3, 4].map((p) => +placeMult(p, L, 4).toFixed(4))).toEqual([1, 0.5, 0.3, 0.125]));
+  it('3 players keeps classic 0.25 for 3rd', () => expect(placeMult(3, L, 3)).toBe(0.25));
+  it('scoreGame uses the unit count', () => {
+    const g = scoreGame({ id: 'g', mode: 'competitive', actualHours: 1, participants: ['a', 'b', 'c', 'd', 'e', 'f'].map((id, i) => ({ playerId: id, placement: i + 1 })) }, resolveSettings({ scoring: { goldScale: 1 } }));
+    expect(g.rows.map((r) => r.goldH)).toEqual([600, 300, 240, 180, 120, 60]);
   });
 });

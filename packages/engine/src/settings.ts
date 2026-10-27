@@ -29,6 +29,13 @@ export interface Settings {
     coopLossMult: number;
     /** Game gold multiplier: gold = hours × players × place mult × goldScale. Other gold sources are unaffected. */
     goldScale: number;
+    /**
+     * 'linear' (default): from 3rd place down, payouts step evenly from 2nd's multiplier to `floorMult` at last place
+     * (so bigger games spread wider), never below the classic curve. 'classic': placementMults + tailFactor only.
+     */
+    curve: 'linear' | 'classic';
+    /** Last place's multiplier on the linear curve. */
+    floorMult: number;
   };
   stake: {
     startingGold: number;
@@ -72,6 +79,14 @@ export interface Settings {
       scale: number;
       /** Fraction of the gap to (average × scale) closed per tick. Low = low volatility. */
       smoothing: number;
+      /** Price added per gold earned per player (hidden from players). Growth only while games run. */
+      growthPerGold: number;
+      /** Price dropped at a game's start per gold that game is expected to pay per player; returned when it ends. */
+      startDropPerGold: number;
+      /** Size of the gentle wobble around the trend, as a fraction of price (std dev). */
+      noiseFrac: number;
+      /** How fast the wobble pulls back to the trend per tick. */
+      noiseReversion: number;
     };
     crypto: {
       /** Std dev of log return per tick. */
@@ -80,6 +95,8 @@ export interface Settings {
       reversion: number;
       /** Baseline follows price by this fraction per tick (slow). */
       baselineAlpha: number;
+      /** Expected change per hour of market time (negative = downward trend, so holding all night loses). */
+      driftPerHour: number;
       /** Start price as a fraction of band. */
       startFrac: number;
       kingfallFrac: number;
@@ -149,6 +166,43 @@ export interface Settings {
     pauseMultiplier: number;
     tvCrawlMinutes: number;
   };
+  hints: {
+    /** Master switch for all hint rewards. */
+    enabled: boolean;
+    games: {
+      /** Winners and last places of qualifying games get a tip. */
+      win: boolean;
+      lastPlace: boolean;
+      /** Minimum length with 4+ players / with 2–3 players. */
+      minMinutesLarge: number;
+      minMinutesSmall: number;
+      /** Longer than this → rarer tip; longer than rarestMinutes → rarest tip. */
+      rarerMinutes: number;
+      rarestMinutes: number;
+    };
+    /** Two correct quarter picks in a row → a rarer tip. */
+    streak: boolean;
+    /** First Server Rack / Data Center / Orbital Array in the NFT Minter → common / rarer / rarest tip. */
+    minter: boolean;
+    /** Players may buy tips with gold (off by default). Prices in gold per tier. */
+    buy: { enabled: boolean; priceCommon: number; priceRarer: number; priceRarest: number };
+    /** Trade an unused re-roll token for a common tip, at most once per cooldown (night minutes). */
+    rerollTradeIn: { enabled: boolean; cooldownMinutes: number };
+    /** Gold-equivalent value of a tip per tier (used by handicaps). */
+    value: { common: number; rarer: number; rarest: number };
+  };
+  handicap: {
+    /** Automatic handicap (Master only). Off by default; manual levels work either way. */
+    autoEnabled: boolean;
+    /** How often the automatic level is recalculated (night minutes). */
+    intervalMinutes: number;
+    /** Target extra gold by the end of the night at each level, as a fraction (levels 1–5). */
+    gainByLevel: number[];
+    /** Share of the help delivered as anonymous gold gifts; the rest as tips. */
+    goldShare: number;
+    /** Players who weren't in any game during the interval get this many levels less (never below 2 if struggling). */
+    idlePenaltyLevels: number;
+  };
 }
 
 /**
@@ -163,6 +217,8 @@ export const DEFAULT_SETTINGS: Settings = {
     dnfMult: 0,
     coopLossMult: 0.25,
     goldScale: 3,
+    curve: 'linear',
+    floorMult: 0.1,
   },
   stake: { startingGold: 20 },
   lateJoin: { goldFraction: 0.75, goldPenalty: 2, stockPenalty: 0.05 },
@@ -190,11 +246,11 @@ export const DEFAULT_SETTINGS: Settings = {
       leaverDecay: 0.02,
       espionageFrac: 0.03,
     },
-    index: { scale: 1, smoothing: 0.3 },
+    index: { scale: 1, smoothing: 0.3, growthPerGold: 0.23, startDropPerGold: 0.15, noiseFrac: 0.01, noiseReversion: 0.1 },
     crypto: {
       sigma: 0.07,
       reversion: 0.05,
-      baselineAlpha: 0.002,
+      baselineAlpha: 0.002, driftPerHour: -0.03,
       startFrac: 0.25,
       kingfallFrac: 0.1,
       kingfallHoldMinutes: 15,
@@ -220,6 +276,16 @@ export const DEFAULT_SETTINGS: Settings = {
   prompts: { tradingCloseMinutesBefore: 15 },
   finale: { collapseSeconds: 10, podiumStepSeconds: 5, recapSlideSeconds: 8 },
   minter: { pauseMultiplier: 2, tvCrawlMinutes: 10 },
+  hints: {
+    enabled: true,
+    games: { win: true, lastPlace: true, minMinutesLarge: 15, minMinutesSmall: 30, rarerMinutes: 90, rarestMinutes: 240 },
+    streak: true,
+    minter: true,
+    buy: { enabled: false, priceCommon: 5, priceRarer: 10, priceRarest: 20 },
+    rerollTradeIn: { enabled: true, cooldownMinutes: 120 },
+    value: { common: 2, rarer: 4, rarest: 8 },
+  },
+  handicap: { autoEnabled: false, intervalMinutes: 60, gainByLevel: [0, 0.05, 0.12, 0.2, 0.3], goldShare: 0.3, idlePenaltyLevels: 1 },
 };
 
 export type DeepPartial<T> = {
@@ -267,6 +333,8 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   nonNeg(s.scoring.dnfMult, 'scoring.dnfMult');
   nonNeg(s.scoring.coopLossMult, 'scoring.coopLossMult');
   pos(s.scoring.goldScale, 'scoring.goldScale');
+  need(['linear', 'classic'].includes(s.scoring.curve), 'scoring.curve', 'linear or classic');
+  frac(s.scoring.floorMult, 'scoring.floorMult');
   nonNeg(s.stake.startingGold, 'stake.startingGold');
   frac(s.lateJoin.goldFraction, 'lateJoin.goldFraction');
   nonNeg(s.lateJoin.goldPenalty, 'lateJoin.goldPenalty');
@@ -294,9 +362,14 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   frac(m.player.espionageFrac, 'market.player.espionageFrac');
   pos(m.index.scale, 'market.index.scale');
   frac(m.index.smoothing, 'market.index.smoothing');
+  nonNeg(m.index.growthPerGold, 'market.index.growthPerGold');
+  nonNeg(m.index.startDropPerGold, 'market.index.startDropPerGold');
+  frac(m.index.noiseFrac, 'market.index.noiseFrac');
+  frac(m.index.noiseReversion, 'market.index.noiseReversion');
   frac(m.crypto.sigma, 'market.crypto.sigma');
   frac(m.crypto.reversion, 'market.crypto.reversion');
   frac(m.crypto.baselineAlpha, 'market.crypto.baselineAlpha');
+  need(m.crypto.driftPerHour > -1 && m.crypto.driftPerHour < 1, 'market.crypto.driftPerHour', 'must be between -1 and 1');
   frac(m.crypto.startFrac, 'market.crypto.startFrac');
   frac(m.crypto.kingfallFrac, 'market.crypto.kingfallFrac');
   nonNeg(m.crypto.kingfallHoldMinutes, 'market.crypto.kingfallHoldMinutes');
@@ -329,6 +402,16 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   pos(s.finale.recapSlideSeconds, 'finale.recapSlideSeconds');
   need(s.minter.pauseMultiplier >= 1, 'minter.pauseMultiplier', 'must be ≥ 1');
   pos(s.minter.tvCrawlMinutes, 'minter.tvCrawlMinutes');
+  const hg = s.hints.games;
+  for (const k of ['minMinutesLarge', 'minMinutesSmall', 'rarerMinutes', 'rarestMinutes'] as const) nonNeg(hg[k], `hints.games.${k}`);
+  need(hg.rarestMinutes >= hg.rarerMinutes, 'hints.games.rarestMinutes', 'must be ≥ rarerMinutes');
+  for (const k of ['priceCommon', 'priceRarer', 'priceRarest'] as const) pos(s.hints.buy[k], `hints.buy.${k}`);
+  nonNeg(s.hints.rerollTradeIn.cooldownMinutes, 'hints.rerollTradeIn.cooldownMinutes');
+  for (const k of ['common', 'rarer', 'rarest'] as const) pos(s.hints.value[k], `hints.value.${k}`);
+  pos(s.handicap.intervalMinutes, 'handicap.intervalMinutes');
+  need(Array.isArray(s.handicap.gainByLevel) && s.handicap.gainByLevel.length === 5 && s.handicap.gainByLevel.every((x) => x >= 0 && x <= 2), 'handicap.gainByLevel', 'five fractions, 0–2');
+  frac(s.handicap.goldShare, 'handicap.goldShare');
+  need(Number.isInteger(s.handicap.idlePenaltyLevels) && s.handicap.idlePenaltyLevels >= 0 && s.handicap.idlePenaltyLevels <= 4, 'handicap.idlePenaltyLevels', 'whole number 0–4');
   return issues;
 }
 

@@ -69,6 +69,11 @@ export function exportNightJson(ctx: Ctx, actor: GmAuth, nightId?: unknown) {
     minter: q('SELECT player_id AS playerId, CAST(minted AS INTEGER) AS minted, tiers FROM minter_state WHERE night_id = ?'),
     standingsSnapshots: q<{ data: string; createdAt: number }>('SELECT data, created_at AS createdAt FROM standings_snapshot WHERE night_id = ? ORDER BY id').map((s) => ({ createdAt: s.createdAt, standings: JSON.parse(s.data) })),
     feed: q<{ data: string }>('SELECT type, message, data, gm_only AS gmOnly, created_at AS createdAt FROM feed_event WHERE night_id = ? ORDER BY id').map((f) => ({ ...f, data: j.parse(f.data, {}) })),
+    // GM export only: tips granted (incl. why) and the handicap log. Never on statements/PDF.
+    tips: q('SELECT player_id AS playerId, hint_id AS hintId, tier, source, cost_h AS costH, night_ms AS nightMs, created_at AS createdAt FROM hint_grant WHERE night_id = ? ORDER BY id'),
+    handicaps: q<{ reasons: string; hints: string }>(
+      'SELECT player_id AS playerId, night_ms AS nightMs, auto_level AS auto, offset, effective, trigger, reasons, gift_h AS giftH, hints, created_at AS createdAt FROM handicap_eval WHERE night_id = ? ORDER BY id',
+    ).map((h) => ({ ...h, reasons: j.parse(h.reasons, {}), hints: j.parse(h.hints, []) })),
   };
 }
 

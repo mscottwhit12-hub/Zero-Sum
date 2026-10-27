@@ -21,3 +21,5 @@ export * from './market/dead';
 export * from './market/tick';
 export * from './market/trade';
 export * from './minter';
+export * from './hints';
+export * from './handicap';

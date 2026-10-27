@@ -8,6 +8,7 @@
  *  Shadow Logistics moves). Fail: TV and feed expose the agent by name (+ hidden dip).
  */
 import { espionageImpulses, toH } from '@gn/engine';
+import { grantHint } from './hints';
 import { j } from '../db';
 import { bad, conflict, notFound, type Ctx } from '../context';
 import { audit } from './audit';
@@ -16,11 +17,13 @@ import type { GmAuth } from './gm';
 import { queueImpulse } from './market';
 import { currentNight, loadSecurities, nightSettings, pid, type NightRow, type PlayerRow } from './state';
 
-export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom';
+export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint';
 export interface Reward {
   type: RewardType;
   gold?: number;
   text?: string;
+  /** hint rewards: which tier of tip. */
+  tier?: 'common' | 'rarer' | 'rarest';
 }
 type Status = 'sent' | 'read' | 'accepted' | 'rejected' | 'succeeded' | 'failed' | 'reassigned';
 
@@ -56,7 +59,12 @@ function getChallenge(ctx: Ctx, id: number): ChallengeRow {
 
 function normalizeReward(ctx: Ctx, n: NightRow, r: unknown): Reward {
   const x = (r ?? {}) as Reward;
-  if (!['gold', 'reroll', 'peek', 'dead_clue', 'custom'].includes(x.type)) throw bad('bad_reward');
+  if (!['gold', 'reroll', 'peek', 'dead_clue', 'custom', 'hint'].includes(x.type)) throw bad('bad_reward');
+  if (x.type === 'hint') {
+    const tier = x.tier ?? 'common';
+    if (!['common', 'rarer', 'rarest'].includes(tier)) throw bad('bad_reward', 'Pick a tip tier.');
+    return { type: 'hint', tier };
+  }
   if (x.type === 'gold') {
     const g = x.gold == null || (x.gold as unknown) === '' ? nightSettings(n).espionage.goldReward : Number(x.gold);
     if (!Number.isFinite(g) || g <= 0 || g > 100) throw bad('bad_reward', 'Gold reward must be 0–100.');
@@ -173,6 +181,7 @@ export function resolveChallenge(ctx: Ctx, actor: GmAuth, id: number, success: b
           .prepare("INSERT INTO adjustment (night_id, player_id, gold_h, reason, kind, gm_id, created_at) VALUES (?,?,?, 'Espionage reward', 'espionage', ?, ?)")
           .run(n.id, c.player_id, toH(reward.gold ?? settings.espionage.goldReward), actor.gmId, ctx.now());
       if (reward.type === 'reroll') ctx.db.prepare('UPDATE player SET reroll_tokens_left = reroll_tokens_left + 1 WHERE id = ?').run(c.player_id);
+      if (reward.type === 'hint') grantHint(ctx, n, c.player_id, reward.tier ?? 'common', 'memo', `memo:${id}`, { force: true });
     }
     // Hidden nudges: agent's stock rises on success / dips on fail; Shadow Logistics moves on success.
     for (const imp of espionageImpulses(loadSecurities(ctx, n.id), pid(c.player_id), success ? 'success' : 'fail', settings)) queueImpulse(ctx, n.id, imp);

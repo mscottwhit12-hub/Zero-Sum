@@ -26,6 +26,7 @@
   import Sounds from './screens/Sounds.svelte';
   import Archive from './screens/Archive.svelte';
   import JoinQr from './screens/JoinQr.svelte';
+  import Handicaps from './screens/Handicaps.svelte';
 
   type Phase = 'loading' | 'setup' | 'login' | 'ready';
   let phase = $state<Phase>('loading');
@@ -43,6 +44,7 @@
     { id: 'notify', label: 'Messages', field: true },
     { id: 'players', label: 'Players', field: true },
     { id: 'market', label: 'Market', field: false },
+    { id: 'handicaps', label: 'Handicaps', field: false },
     { id: 'seating', label: 'Seating', field: false },
     { id: 'sounds', label: 'Soundboard', field: false },
     { id: 'rules', label: 'Rulebook', field: false },
@@ -158,6 +160,7 @@
       {:else if route === 'espionage'}<Espionage gs={gmState} />
       {:else if route === 'notify'}<Notify gs={gmState} />
       {:else if route === 'market'}<Market gs={gmState} {whoami} />
+      {:else if route === 'handicaps'}<Handicaps gs={gmState} {whoami} />
       {:else if route === 'seating'}<Seating gs={gmState} {whoami} />
       {:else if route === 'sounds'}<Sounds gs={gmState} {whoami} />
       {:else if route === 'rules'}<Rulebook {whoami} />

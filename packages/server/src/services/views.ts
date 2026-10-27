@@ -6,6 +6,9 @@
  * Views are built field-by-field from DB/engine data; nothing is spread wholesale.
  */
 import { capRemainingH, hoursPlayed, sellValueH, type GoldH } from '@gn/engine';
+import { gmHintLog, playerHints, tipShop } from './hints';
+import { handicapGmView, playerGifts } from './handicap';
+import { indexTerms } from './indexTerms';
 import { gameViews, type GameView } from './games';
 import { pendingRequests, type PendingRequest } from './join';
 import { myTrades } from './trading';
@@ -130,6 +133,12 @@ export interface PlayerView extends PublicView {
     trades: ReturnType<typeof myTrades>;
     vote: ReturnType<typeof voteView>;
     challenges: ReturnType<typeof playerChallenges>;
+    /** Anonymous tips (hint rewards). */
+    tips: ReturnType<typeof playerHints>;
+    /** Anonymous gifts from "another associate". */
+    gifts: ReturnType<typeof playerGifts>;
+    /** Tip shop: buying (off by default) and re-roll trade-ins. */
+    tipShop: ReturnType<typeof tipShop>;
   };
 }
 
@@ -173,6 +182,9 @@ export function playerView(ctx: Ctx, st: NightState, playerId: number, base?: Pu
       trades: myTrades(ctx, p),
       vote: voteView(ctx, st, playerId),
       challenges: playerChallenges(ctx, playerId, st.night.id),
+      tips: playerHints(ctx, st.night, playerId),
+      gifts: playerGifts(ctx, st.night.id, playerId),
+      tipShop: tipShop(ctx, st.night, playerId),
     },
   };
 }
@@ -207,6 +219,8 @@ export interface GmView extends PublicView {
       netWorthH: GoldH;
     }[];
     stocks: { securityId: string; gmOffset: number; moodTerm: number }[];
+    /** Hidden index growth (price units): growth from games, running games' start drops, net. GM only. */
+    indexTerms: { growth: number; drop: number; extra: number };
     settings: { resolved: NightState['settings']; overrides: unknown };
     library: LibraryGame[];
     /** Hours played per player (tracked, never enforced). */
@@ -224,6 +238,10 @@ export interface GmView extends PublicView {
     sounds: ReturnType<typeof listSounds>;
     ambient: { current: ReturnType<typeof currentAmbient>; off: boolean };
     prompts: ReturnType<typeof promptsView>;
+    /** Tips granted tonight (who, which, why). */
+    tips: ReturnType<typeof gmHintLog>;
+    /** Handicap levels and the reasoning log. Master only in the UI. */
+    handicap: ReturnType<typeof handicapGmView>;
   };
 }
 
@@ -251,6 +269,7 @@ export function gmView(ctx: Ctx, st: NightState, base?: PublicView): GmView {
         netWorthH: nw.get(l.playerId) ?? l.cashH,
       })),
       stocks: st.securities.filter((s) => s.kind === 'player').map((s) => ({ securityId: s.id, gmOffset: s.gmOffset, moodTerm: mood.get(s.id) ?? 0 })),
+      indexTerms: indexTerms(ctx, st.night),
       settings: { resolved: st.settings, overrides: nightOverrides(st.night) },
       library: listLibrary(ctx),
       hours: Object.fromEntries([...hoursPlayed(loadResults(ctx, st.night.id))].map(([k, v]) => [Number(k), Math.round(v * 100) / 100])),
@@ -266,6 +285,8 @@ export function gmView(ctx: Ctx, st: NightState, base?: PublicView): GmView {
       sounds: listSounds(ctx),
       ambient: { current: currentAmbient(ctx, st.night.id), off: ambientOff(ctx, st.night.id) },
       prompts: promptsView(ctx, st.night),
+      tips: gmHintLog(ctx, st.night.id),
+      handicap: handicapGmView(ctx, st.night, st.players.filter((p) => p.left_at == null).map((p) => p.id)),
     },
   };
 }

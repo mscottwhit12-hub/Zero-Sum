@@ -6,6 +6,8 @@ import { awardAchievements } from './achievements';
 import {
   EMPTY_CROWN,
   kingfallImpulse,
+  leaderFromScores,
+  type LeadMode,
   scoreGame,
   tapLeader,
   validateResult,
@@ -17,7 +19,9 @@ import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit } from './audit';
 import { pushFeed } from './feed';
 import type { GmAuth } from './gm';
-import { getLibraryGame, type GameMode } from './library';
+import { getLibraryGame, leadLabelOf, leadModeOf, type GameMode } from './library';
+import { hintsForResult } from './hints';
+import { handicapAfterCorrection } from './handicap';
 import { queueImpulse } from './market';
 import { computeNightState, currentNight, loadSecurities, nightMs, nightSettings, pauses, pid, type NightRow } from './state';
 
@@ -40,6 +44,8 @@ export interface GameRow {
   actual_duration_hours: number | null;
   rerolls_allowed: number;
   coop_won: number | null;
+  lead_mode: LeadMode;
+  lead_label: string | null;
 }
 
 export interface ParticipantInput {
@@ -97,6 +103,9 @@ export interface ScheduleInput {
   tableId?: unknown;
   rerollsAllowed?: unknown;
   participants?: unknown;
+  /** Only used when the library game doesn't set one. */
+  leadMode?: unknown;
+  leadLabel?: unknown;
 }
 
 /** Optional table (seating plan) for a game; must belong to this night. */
@@ -122,12 +131,15 @@ export function scheduleGame(ctx: Ctx, actor: GmAuth, input: ScheduleInput): Gam
   if (plannedStart != null && !Number.isFinite(plannedStart)) throw bad('bad_start');
   const rerolls = input.rerollsAllowed === undefined ? !!lib?.rerollsAllowed : !!input.rerollsAllowed;
   const parts = checkPlayers(ctx, n.id, input.participants);
+  // The library (pack) decides how the crown works; if it doesn't say, the GM picks (default: score, higher wins).
+  const leadMode: LeadMode = lib?.leadMode ?? leadModeOf(input.leadMode) ?? 'high';
+  const leadLabel = lib?.leadMode ? lib.leadLabel : (leadLabelOf(input.leadLabel) ?? lib?.leadLabel ?? null);
   return ctx.db.transaction(() => {
     const r = ctx.db
       .prepare(
-        "INSERT INTO game (night_id, library_game_id, name, table_id, mode, planned_start, planned_duration_hours, status, rerolls_allowed) VALUES (?,?,?,?,?,?,?, 'scheduled', ?)",
+        "INSERT INTO game (night_id, library_game_id, name, table_id, mode, planned_start, planned_duration_hours, status, rerolls_allowed, lead_mode, lead_label) VALUES (?,?,?,?,?,?,?, 'scheduled', ?,?,?)",
       )
-      .run(n.id, lib?.id ?? null, name, tableOf(ctx, n.id, input.tableId), mode, plannedStart, duration, rerolls ? 1 : 0);
+      .run(n.id, lib?.id ?? null, name, tableOf(ctx, n.id, input.tableId), mode, plannedStart, duration, rerolls ? 1 : 0, leadMode, leadLabel);
     const id = Number(r.lastInsertRowid);
     setParticipants(ctx, id, parts);
     const g = getGame(ctx, id);
@@ -150,10 +162,19 @@ export function updateScheduledGame(ctx: Ctx, actor: GmAuth, id: number, input: 
   const plannedStart = input.plannedStart === undefined ? before.planned_start : input.plannedStart == null || input.plannedStart === '' ? null : Number(input.plannedStart);
   const rerolls = input.rerollsAllowed === undefined ? before.rerolls_allowed : input.rerollsAllowed ? 1 : 0;
   const tableId = input.tableId === undefined ? before.table_id : tableOf(ctx, n.id, input.tableId);
+  // Lead mode: fixed by the library game if it sets one; otherwise editable until the game starts.
+  const lib = before.library_game_id != null ? getLibraryGame(ctx, before.library_game_id) : null;
+  let leadMode = before.lead_mode;
+  let leadLabel = before.lead_label;
+  if (!lib?.leadMode && (input.leadMode !== undefined || input.leadLabel !== undefined)) {
+    if (before.status !== 'scheduled') throw conflict('lead_mode_locked', 'The crown mode can only change before the game starts.');
+    if (input.leadMode !== undefined) leadMode = leadModeOf(input.leadMode) ?? 'high';
+    if (input.leadLabel !== undefined) leadLabel = leadLabelOf(input.leadLabel);
+  }
   return ctx.db.transaction(() => {
     ctx.db
-      .prepare('UPDATE game SET name=?, mode=?, planned_duration_hours=?, planned_start=?, rerolls_allowed=?, table_id=? WHERE id=?')
-      .run(name, mode, duration, plannedStart, rerolls, tableId, id);
+      .prepare('UPDATE game SET name=?, mode=?, planned_duration_hours=?, planned_start=?, rerolls_allowed=?, table_id=?, lead_mode=?, lead_label=? WHERE id=?')
+      .run(name, mode, duration, plannedStart, rerolls, tableId, leadMode, leadLabel, id);
     if (input.participants !== undefined) setParticipants(ctx, id, checkPlayers(ctx, n.id, input.participants));
     const after = getGame(ctx, id);
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.update', entity: 'game', entityId: id, before, after });
@@ -269,6 +290,7 @@ export function submitResult(ctx: Ctx, actor: GmAuth, id: number, input: ResultI
   })();
   snapshotStandings(ctx, n.id);
   awardAchievements(ctx, n.id);
+  hintsForResult(ctx, n, { ...result, id: String(id) });
   const winners = scored.rows.filter((r) => r.mult === Math.max(...scored.rows.map((x) => x.mult)) && r.goldH > 0).map((r) => Number(r.playerId));
   pushFeed(ctx, n.id, 'result', 'feed.game_result', { gameId: id, name: g.name, winners, gold: scored.rows.map((r) => ({ playerId: Number(r.playerId), goldH: r.goldH })) });
   ctx.bus.all('game:update', { id, status: 'final' });
@@ -299,6 +321,8 @@ export function correctResult(ctx: Ctx, actor: GmAuth, id: number, input: Result
   })();
   snapshotStandings(ctx, n.id);
   awardAchievements(ctx, n.id);
+  hintsForResult(ctx, n, { ...result, id: String(id) });
+  handicapAfterCorrection(ctx, n);
   pushFeed(ctx, n.id, 'correction', 'feed.correction', { gameId: id, name: g.name, by: actor.name }, true);
   ctx.bus.all('game:update', { id, status: 'final' });
   ctx.bus.refresh(n.id);
@@ -325,32 +349,85 @@ export function crownOf(ctx: Ctx, gameId: number): CrownState {
   return crown;
 }
 
-/** ≤2 taps on the GM phone: pick game, tap leader. Dethroning is public; kingfall (a long reign ending) is hidden. */
-export function leaderTap(ctx: Ctx, actor: GmAuth, gameId: number, playerId: unknown) {
+function activeGameFor(ctx: Ctx, gameId: number) {
   const n = requireNight(ctx, ['live', 'paused']);
   const g = getGame(ctx, gameId);
   if (g.night_id !== n.id) throw notFound('game_not_found');
   if (g.status !== 'active') throw conflict('game_not_active');
-  const p = Number(playerId);
   const parts = participantIds(ctx, gameId);
-  if (parts.length ? !parts.includes(p) : !ctx.db.prepare('SELECT 1 FROM player WHERE id = ? AND night_id = ?').get(p, n.id)) throw bad('not_a_participant');
-  const before = crownOf(ctx, gameId);
+  const eligible = (p: number) => (parts.length ? parts.includes(p) : !!ctx.db.prepare('SELECT 1 FROM player WHERE id = ? AND night_id = ?').get(p, n.id));
+  return { n, g, eligible };
+}
+
+/** Moves the crown (manual tap or score-derived). Dethroning is public; kingfall (a long reign ending) is hidden. */
+function setCrown(ctx: Ctx, actor: GmAuth, n: NightRow, g: GameRow, p: number) {
+  const before = crownOf(ctx, g.id);
   const at = nightMs(ctx, n);
   const t = tapLeader(before, pid(p), at, nightSettings(n));
-  if (!t.dethroned && before.leaderId === pid(p)) return { leaderId: p, changed: false };
+  if (!t.dethroned && before.leaderId === pid(p)) return { leaderId: p, changed: false, dethroned: false };
   ctx.db.transaction(() => {
-    ctx.db.prepare('INSERT INTO leader_tap (game_id, player_id, gm_id, night_ms, created_at) VALUES (?,?,?,?,?)').run(gameId, p, actor.gmId, at, ctx.now());
-    audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.leader', entity: 'game', entityId: gameId, before: { leaderId: before.leaderId }, after: { leaderId: p } });
+    ctx.db.prepare('INSERT INTO leader_tap (game_id, player_id, gm_id, night_ms, created_at) VALUES (?,?,?,?,?)').run(g.id, p, actor.gmId, at, ctx.now());
+    audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.leader', entity: 'game', entityId: g.id, before: { leaderId: before.leaderId }, after: { leaderId: p } });
     if (t.kingfall) {
       const imp = kingfallImpulse(loadSecurities(ctx, n.id), nightSettings(n));
       if (imp) queueImpulse(ctx, n.id, imp);
     }
   })();
-  if (t.dethroned) pushFeed(ctx, n.id, 'dethroned', 'feed.dethroned', { gameId, name: g.name, from: Number(t.dethroned.from), to: p });
-  if (t.kingfall) pushFeed(ctx, n.id, 'kingfall', 'feed.kingfall', { gameId, name: g.name, from: Number(t.dethroned!.from) }, true);
-  ctx.bus.all('leader:update', { gameId, leaderId: p });
-  ctx.bus.refresh(n.id);
+  if (t.dethroned) pushFeed(ctx, n.id, 'dethroned', 'feed.dethroned', { gameId: g.id, name: g.name, from: Number(t.dethroned.from), to: p });
+  if (t.kingfall) pushFeed(ctx, n.id, 'kingfall', 'feed.kingfall', { gameId: g.id, name: g.name, from: Number(t.dethroned!.from) }, true);
+  ctx.bus.all('leader:update', { gameId: g.id, leaderId: p });
   return { leaderId: p, changed: true, dethroned: !!t.dethroned };
+}
+
+/** Manual crown: ≤2 taps on the GM phone (pick game, tap leader). Only for games in manual lead mode. */
+export function leaderTap(ctx: Ctx, actor: GmAuth, gameId: number, playerId: unknown) {
+  const { n, g, eligible } = activeGameFor(ctx, gameId);
+  if (g.lead_mode !== 'manual') throw conflict('crown_is_scored', 'This game decides the leader from scores. Enter scores instead.');
+  const p = Number(playerId);
+  if (!eligible(p)) throw bad('not_a_participant');
+  const r = setCrown(ctx, actor, n, g, p);
+  if (r.changed) ctx.bus.refresh(n.id);
+  return r;
+}
+
+/** Latest entered score per player for a game. */
+export function latestScores(ctx: Ctx, gameId: number): Map<number, number> {
+  const rows = ctx.db
+    .prepare('SELECT player_id, score FROM game_score WHERE id IN (SELECT MAX(id) FROM game_score WHERE game_id = ? GROUP BY player_id)')
+    .all(gameId) as { player_id: number; score: number }[];
+  return new Map(rows.map((r) => [r.player_id, r.score]));
+}
+
+/** Score entry (any GM): update some or all players' current scores; the crown follows automatically. */
+export function enterScores(ctx: Ctx, actor: GmAuth, gameId: number, input: { scores?: unknown }) {
+  const { n, g, eligible } = activeGameFor(ctx, gameId);
+  if (g.lead_mode === 'manual') throw conflict('crown_is_manual', 'This game uses manual crown taps.');
+  if (!Array.isArray(input.scores) || !input.scores.length) throw bad('bad_scores');
+  if (input.scores.length > 40) throw bad('bad_scores');
+  const entries = (input.scores as { playerId?: unknown; score?: unknown }[]).map((e) => {
+    const p = Number(e?.playerId);
+    const v = Number(e?.score);
+    if (!eligible(p)) throw bad('not_a_participant');
+    if (e?.score === '' || e?.score == null || !Number.isFinite(v) || Math.abs(v) > 1e6) throw bad('bad_score', 'Scores must be numbers.');
+    return { p, v };
+  });
+  const at = nightMs(ctx, n);
+  const prev = latestScores(ctx, gameId);
+  const changed = entries.filter((e) => prev.get(e.p) !== e.v);
+  if (changed.length) {
+    ctx.db.transaction(() => {
+      const ins = ctx.db.prepare('INSERT INTO game_score (game_id, player_id, score, gm_id, night_ms, created_at) VALUES (?,?,?,?,?,?)');
+      for (const e of changed) ins.run(gameId, e.p, e.v, actor.gmId, at, ctx.now());
+      audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.scores', entity: 'game', entityId: gameId, before: Object.fromEntries(changed.map((e) => [e.p, prev.get(e.p) ?? null])), after: Object.fromEntries(changed.map((e) => [e.p, e.v])) });
+    })();
+  }
+  const scores = latestScores(ctx, gameId);
+  const current = crownOf(ctx, gameId).leaderId;
+  const next = leaderFromScores(new Map([...scores].map(([k, v]) => [pid(k), v])), g.lead_mode, current);
+  const crown = next && next !== current ? setCrown(ctx, actor, n, g, Number(next)) : null;
+  if (changed.length) ctx.bus.all('game:update', { id: gameId, status: g.status });
+  if (changed.length || crown) ctx.bus.refresh(n.id);
+  return { leaderId: next ? Number(next) : null, changed: !!crown?.changed, dethroned: !!crown?.dethroned, scores: Object.fromEntries(scores) };
 }
 
 // ---------------------------------------------------------------- views
@@ -371,16 +448,23 @@ export interface GameView {
   participants: { playerId: number; placement: number | null; dnf: boolean; team: string | null }[];
   leaderId: number | null;
   tableId: number | null;
+  /** How the crown is decided: 'high'/'low' from entered scores, or 'manual' taps. */
+  leadMode: LeadMode;
+  leadLabel: string | null;
+  /** Latest entered score per player (scored games only). Public: it's what the table already sees. */
+  scores: Record<number, number>;
+  /** The library game sets the lead mode (the schedule form can't change it). */
+  leadFixed: boolean;
 }
 
 export function gameViews(ctx: Ctx, nightId: number): GameView[] {
   const rows = ctx.db
     .prepare(
-      `SELECT g.*, l.color FROM game g LEFT JOIN library_game l ON l.id = g.library_game_id
+      `SELECT g.*, l.color, l.lead_mode AS lib_lead_mode FROM game g LEFT JOIN library_game l ON l.id = g.library_game_id
        WHERE g.night_id = ? AND g.status != 'cancelled'
        ORDER BY CASE g.status WHEN 'active' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END, COALESCE(g.planned_start, g.started_at, g.id), g.id`,
     )
-    .all(nightId) as (GameRow & { color: string | null })[];
+    .all(nightId) as (GameRow & { color: string | null; lib_lead_mode: string | null })[];
   const parts = ctx.db.prepare('SELECT player_id, placement, dnf, team_label FROM game_participant WHERE game_id = ? ORDER BY COALESCE(placement, 99), rowid');
   return rows.map((g) => ({
     id: g.id,
@@ -402,5 +486,9 @@ export function gameViews(ctx: Ctx, nightId: number): GameView[] {
     })),
     leaderId: g.status === 'active' ? ((v) => (v ? Number(v) : null))(crownOf(ctx, g.id).leaderId) : null,
     tableId: g.table_id,
+    leadMode: g.lead_mode,
+    leadLabel: g.lead_label,
+    scores: g.lead_mode === 'manual' ? {} : Object.fromEntries(latestScores(ctx, g.id)),
+    leadFixed: g.lib_lead_mode != null,
   }));
 }

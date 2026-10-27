@@ -362,4 +362,78 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE night ADD COLUMN recap_until INTEGER;
   ALTER TABLE night ADD COLUMN recap_done INTEGER NOT NULL DEFAULT 0;
   `,
+  /* 7 — score entry: crown from entered scores (library sets the mode, or the GM picks per game) */ `
+  ALTER TABLE library_game ADD COLUMN lead_mode TEXT;
+  ALTER TABLE library_game ADD COLUMN lead_label TEXT;
+  ALTER TABLE game ADD COLUMN lead_mode TEXT NOT NULL DEFAULT 'manual';
+  ALTER TABLE game ADD COLUMN lead_label TEXT;
+  CREATE TABLE game_score (
+    id INTEGER PRIMARY KEY,
+    game_id INTEGER NOT NULL REFERENCES game(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    score REAL NOT NULL,
+    gm_id INTEGER REFERENCES game_master(id),
+    night_ms INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX game_score_game ON game_score(game_id, player_id, id);
+  `,
+  /* 8 — hint rewards, handicaps, anonymous gifts */ `
+  CREATE TABLE adjustment_v8 (
+    id INTEGER PRIMARY KEY,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    gold_h INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'manual' CHECK (kind IN ('manual','late_join','espionage','gift')),
+    gm_id INTEGER REFERENCES game_master(id),
+    created_at INTEGER NOT NULL,
+    read_at INTEGER
+  );
+  INSERT INTO adjustment_v8 (id, night_id, player_id, gold_h, reason, kind, gm_id, created_at)
+    SELECT id, night_id, player_id, gold_h, reason, kind, gm_id, created_at FROM adjustment;
+  DROP TABLE adjustment;
+  ALTER TABLE adjustment_v8 RENAME TO adjustment;
+  CREATE TABLE hint_grant (
+    id INTEGER PRIMARY KEY,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    hint_id TEXT NOT NULL,
+    tier TEXT NOT NULL CHECK (tier IN ('common','rarer','rarest')),
+    source TEXT NOT NULL,
+    source_ref TEXT NOT NULL,
+    cost_h INTEGER NOT NULL DEFAULT 0,
+    gm_id INTEGER REFERENCES game_master(id),
+    night_ms INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    read_at INTEGER,
+    UNIQUE (night_id, player_id, source, source_ref)
+  );
+  CREATE TABLE handicap_manual (
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    offset INTEGER NOT NULL DEFAULT 0,
+    gm_id INTEGER REFERENCES game_master(id),
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (night_id, player_id)
+  );
+  CREATE TABLE handicap_eval (
+    id INTEGER PRIMARY KEY,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    night_ms INTEGER NOT NULL,
+    auto_level INTEGER NOT NULL,
+    offset INTEGER NOT NULL,
+    effective INTEGER NOT NULL,
+    net_worth_h INTEGER NOT NULL,
+    reasons TEXT NOT NULL DEFAULT '{}',
+    trigger TEXT NOT NULL,
+    gift_h INTEGER NOT NULL DEFAULT 0,
+    hints TEXT NOT NULL DEFAULT '[]',
+    credit_h INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX handicap_eval_night ON handicap_eval(night_id, player_id, id);
+  ALTER TABLE player ADD COLUMN hint_tradein_nms INTEGER;
+  `,
 ];

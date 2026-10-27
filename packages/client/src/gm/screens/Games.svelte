@@ -21,6 +21,10 @@
   let rerolls = $state(false);
   let tableId = $state('');
   let picked = $state<number[]>([]);
+  let leadMode = $state<'high' | 'low' | 'manual'>('high');
+  let leadLabel = $state('');
+  /** Set by the library game (pack): shown, not editable here. */
+  let leadFixed = $state(false);
 
   function pickLibrary(id: string) {
     libraryGameId = id;
@@ -30,7 +34,10 @@
       mode = g.mode;
       duration = g.defaultDuration;
       rerolls = g.rerollsAllowed;
-    }
+      leadFixed = !!g.leadMode;
+      leadMode = g.leadMode ?? 'high';
+      leadLabel = g.leadLabel ?? '';
+    } else leadFixed = false;
   }
   function edit(g: GameInfo) {
     editing = g.id;
@@ -42,6 +49,9 @@
     rerolls = g.rerollsAllowed;
     tableId = g.tableId == null ? '' : String(g.tableId);
     picked = g.participants.map((p) => p.playerId);
+    leadMode = g.leadMode;
+    leadLabel = g.leadLabel ?? '';
+    leadFixed = g.leadFixed || g.status !== 'scheduled';
   }
   function reset() {
     editing = null;
@@ -53,6 +63,9 @@
     rerolls = false;
     tableId = '';
     picked = [];
+    leadMode = 'high';
+    leadLabel = '';
+    leadFixed = false;
   }
   async function save(e: Event) {
     e.preventDefault();
@@ -65,6 +78,7 @@
       rerollsAllowed: rerolls,
       tableId: tableId || null,
       participants: picked,
+      ...(leadFixed ? {} : { leadMode, leadLabel }),
     };
     const r = editing ? await run(() => patch(`/api/games/${editing}`, body), 'Game updated') : await run(() => post('/api/games', body), 'Game scheduled');
     if (r) reset();
@@ -101,6 +115,15 @@
           {#each gs?.gm?.seating ?? [] as tb (tb.id)}<option value={String(tb.id)}>{tb.name}</option>{/each}
         </select>
       </label>
+      <label class="field">
+        <span>Who's leading</span>
+        <select bind:value={leadMode} disabled={leadFixed}>
+          <option value="high">{t('lead.high')}</option>
+          <option value="low">{t('lead.low')}</option>
+          <option value="manual">{t('lead.manual')}</option>
+        </select>
+      </label>
+      {#if leadMode !== 'manual'}<label class="field"><span>Score name</span><input bind:value={leadLabel} maxlength="24" placeholder={t('lead.score')} disabled={leadFixed} /></label>{/if}
       <label class="field row"><input type="checkbox" bind:checked={rerolls} /> Re-rolls allowed</label>
     </div>
     <p class="small muted">Players (optional — can be set when the result is entered)</p>

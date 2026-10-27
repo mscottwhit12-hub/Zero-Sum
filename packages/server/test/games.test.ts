@@ -129,7 +129,7 @@ describe('schedule and results', () => {
   });
 
   it('Sub GMs can run games but not schedule them', async () => {
-    const { t, gm, ids, game } = await nightWithGame(2);
+    const { t, gm, ids, game } = await nightWithGame(2, { leadMode: 'manual' });
     await call(t, gm, 'POST', '/api/gm/gms', { name: 'Helper', password: 'helper pass', pin: '5555' });
     const sub = await loginAs(t, 'Helper', 'helper pass');
     expect((await call(t, sub, 'POST', '/api/games', { name: 'X' })).statusCode).toBe(403);
@@ -141,7 +141,7 @@ describe('schedule and results', () => {
 
 describe('leader taps', () => {
   it('crown on the TV; dethroned is public; kingfall is GM-only and queues a hidden crypto spike', async () => {
-    const { t, gm, ids, game } = await nightWithGame(3);
+    const { t, gm, ids, game } = await nightWithGame(3, { leadMode: 'manual' });
     await call(t, gm, 'POST', `/api/games/${game.id}/start`);
     expect((await call(t, gm, 'POST', `/api/games/${game.id}/leader`, { playerId: 999 })).json().error).toBe('not_a_participant');
     await call(t, gm, 'POST', `/api/games/${game.id}/leader`, { playerId: ids[0] });
@@ -164,5 +164,77 @@ describe('leader taps', () => {
     for (const k of FORBIDDEN_KEYS) expect(JSON.stringify(pub)).not.toContain(k);
     // Same leader again: no-op
     expect((await call(t, gm, 'POST', `/api/games/${game.id}/leader`, { playerId: ids[2] })).json().changed).toBe(false);
+  });
+});
+
+describe('score entry', () => {
+  it('library sets the lead mode; scores move the crown; ties keep the holder; kingfall still fires', async () => {
+    const { t, gm, ids, game, lib } = await nightWithGame(3, { leadMode: 'high', leadLabel: 'Victory points' });
+    expect(lib).toMatchObject({ leadMode: 'high', leadLabel: 'Victory points' });
+    expect(game).toMatchObject({ lead_mode: 'high', lead_label: 'Victory points' });
+    // Library-fixed: GM can't override at schedule time
+    const g2 = (await call(t, gm, 'POST', '/api/games', { libraryGameId: lib.id, leadMode: 'manual' })).json().game;
+    expect(g2.lead_mode).toBe('high');
+    await call(t, gm, 'POST', `/api/games/${game.id}/start`);
+    expect((await call(t, gm, 'POST', `/api/games/${game.id}/leader`, { playerId: ids[0] })).json().error).toBe('crown_is_scored');
+    expect((await call(t, gm, 'POST', `/api/games/${game.id}/scores`, { scores: [{ playerId: 999, score: 1 }] })).json().error).toBe('not_a_participant');
+    expect((await call(t, gm, 'POST', `/api/games/${game.id}/scores`, { scores: [{ playerId: ids[0], score: 'x' }] })).json().error).toBe('bad_score');
+
+    const s1 = (await call(t, gm, 'POST', `/api/games/${game.id}/scores`, { scores: [{ playerId: ids[0], score: 3 }, { playerId: ids[1], score: 2 }, { playerId: ids[2], score: 2 }] })).json();
+    expect(s1).toMatchObject({ leaderId: ids[0], changed: true, dethroned: false });
+    const n = currentNight(t.ctx)!;
+    const pg = publicView(t.ctx, computeNightState(t.ctx, n.id)!).games[0]!;
+    expect(pg).toMatchObject({ leaderId: ids[0], leadMode: 'high', leadLabel: 'Victory points', scores: { [ids[0]!]: 3, [ids[1]!]: 2, [ids[2]!]: 2 } });
+
+    // Tie at the top: holder keeps it
+    t.clock.advance(20 * 60_000);
+    expect((await call(t, gm, 'POST', `/api/games/${game.id}/scores`, { scores: [{ playerId: ids[1], score: 3 }] })).json()).toMatchObject({ leaderId: ids[0], changed: false });
+    // Overtaken after 20 min: dethroned + hidden kingfall
+    expect((await call(t, gm, 'POST', `/api/games/${game.id}/scores`, { scores: [{ playerId: ids[1], score: 5 }] })).json()).toMatchObject({ leaderId: ids[1], changed: true, dethroned: true });
+    expect(t.ctx.db.prepare('SELECT cause FROM impulse').all()).toEqual([{ cause: 'kingfall' }]);
+    expect(t.ctx.db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action = 'game.scores'").get()).toEqual({ c: 3 });
+    // Unchanged scores don't write
+    await call(t, gm, 'POST', `/api/games/${game.id}/scores`, { scores: [{ playerId: ids[1], score: 5 }] });
+    expect(t.ctx.db.prepare('SELECT COUNT(*) c FROM game_score').get()).toEqual({ c: 5 });
+  });
+
+  it('lower-wins mode; GM picks when the library does not; locked once started; manual games reject scores', async () => {
+    const t = await makeApp();
+    const night = await liveNight(t, 2);
+    const [a, b] = night.devices.map((d) => d.id);
+    const g = (await call(t, night.gm, 'POST', '/api/games', { name: 'Golf', leadMode: 'low', leadLabel: 'Strokes', participants: [a, b] })).json().game;
+    expect(g).toMatchObject({ lead_mode: 'low', lead_label: 'Strokes' });
+    const d = (await call(t, night.gm, 'POST', '/api/games', { name: 'Default' })).json().game;
+    expect(d.lead_mode).toBe('high');
+    expect((await call(t, night.gm, 'PATCH', `/api/games/${d.id}`, { leadMode: 'manual' })).json().game.lead_mode).toBe('manual');
+    expect((await call(t, night.gm, 'POST', '/api/games', { name: 'Bad', leadMode: 'sideways' })).json().error).toBe('bad_lead_mode');
+    await call(t, night.gm, 'POST', `/api/games/${g.id}/start`);
+    expect((await call(t, night.gm, 'PATCH', `/api/games/${g.id}`, { leadMode: 'high' })).json().error).toBe('lead_mode_locked');
+    expect((await call(t, night.gm, 'POST', `/api/games/${g.id}/scores`, { scores: [{ playerId: a, score: 40 }, { playerId: b, score: 38 }] })).json().leaderId).toBe(b);
+    await call(t, night.gm, 'POST', `/api/games/${d.id}/start`);
+    expect((await call(t, night.gm, 'POST', `/api/games/${d.id}/scores`, { scores: [{ playerId: a, score: 1 }] })).json().error).toBe('crown_is_manual');
+  });
+
+  it('packs carry lead mode and label', async () => {
+    const t = await makeApp();
+    const night = await liveNight(t, 1);
+    const r = (await call(t, night.gm, 'POST', '/api/library/import', { format: 'game-night-pack/1', name: 'Test', games: [{ name: 'Area Control', leadMode: 'high', leadLabel: 'Territories' }, { name: 'Free' }] })).json();
+    expect(r).toEqual({ added: 2, updated: 0 });
+    const exp = (await call(t, night.gm, 'GET', '/api/library/export')).json();
+    expect(exp.games.find((g: { name: string }) => g.name === 'Area Control')).toMatchObject({ leadMode: 'high', leadLabel: 'Territories' });
+    expect(exp.games.find((g: { name: string }) => g.name === 'Free')).toMatchObject({ leadMode: null });
+    expect((await call(t, night.gm, 'POST', '/api/library/import', { games: [{ name: 'X', leadMode: 'up' }] })).json().error).toBe('bad_pack_entry');
+  });
+});
+
+describe('test-data pack', () => {
+  it('catan-risk pack imports with score-based crowns', async () => {
+    const t = await makeApp();
+    const night = await liveNight(t, 1);
+    const pack = JSON.parse((await import('node:fs')).readFileSync(fileURLToPath(new URL('../../../test-data/packs/catan-risk.json', import.meta.url)), 'utf8'));
+    expect((await call(t, night.gm, 'POST', '/api/library/import', pack)).json()).toEqual({ added: 2, updated: 0 });
+    const lib = (await call(t, night.gm, 'GET', '/api/library')).json().games;
+    expect(lib.find((g: { name: string }) => g.name === 'Catan')).toMatchObject({ minPlayers: 3, maxPlayers: 4, leadMode: 'high', leadLabel: 'Victory points', rerollsAllowed: true });
+    expect(lib.find((g: { name: string }) => g.name === 'Risk')).toMatchObject({ maxPlayers: 6, defaultDuration: 4, leadMode: 'high', leadLabel: 'Territories' });
   });
 });

@@ -2,6 +2,7 @@ import { createRng, moodBiasMap, tickMarket, type Impulse, type MoodReading } fr
 import { j } from '../db';
 import type { Ctx } from '../context';
 import { computeNightState, getNight, pid, upsertSecurities } from './state';
+import { indexTerms } from './indexTerms';
 
 /** Queue an impulse for the next tick (trades, espionage, kingfall, re-rolls). Persisted so a restart loses nothing. */
 export function queueImpulse(ctx: Ctx, nightId: number, imp: Impulse): void {
@@ -65,6 +66,7 @@ export function runTick(ctx: Ctx, nightId: number): boolean {
         drift: activeDrift(ctx, nightId, n.current_quarter),
         mood: moodBiasMap(moodReadings(ctx, nightId), tick, st.settings),
         impulses,
+        indexExtra: indexTerms(ctx, n).extra,
       },
       st.settings,
       createRng(tickSeed(nightId, tick)),

@@ -1,4 +1,5 @@
 import { quarterAt } from '@gn/engine';
+import { handicapStep } from './services/handicap';
 import type { Ctx } from './context';
 import { runTick, tradingOpen } from './services/market';
 import { computeNightState, currentNight } from './services/state';
@@ -38,6 +39,7 @@ export function tickOnce(ctx: Ctx): boolean {
   }
   voteStep(ctx, n);
   espionageStep(ctx, n);
+  handicapStep(ctx, n);
   if (!tradingOpen(n.status, n.trading_closed)) return false;
   const due = (n.last_tick_at ?? n.started_at) + st.settings.market.tickSeconds * 1000;
   if (ctx.now() < due) return false;

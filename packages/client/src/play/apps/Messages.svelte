@@ -1,7 +1,9 @@
 <script lang="ts">
   import { t } from '@shared/copy';
   import { run } from '@shared/ui';
-  import type { MyChallenge, PlayerState, Reward } from '@shared/types';
+  import type { MyChallenge, PlayerState, Reward, TipTier } from '@shared/types';
+  import { clock } from '@shared/format';
+  import { nightNow } from '@shared/socket';
   import { dapi } from '../device';
   let { s }: { s: PlayerState } = $props();
 
@@ -23,6 +25,7 @@
 
   function rewardText(r: Reward) {
     if (r.type === 'gold') return t('phone.rewards.gold', { gold: r.gold ?? '' });
+    if (r.type === 'hint') return t('phone.rewards.hint', { tier: t(`phone.tip_tiers.${r.tier ?? 'common'}`) });
     if (r.type === 'custom') return t('phone.rewards.custom', { text: r.text ?? '' });
     return t(`phone.rewards.${r.type}`);
   }
@@ -34,7 +37,70 @@
   const ticker = (id: string) => s.market.find((m) => m.id === id)?.ticker ?? id;
   const usePeek = (c: MyChallenge) => run(() => dapi('POST', `/api/me/challenges/${c.id}/peek`, { targetPlayerId: Number(peekTarget[c.id]) }));
   const nameOf = (id: number | null) => s.players.find((p) => p.id === id)?.displayName ?? '?';
+
+  // Anonymous tips and gifts, newest first.
+  const inbox = $derived(
+    [
+      ...(s.me?.tips ?? []).map((x) => ({ key: `t${x.id}`, kind: 'tip' as const, id: x.id, createdAt: x.createdAt, read: x.read, text: t(`hints.${x.hintId}`, x.vars) })),
+      ...(s.me?.gifts ?? []).map((x) => ({ key: `g${x.id}`, kind: 'gift' as const, id: x.id, createdAt: x.createdAt, read: x.read, text: t('phone.gift_body', { gold: (x.goldH / 100).toFixed(1) }) })),
+    ].sort((a, b) => b.createdAt - a.createdAt),
+  );
+  const readTip = (id: number) => dapi('POST', `/api/me/tips/${id}/read`).catch(() => {});
+  const readGift = (id: number) => dapi('POST', `/api/me/gifts/${id}/read`).catch(() => {});
+  let busy = $state(false);
+  const once = async (fn: () => Promise<unknown>) => {
+    if (busy) return;
+    busy = true;
+    try {
+      await run(fn);
+    } finally {
+      busy = false;
+    }
+  };
+  const buy = (tier: TipTier) => once(() => dapi('POST', '/api/me/tips/buy', { tier }));
+  const trade = () => once(() => dapi('POST', '/api/me/tips/trade-reroll'));
+  let nowWall = $state(Date.now());
+  $effect(() => {
+    const h = setInterval(() => (nowWall = Date.now()), 1000);
+    return () => clearInterval(h);
+  });
+  const nowNms = $derived(nightNow(s.night, nowWall));
 </script>
+
+{#if s.me?.tipShop?.buy || (s.me?.tipShop?.tradeIn && s.me.tipShop.tradeIn.tokens > 0)}
+  <div class="msg panel shop">
+    <span class="small muted">{t('phone.tip_shop')}</span>
+    {#if s.me.tipShop.buy}
+      <div class="actions">
+        {#each ['common', 'rarer', 'rarest'] as tier (tier)}
+          {@const price = s.me.tipShop.buy[tier as TipTier]}
+          <button disabled={busy || (s.me?.cashH ?? 0) < price * 100 || s.night?.status !== 'live'} onclick={() => buy(tier as TipTier)}>
+            {t('phone.tip_buy', { tier: t(`phone.tip_tiers.${tier}`), price })}
+          </button>
+        {/each}
+      </div>
+    {/if}
+    {#if s.me.tipShop.tradeIn && s.me.tipShop.tradeIn.tokens > 0}
+      {@const wait = s.me.tipShop.tradeIn.nextAtNms != null && nowNms < s.me.tipShop.tradeIn.nextAtNms}
+      <button disabled={busy || wait || s.night?.status !== 'live'} onclick={trade}>{t('phone.tip_trade')}</button>
+      {#if wait}<span class="small muted">{t('phone.tip_trade_wait', { time: clock((s.me.tipShop.tradeIn.nextAtNms ?? 0) - nowNms) })}</span>{/if}
+    {/if}
+  </div>
+{/if}
+
+{#each inbox as item (item.key)}
+  {#if item.kind === 'tip'}
+    <button class="msg panel tip" class:unread={!item.read} onclick={() => !item.read && readTip(item.id)}>
+      <span class="small muted mono">{time(item.createdAt)} · {t('phone.tip_from')}</span>
+      <span>{item.text}</span>
+    </button>
+  {:else}
+    <button class="msg panel" class:unread={!item.read} onclick={() => !item.read && readGift(item.id)}>
+      <span class="small muted mono">{time(item.createdAt)} · {t('phone.gift_from')}</span>
+      <span>{item.text}</span>
+    </button>
+  {/if}
+{/each}
 
 {#each s.me?.challenges ?? [] as c (c.id)}
   <div class="msg panel memo" class:unread={c.status === 'sent'}>
@@ -87,7 +153,7 @@
     <span>{m.message}</span>
   </button>
 {/each}
-{#if !s.me?.messages.length && !s.me?.challenges.length}<p class="muted">No messages.</p>{/if}
+{#if !s.me?.messages.length && !s.me?.challenges.length && !inbox.length}<p class="muted">No messages.</p>{/if}
 
 <style>
   .msg {
@@ -100,6 +166,14 @@
   }
   .memo {
     border-style: dashed;
+  }
+  .tip {
+    border-style: dotted;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
   }
   .unread {
     border-left: 4px solid var(--accent);

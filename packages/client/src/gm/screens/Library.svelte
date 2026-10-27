@@ -18,13 +18,13 @@
     get<{ rules: RuleEntry[] }>('/api/rules').then((r) => (rules = r.rules)).catch(() => {});
   });
 
-  const blank = { name: '', minPlayers: 2, maxPlayers: 6, defaultDuration: 1, mode: 'competitive' as const, rerollsAllowed: false, color: '#888888', icon: '', soundTheme: '', ruleEntryId: '' };
-  let form = $state<Omit<LibraryGame, 'id' | 'soundTheme' | 'ruleEntryId' | 'color' | 'icon'> & { color: string; icon: string; soundTheme: string; ruleEntryId: string }>({ ...blank });
+  const blank = { name: '', minPlayers: 2, maxPlayers: 6, defaultDuration: 1, mode: 'competitive' as const, rerollsAllowed: false, color: '#888888', icon: '', soundTheme: '', ruleEntryId: '', leadMode: '', leadLabel: '' };
+  let form = $state<Omit<LibraryGame, 'id' | 'soundTheme' | 'ruleEntryId' | 'color' | 'icon' | 'leadMode' | 'leadLabel'> & { color: string; icon: string; soundTheme: string; ruleEntryId: string; leadMode: string; leadLabel: string }>({ ...blank });
   let editing = $state<number | null>(null);
 
   function edit(g: LibraryGame) {
     editing = g.id;
-    form = { name: g.name, minPlayers: g.minPlayers, maxPlayers: g.maxPlayers, defaultDuration: g.defaultDuration, mode: g.mode, rerollsAllowed: g.rerollsAllowed, color: g.color ?? '#888888', icon: g.icon ?? '', soundTheme: g.soundTheme ?? '', ruleEntryId: g.ruleEntryId == null ? '' : String(g.ruleEntryId) };
+    form = { name: g.name, minPlayers: g.minPlayers, maxPlayers: g.maxPlayers, defaultDuration: g.defaultDuration, mode: g.mode, rerollsAllowed: g.rerollsAllowed, color: g.color ?? '#888888', icon: g.icon ?? '', soundTheme: g.soundTheme ?? '', ruleEntryId: g.ruleEntryId == null ? '' : String(g.ruleEntryId), leadMode: g.leadMode ?? '', leadLabel: g.leadLabel ?? '' };
   }
   function reset() {
     editing = null;
@@ -78,6 +78,16 @@
           {#each rules as r (r.id)}<option value={String(r.id)}>{r.title}</option>{/each}
         </select>
       </label>
+      <label class="field">
+        <span>Who's leading</span>
+        <select bind:value={form.leadMode}>
+          <option value="">{t('lead.unset')}</option>
+          <option value="high">{t('lead.high')}</option>
+          <option value="low">{t('lead.low')}</option>
+          <option value="manual">{t('lead.manual')}</option>
+        </select>
+      </label>
+      {#if form.leadMode !== 'manual'}<label class="field"><span>Score name</span><input bind:value={form.leadLabel} maxlength="24" placeholder="e.g. Victory points" /></label>{/if}
       <label class="field row"><input type="checkbox" bind:checked={form.rerollsAllowed} /> Re-rolls allowed by default</label>
     </div>
     <div class="row">
@@ -97,7 +107,7 @@
   </div>
   <div class="scroll-x">
     <table>
-      <thead><tr><th></th><th>Name</th><th>Mode</th><th>Players</th><th>Length</th><th>Re-rolls</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Name</th><th>Mode</th><th>Players</th><th>Length</th><th>Leader</th><th>Re-rolls</th><th></th></tr></thead>
       <tbody>
         {#each games as g (g.id)}
           <tr>
@@ -106,6 +116,7 @@
             <td class="small">{t(`modes.${g.mode}`)}</td>
             <td class="small">{g.minPlayers}–{g.maxPlayers}</td>
             <td class="small mono">{g.defaultDuration} h</td>
+            <td class="small">{g.leadMode ? t(`lead.${g.leadMode}`) : t('lead.unset')}{g.leadLabel && g.leadMode !== 'manual' ? ` (${g.leadLabel})` : ''}</td>
             <td class="small">{g.rerollsAllowed ? 'Yes' : 'No'}</td>
             <td class="actions">
               {#if master}

@@ -58,4 +58,4 @@ export async function liveNight(t: TestApp, n = 3, opts: { start?: boolean; sett
 
 /** Strings that must never reach a client (hidden mechanics / internals). */
 export const FORBIDDEN_KEYS = ['"drift"', '"causes"', '"fair"', '"target"', '"impulses"', '"shock"', '"lastFair"', '"leaverFair"', '"credential_hash"', '"pin_hash"', '"token_hash"', 'goldHidden', 'gold_hidden'];
-export const GM_ONLY_KEYS = ['"gmOffset"', '"moodTerm"', '"ledger"', '"overrides"', '"baseline"'];
+export const GM_ONLY_KEYS = ['"indexTerms"', '"gmOffset"', '"moodTerm"', '"ledger"', '"overrides"', '"baseline"'];

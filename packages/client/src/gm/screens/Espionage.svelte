@@ -13,16 +13,18 @@
   let rewardType = $state<RewardType>('gold');
   let rewardGold = $state<number | ''>('');
   let rewardText = $state('');
+  let rewardTier = $state<'common' | 'rarer' | 'rarest'>('common');
   const REWARDS: { id: RewardType; label: string }[] = [
     { id: 'gold', label: 'Gold' },
     { id: 'reroll', label: 'Re-roll' },
     { id: 'peek', label: 'Peek' },
     { id: 'dead_clue', label: 'Dead-stock clue' },
+    { id: 'hint', label: 'Mechanic tip' },
     { id: 'custom', label: 'Custom' },
   ];
   async function assign(e: Event) {
     e.preventDefault();
-    const reward = rewardType === 'gold' ? { type: 'gold', gold: rewardGold === '' ? undefined : Number(rewardGold) } : rewardType === 'custom' ? { type: 'custom', text: rewardText } : { type: rewardType };
+    const reward = rewardType === 'gold' ? { type: 'gold', gold: rewardGold === '' ? undefined : Number(rewardGold) } : rewardType === 'custom' ? { type: 'custom', text: rewardText } : rewardType === 'hint' ? { type: 'hint', tier: rewardTier } : { type: rewardType };
     const r = await run(() => post('/api/challenges', { playerId: Number(playerId), text, reward }), 'Memo sent');
     if (r) {
       text = '';
@@ -31,7 +33,7 @@
   }
   let reassignTo = $state<Record<number, string>>({});
   const rewardLabel = (c: GmChallenge) =>
-    c.reward.type === 'gold' ? `${c.reward.gold} gold` : c.reward.type === 'custom' ? `Custom: ${c.reward.text}` : REWARDS.find((r) => r.id === c.reward.type)?.label;
+    c.reward.type === 'gold' ? `${c.reward.gold} gold` : c.reward.type === 'custom' ? `Custom: ${c.reward.text}` : c.reward.type === 'hint' ? `Mechanic tip (${c.reward.tier ?? 'common'})` : REWARDS.find((r) => r.id === c.reward.type)?.label;
   const STATUS: Record<string, string> = { sent: 'Sent', read: 'Read', accepted: 'Accepted', rejected: 'Rejected', succeeded: 'Success', failed: 'Failed', reassigned: 'Reassigned' };
   const list = $derived(gs?.gm?.challenges ?? []);
 </script>
@@ -53,6 +55,10 @@
     </label>
     {#if rewardType === 'gold'}
       <label class="field"><span>Gold</span><input type="number" step="any" min="0.01" max="100" placeholder={String(defaultGold)} bind:value={rewardGold} /></label>
+    {:else if rewardType === 'hint'}
+      <label class="field"><span>Tip tier</span>
+        <select bind:value={rewardTier}><option value="common">Common</option><option value="rarer">Rarer</option><option value="rarest">Rarest</option></select>
+      </label>
     {:else if rewardType === 'custom'}
       <label class="field"><span>Custom reward (granted by hand)</span><input maxlength="200" bind:value={rewardText} required /></label>
     {/if}

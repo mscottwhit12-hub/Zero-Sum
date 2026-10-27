@@ -36,18 +36,30 @@ export interface ScoredGame {
 
 export class ScoringError extends Error {}
 
-/** Multiplier for a single (untied) place, 1-based. */
-export function placeMult(place: number, s: Settings['scoring']): number {
+/** Classic curve: placementMults, then × tailFactor per further place. */
+function classicMult(place: number, s: Settings['scoring']): number {
   const list = s.placementMults;
-  if (place < 1) throw new ScoringError(`bad place ${place}`);
   if (place <= list.length) return list[place - 1]!;
   return list[list.length - 1]! * Math.pow(s.tailFactor, place - list.length);
 }
 
-/** Multiplier for a tie group occupying places [from, from+count-1]. */
-export function tieMult(from: number, count: number, s: Settings['scoring']): number {
+/**
+ * Multiplier for a single (untied) place, 1-based, among `units` ranked units (players or teams).
+ * Linear curve: places 3..units step evenly from 2nd's mult down to floorMult, never below the classic curve.
+ */
+export function placeMult(place: number, s: Settings['scoring'], units = place): number {
+  if (place < 1) throw new ScoringError(`bad place ${place}`);
+  const classic = classicMult(place, s);
+  if ((s.curve ?? 'classic') !== 'linear' || place < 3 || units < 3) return classic;
+  const second = classicMult(2, s);
+  const lin = second - ((second - s.floorMult) * (place - 2)) / (units - 2);
+  return Math.round(Math.max(classic, lin) * 1e6) / 1e6;
+}
+
+/** Multiplier for a tie group occupying places [from, from+count-1] among `units` ranked units. */
+export function tieMult(from: number, count: number, s: Settings['scoring'], units = from + count - 1): number {
   const ms: number[] = [];
-  for (let p = from; p < from + count; p++) ms.push(placeMult(p, s));
+  for (let p = from; p < from + count; p++) ms.push(placeMult(p, s, units));
   if (s.tieRule === 'best') return Math.max(...ms);
   if (s.tieRule === 'worst') return Math.min(...ms);
   return ms.reduce((a, b) => a + b, 0) / ms.length;
@@ -65,7 +77,7 @@ export function multsForPlacements<K>(units: { key: K; placement: number }[], s:
   while (i < sorted.length) {
     let j = i;
     while (j < sorted.length && sorted[j]!.placement === sorted[i]!.placement) j++;
-    const m = tieMult(pos, j - i, s);
+    const m = tieMult(pos, j - i, s, sorted.length);
     for (let k = i; k < j; k++) out.set(sorted[k]!.key, m);
     pos += j - i;
     i = j;
