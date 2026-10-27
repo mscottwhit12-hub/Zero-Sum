@@ -1,6 +1,7 @@
-node_modules/
-dist/
-data/
 *.log
-packages/sim/reports/results.json
+data/
+dist/
+e2e/.out/
 media/
+node_modules/
+packages/sim/reports/results.json
