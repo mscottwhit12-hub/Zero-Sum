@@ -151,6 +151,9 @@ export interface SeatingTable {
   seats: number;
   x: number;
   y: number;
+  /** size as fractions of the floor-plan width */
+  w: number;
+  h: number;
   assignments: { seat: number; playerId: number }[];
   gameId: number | null;
 }

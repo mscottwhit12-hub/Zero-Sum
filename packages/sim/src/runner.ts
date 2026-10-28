@@ -17,6 +17,8 @@ import {
   rerollImpulse,
   resolveQuarter,
   scoreGame,
+  indexExtra,
+  type IndexGame,
   tapLeader,
   tickMarket,
   toH,
@@ -279,6 +281,7 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
     }
   };
 
+  const paidByGame = new Map<string, number>();
   const finishGames = () => {
     for (const g of [...w.games]) {
       if (w.tick < g.endTick) continue;
@@ -492,7 +495,21 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
     // Market tick applies queued impulses.
     const earnedActive = active(w).map((p) => ({ playerId: p.id, earnedH: w.earned.get(p.id)! }));
     const prev = new Map(w.securities.map((s) => [s.id, s.price]));
-    const res = tickMarket(w.securities, { earned: earnedActive, drift, mood: moodBiasMap(moods, w.tick, settings), impulses: w.impulses }, settings, rng);
+    // Hidden index growth and start dips, built the way the server does (services/indexTerms.ts).
+    const idxGames: IndexGame[] = [];
+    for (const r of w.results) {
+      let paid = paidByGame.get(r.id);
+      if (paid === undefined) {
+        paid = scoreGame(r, settings).rows.reduce((a, x) => a + x.goldH, 0);
+        paidByGame.set(r.id, paid);
+      }
+      idxGames.push({ status: 'final', players: r.participants.length, plannedHours: 0, elapsedHours: 0, paidH: paid });
+    }
+    for (const g of w.games) {
+      idxGames.push({ status: 'active', players: g.result.participants.length, plannedHours: g.result.actualHours, elapsedHours: ((w.tick - g.startTick) * tickMs) / 3_600_000 });
+    }
+    const indexExtraNow = indexExtra(idxGames, active(w).length, settings).extra;
+    const res = tickMarket(w.securities, { earned: earnedActive, drift, mood: moodBiasMap(moods, w.tick, settings), impulses: w.impulses, indexExtra: indexExtraNow }, settings, rng);
     w.securities = res.securities;
     w.impulses = [];
     for (const s of w.securities) {

@@ -436,4 +436,8 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX handicap_eval_night ON handicap_eval(night_id, player_id, id);
   ALTER TABLE player ADD COLUMN hint_tradein_nms INTEGER;
   `,
+  /* 9 — resizable tables: size as fractions of the floor-plan width */ `
+  ALTER TABLE game_table ADD COLUMN map_w REAL NOT NULL DEFAULT 0.2;
+  ALTER TABLE game_table ADD COLUMN map_h REAL NOT NULL DEFAULT 0.12;
+  `,
 ];

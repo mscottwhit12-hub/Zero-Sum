@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Main Screen TV (/display). Placeholder broadcast layout (decision: keep visuals bland):
-   * headline bar, standings, now playing, rotating panels (schedule / market / seating / minters),
+   * headline bar, standings, now playing, rotating panels (schedule / market / full floor / each seated table / minters),
    * bottom crawl, BREAKING lower-thirds, poll strip, intermission overlay, and TV-side audio.
    */
   import { onDestroy } from 'svelte';
@@ -9,6 +9,8 @@
   import { feedText } from '@shared/feedText';
   import { clock, gold, timeOfDay } from '@shared/format';
   import { connectLive, nightNow } from '@shared/socket';
+  import FloorPlan from '@shared/FloorPlan.svelte';
+  import TableView from './TableView.svelte';
   import Sparkline from '@shared/Sparkline.svelte';
   import type { FeedItem, TvState } from '@shared/types';
   import { cueTone } from './tones';
@@ -109,17 +111,38 @@
     lastFeedId = Math.max(lastFeedId, top);
   });
 
-  // Rotating panel.
-  const PANELS = ['schedule', 'market', 'seating', 'minters'] as const;
-  let panelIdx = $state(0);
-  const rot = setInterval(() => (panelIdx = (panelIdx + 1) % PANELS.length), 15000);
-  const panel = $derived(PANELS[panelIdx]!);
+  // Rotating panel. Seating expands into the full floor (filled/empty dots) then one close-up per table
+  // that has someone seated. The step list is rebuilt from live state each time it advances.
+  type Step = { kind: 'schedule' | 'market' | 'floor' | 'minters'; ms: number } | { kind: 'table'; tableId: number; ms: number };
+  const PANEL_MS = 15000;
+  const FLOOR_MS = 10000;
+  const TABLE_MS = 8000;
+  const steps = $derived.by((): Step[] => {
+    const tables = s?.tv?.seating ?? [];
+    const out: Step[] = [{ kind: 'schedule', ms: PANEL_MS }, { kind: 'market', ms: PANEL_MS }];
+    if (tables.length) {
+      out.push({ kind: 'floor', ms: FLOOR_MS });
+      for (const tb of tables) if (tb.assignments.length) out.push({ kind: 'table', tableId: tb.id, ms: TABLE_MS });
+    }
+    out.push({ kind: 'minters', ms: PANEL_MS });
+    return out;
+  });
+  let stepIdx = $state(0);
+  let rot: ReturnType<typeof setTimeout>;
+  function advance() {
+    stepIdx = (stepIdx + 1) % steps.length;
+    rot = setTimeout(advance, steps[stepIdx]?.ms ?? PANEL_MS);
+  }
+  rot = setTimeout(advance, PANEL_MS);
+  const step = $derived(steps[Math.min(stepIdx, steps.length - 1)]!);
+  const stepTable = $derived(step.kind === 'table' ? ((s?.tv?.seating ?? []).find((tb) => tb.id === step.tableId) ?? null) : null);
+  const gameName = (id: number | null) => (id == null ? '' : (s?.games.find((g) => g.id === id)?.name ?? ''));
 
   onDestroy(() => {
     u1();
     u2();
     clearInterval(timer);
-    clearInterval(rot);
+    clearTimeout(rot);
     live.close();
   });
 
@@ -235,16 +258,18 @@
 
           <div class="panel rotating">
             <div class="spread">
-              <h2>{t(`tv.${panel === 'schedule' ? 'up_next' : panel}`)}</h2>
-              <span class="small muted mono">{panelIdx + 1}/{PANELS.length}</span>
+              <h2>
+                {step.kind === 'schedule' ? t('tv.up_next') : step.kind === 'floor' || step.kind === 'table' ? t('tv.seating') : t(`tv.${step.kind}`)}{stepTable ? ` · ${stepTable.name}` : ''}
+              </h2>
+              <span class="small muted mono">{stepIdx + 1}/{steps.length}</span>
             </div>
-            {#if panel === 'schedule'}
+            {#if step.kind === 'schedule'}
               {#each next as g (g.id)}
                 <div class="spread small"><span>{g.name}</span><span class="muted mono">{timeOfDay(g.plannedStart)}</span></div>
               {:else}
                 <p class="muted small">Nothing scheduled.</p>
               {/each}
-            {:else if panel === 'market'}
+            {:else if step.kind === 'market'}
               <table class="small">
                 <tbody>
                   {#each s.market as m (m.id)}
@@ -258,17 +283,10 @@
                   {/each}
                 </tbody>
               </table>
-            {:else if panel === 'seating'}
-              <div class="map">
-                {#each s.tv?.seating ?? [] as tb (tb.id)}
-                  <div class="tbl" style="left:{tb.x * 100}%;top:{tb.y * 100}%">
-                    <strong class="small">{tb.name}</strong>
-                    <span class="tiny">{tb.assignments.map((a) => name(a.playerId)).join(', ') || '—'}</span>
-                  </div>
-                {:else}
-                  <p class="muted small">No seating plan.</p>
-                {/each}
-              </div>
+            {:else if step.kind === 'floor'}
+              <FloorPlan tables={s.tv?.seating ?? []} players={s.players} dots />
+            {:else if step.kind === 'table'}
+              {#if stepTable}<TableView table={stepTable} players={s.players} game={gameName(stepTable.gameId)} />{/if}
             {:else}
               {#each (s.minter?.leaderboard ?? []).slice(0, 5) as r, i (r.playerId)}
                 <div class="spread small"><span>{i + 1}. {name(r.playerId)}</span><span class="mono">{r.minted.toLocaleString()}</span></div>
@@ -395,22 +413,6 @@
   }
   .down {
     color: var(--bad);
-  }
-  .map {
-    position: relative;
-    height: 12em;
-  }
-  .tbl {
-    position: absolute;
-    transform: translate(-50%, -50%);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 0.2rem 0.4rem;
-    max-width: 30%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
   }
   .tiny {
     font-size: 0.7em;

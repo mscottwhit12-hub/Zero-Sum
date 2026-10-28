@@ -41,6 +41,54 @@ describe('rulebook', () => {
   });
 });
 
+describe('seating: resize and swap', () => {
+  it('table size defaults, clamps and persists; drops swap or bump', async () => {
+    const t = await makeApp();
+    const { gm, devices } = await liveNight(t, 4);
+    const [a, b, c] = devices as unknown as [{ id: number }, { id: number }, { id: number }];
+    const t1 = (await call(t, gm, 'POST', '/api/tables', { name: 'One', seats: 4 })).json().id;
+    const t2 = (await call(t, gm, 'POST', '/api/tables', { name: 'Two', seats: 3 })).json().id;
+    const find = (id: number) => tvView(t.ctx, state(t)).seating.find((x) => x.id === id)!;
+    expect(find(t1)).toMatchObject({ w: 0.2, h: 0.12 });
+    await call(t, gm, 'PATCH', `/api/tables/${t1}`, { w: 0.35, h: 0.2 });
+    expect(find(t1)).toMatchObject({ w: 0.35, h: 0.2, seats: 4 });
+    await call(t, gm, 'PATCH', `/api/tables/${t1}`, { w: 9, h: -3 });
+    expect(find(t1)).toMatchObject({ w: 0.6, h: 0.07 });
+    await call(t, gm, 'PATCH', `/api/tables/${t1}`, { w: 'junk' });
+    expect(find(t1).w).toBe(0.6);
+
+    // seat limits 2–8; the table never shrinks below what its seats need, and adding seats grows it
+    expect((await call(t, gm, 'POST', '/api/tables', { seats: 1 })).json().error).toBe('bad_seats');
+    expect((await call(t, gm, 'POST', '/api/tables', { seats: 9 })).json().error).toBe('bad_seats');
+    expect((await call(t, gm, 'PATCH', `/api/tables/${t2}`, { seats: 9 })).json().error).toBe('bad_seats');
+    const t8 = (await call(t, gm, 'POST', '/api/tables', { name: 'Eight', seats: 8, w: 0.1, h: 0.07 })).json().id;
+    expect(find(t8).w).toBeCloseTo(0.165, 3);
+    expect(find(t8).h).toBeCloseTo(0.1155, 3);
+    await call(t, gm, 'PATCH', `/api/tables/${t2}`, { w: 0.1, h: 0.07 });
+    expect(find(t2)).toMatchObject({ w: 0.1, h: 0.07 });
+    await call(t, gm, 'PATCH', `/api/tables/${t2}`, { seats: 8 });
+    expect(find(t2).w).toBeCloseTo(0.165, 3);
+    await call(t, gm, 'PATCH', `/api/tables/${t2}`, { seats: 3 });
+    await call(t, gm, 'DELETE', `/api/tables/${t8}`);
+
+    // swap across tables
+    await call(t, gm, 'POST', `/api/tables/${t1}/seat`, { seat: 1, playerId: a.id });
+    await call(t, gm, 'POST', `/api/tables/${t2}/seat`, { seat: 3, playerId: b.id });
+    await call(t, gm, 'POST', `/api/tables/${t2}/seat`, { seat: 3, playerId: a.id });
+    expect(find(t1).assignments).toEqual([{ seat: 1, playerId: b.id }]);
+    expect(find(t2).assignments).toEqual([{ seat: 3, playerId: a.id }]);
+    // unseated player onto an occupied seat: occupant goes back to unseated
+    await call(t, gm, 'POST', `/api/tables/${t1}/seat`, { seat: 1, playerId: c.id });
+    expect(find(t1).assignments).toEqual([{ seat: 1, playerId: c.id }]);
+    // dropping a player on their own seat changes nothing
+    await call(t, gm, 'POST', `/api/tables/${t1}/seat`, { seat: 1, playerId: c.id });
+    expect(find(t1).assignments).toEqual([{ seat: 1, playerId: c.id }]);
+    // clear a seat
+    await call(t, gm, 'POST', `/api/tables/${t1}/seat`, { seat: 1, playerId: null });
+    expect(find(t1).assignments).toEqual([]);
+  });
+});
+
 describe('seating', () => {
   it('tables, seat moves and bumps, shrink drops seats; GM + TV only', async () => {
     const t = await makeApp();
@@ -52,9 +100,9 @@ describe('seating', () => {
     await call(t, gm, 'POST', `/api/tables/${t1}/seat`, { seat: 1, playerId: a.id });
     await call(t, gm, 'POST', `/api/tables/${t1}/seat`, { seat: 4, playerId: b.id });
     await call(t, gm, 'POST', `/api/tables/${t2}/seat`, { seat: 2, playerId: a.id }); // move
-    await call(t, gm, 'POST', `/api/tables/${t2}/seat`, { seat: 2, playerId: b.id }); // bump a
+    await call(t, gm, 'POST', `/api/tables/${t2}/seat`, { seat: 2, playerId: b.id }); // a seated player onto an occupied seat swaps: a takes b's old seat
     let seating = tvView(t.ctx, state(t)).seating;
-    expect(seating.find((x) => x.id === t1)!.assignments).toEqual([]);
+    expect(seating.find((x) => x.id === t1)!.assignments).toEqual([{ seat: 4, playerId: a.id }]);
     expect(seating.find((x) => x.id === t2)!.assignments).toEqual([{ seat: 2, playerId: b.id }]);
     await call(t, gm, 'POST', `/api/tables/${t1}/seat`, { seat: 4, playerId: a.id });
     await call(t, gm, 'PATCH', `/api/tables/${t1}`, { seats: 3, x: 1.7, y: 0.5 });
