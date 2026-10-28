@@ -11,6 +11,7 @@ import { castBallot } from '../services/votes';
 import { logReroll, recordMood, sendNotification, setOffset } from '../services/field';
 import { createRule, deleteRule, listRules, updateRule } from '../services/rules';
 import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '../services/seating';
+import { getBoard, saveBoard, setBoardSettings } from '../services/boards';
 import { deleteSound, listSounds, playSound, soundFileMime, uploadSound } from '../services/sounds';
 import { minterGet, minterSync } from '../services/minter';
 import { dismissPrompt } from '../services/prompts';
@@ -324,6 +325,11 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/rules', async (req) => createRule(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
   app.patch<Id>('/api/rules/:id', async (req) => updateRule(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
   app.delete<Id>('/api/rules/:id', async (req) => deleteRule(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id)));
+
+  // Per-game GM boards (any GM plays a board; settings are Master only)
+  app.get<Id>('/api/games/:id/board', async (req) => getBoard(ctx, requireGm(ctx, req), Number(req.params.id)));
+  app.put<Id>('/api/games/:id/board', async (req) => saveBoard(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body)));
+  app.patch<{ Params: { key: string } }>('/api/boards/:key/settings', async (req) => ({ settings: setBoardSettings(ctx, requireGm(ctx, req, { master: true }), req.params.key, b(req.body)) }));
 
   // Phase 7 — seating (Master; GM + TV only)
   app.post('/api/tables', async (req) => createTable(ctx, requireGm(ctx, req, { master: true }), b(req.body)));

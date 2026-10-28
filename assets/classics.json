@@ -1,0 +1,18 @@
+{
+  "format": "game-night-pack/1",
+  "name": "Classics",
+  "games": [
+    {
+      "name": "Risk",
+      "minPlayers": 4,
+      "maxPlayers": 6,
+      "defaultDuration": 4,
+      "mode": "competitive",
+      "rerollsAllowed": true,
+      "color": "#c92a2a",
+      "leadMode": "high",
+      "leadLabel": "Reinforcements",
+      "board": "risk"
+    }
+  ]
+}

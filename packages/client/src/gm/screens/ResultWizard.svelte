@@ -7,7 +7,13 @@
   import type { GameInfo, GmState } from '@shared/types';
   import { activePlayers, playerName } from '../lib';
 
-  let { gs, game, correction = false, onclose }: { gs: GmState | null; game: GameInfo; correction?: boolean; onclose: () => void } = $props();
+  let {
+    gs,
+    game,
+    correction = false,
+    prefill = null,
+    onclose,
+  }: { gs: GmState | null; game: GameInfo; correction?: boolean; prefill?: number[][] | null; onclose: () => void } = $props();
 
   // Step 1: participants → 2: placements / teams / win-loss → 3: duration → submit. Target ≤30 s.
   let step = $state(1);
@@ -35,6 +41,16 @@
         }
       }
       return;
+    }
+    // Finish order from the game's board: groups best first; a group of 2+ shares a place.
+    if (prefill && game.mode === 'competitive') {
+      let place = 1;
+      const next: Record<number, number> = {};
+      for (const g of prefill) {
+        for (const id of g) if (picked.includes(id)) next[id] = place;
+        place += g.length;
+      }
+      places = next;
     }
     const r = await run(() => get<{ suggestedHours: number }>(`/api/games/${game.id}/prefill`));
     if (r) hoursPlayed = r.suggestedHours;

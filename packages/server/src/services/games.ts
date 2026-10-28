@@ -17,6 +17,7 @@ import {
 import { j } from '../db';
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit } from './audit';
+import { sendBoardRecap } from './boards';
 import { pushFeed } from './feed';
 import type { GmAuth } from './gm';
 import { getLibraryGame, leadLabelOf, leadModeOf, type GameMode } from './library';
@@ -294,13 +295,16 @@ export function submitResult(ctx: Ctx, actor: GmAuth, id: number, input: ResultI
   const scored = scoreGame(result, settings);
   const now = ctx.now();
   const pausedMs = g.started_at ? pauseOverlapMs(ctx, n.id, g.started_at, now) : 0;
+  let recapTo: number[] = [];
   ctx.db.transaction(() => {
     writeResult(ctx, g, result);
     ctx.db
       .prepare("UPDATE game SET status = 'final', started_at = COALESCE(started_at, ?), ended_at = ?, actual_duration_hours = ?, coop_won = ?, paused_seconds = ? WHERE id = ?")
       .run(now, now, result.actualHours, result.coopWon == null ? null : result.coopWon ? 1 : 0, Math.round(pausedMs / 1000), id);
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.result', entity: 'game', entityId: id, after: result });
+    recapTo = sendBoardRecap(ctx, id, actor.gmId);
   })();
+  for (const p of recapTo) ctx.bus.player(p, 'notify:player', { gameId: id });
   snapshotStandings(ctx, n.id);
   awardAchievements(ctx, n.id);
   hintsForResult(ctx, n, { ...result, id: String(id) });
@@ -469,16 +473,18 @@ export interface GameView {
   scores: Record<number, number>;
   /** The library game sets the lead mode (the schedule form can't change it). */
   leadFixed: boolean;
+  /** GM board module key from the library game; null = generic score entry. */
+  board: string | null;
 }
 
 export function gameViews(ctx: Ctx, nightId: number): GameView[] {
   const rows = ctx.db
     .prepare(
-      `SELECT g.*, l.color, l.lead_mode AS lib_lead_mode FROM game g LEFT JOIN library_game l ON l.id = g.library_game_id
+      `SELECT g.*, l.color, l.lead_mode AS lib_lead_mode, l.board FROM game g LEFT JOIN library_game l ON l.id = g.library_game_id
        WHERE g.night_id = ? AND g.status != 'cancelled'
        ORDER BY CASE g.status WHEN 'active' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END, COALESCE(g.planned_start, g.started_at, g.id), g.id`,
     )
-    .all(nightId) as (GameRow & { color: string | null; lib_lead_mode: string | null })[];
+    .all(nightId) as (GameRow & { color: string | null; lib_lead_mode: string | null; board: string | null })[];
   const parts = ctx.db.prepare('SELECT player_id, placement, dnf, team_label FROM game_participant WHERE game_id = ? ORDER BY COALESCE(placement, 99), rowid');
   return rows.map((g) => ({
     id: g.id,
@@ -504,5 +510,6 @@ export function gameViews(ctx: Ctx, nightId: number): GameView[] {
     leadLabel: g.lead_label,
     scores: g.lead_mode === 'manual' ? {} : Object.fromEntries(latestScores(ctx, g.id)),
     leadFixed: g.lib_lead_mode != null,
+    board: g.board ?? null,
   }));
 }

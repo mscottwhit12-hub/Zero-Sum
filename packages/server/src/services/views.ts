@@ -20,6 +20,7 @@ import { voteGmView, voteView } from './votes';
 import { moodGmView, sentNotifications } from './field';
 import { gmChallenges, playerChallenges } from './espionage';
 import { seatingView } from './seating';
+import { boardSettings } from './boards';
 import { ambientOff, currentAmbient, listSounds } from './sounds';
 import { minterLeaderboard } from './minter';
 import { finale, type Finale } from './recap';
@@ -238,6 +239,8 @@ export interface GmView extends PublicView {
     /** Re-roll tokens left per player. */
     rerolls: Record<number, number>;
     seating: ReturnType<typeof seatingView>;
+    /** GM board settings: board key -> setting name -> value (defaults live in the client board modules). */
+    boardSettings: Record<string, Record<string, number>>;
     sounds: ReturnType<typeof listSounds>;
     ambient: { current: ReturnType<typeof currentAmbient>; off: boolean };
     prompts: ReturnType<typeof promptsView>;
@@ -285,6 +288,7 @@ export function gmView(ctx: Ctx, st: NightState, base?: PublicView): GmView {
       notifications: sentNotifications(ctx, st.night.id),
       rerolls: Object.fromEntries(st.players.map((p) => [p.id, p.reroll_tokens_left])),
       seating: seatingView(ctx, st.night.id),
+      boardSettings: boardSettings(ctx),
       sounds: listSounds(ctx),
       ambient: { current: currentAmbient(ctx, st.night.id), off: ambientOff(ctx, st.night.id) },
       prompts: promptsView(ctx, st.night),

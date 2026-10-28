@@ -364,6 +364,13 @@
     "bad_pin": "Wrong PIN.",
     "game_not_open": "That game is already finished. Use Correct result instead.",
     "night_in_progress": "Archive the current night first.",
-    "bad_length": "Night length must be 30–1440 minutes."
+    "bad_length": "Night length must be 30–1440 minutes.",
+    "no_board": "This game has no board.",
+    "board_closed": "This game isn't running, so its board can't change.",
+    "board_stale": "Someone else changed this board. It has been reloaded.",
+    "bad_board_state": "That board update was not valid.",
+    "board_too_large": "The board has too much history. Lower its history size in Settings.",
+    "bad_recap": "The recap was not valid.",
+    "bad_board": "Unknown board."
   }
 }

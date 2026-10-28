@@ -33,6 +33,8 @@ export interface LibraryGame {
   leadMode: LeadMode | null;
   /** What the score is called, e.g. "Victory points". */
   leadLabel: string | null;
+  /** GM board module key (e.g. 'risk'); null = generic score entry. */
+  board: string | null;
 }
 
 export interface LibraryGameInput {
@@ -48,6 +50,7 @@ export interface LibraryGameInput {
   color?: unknown;
   leadMode?: unknown;
   leadLabel?: unknown;
+  board?: unknown;
 }
 
 const PACK_FORMAT = 'game-night-pack/1';
@@ -66,6 +69,7 @@ interface Row {
   color: string | null;
   lead_mode: LeadMode | null;
   lead_label: string | null;
+  board: string | null;
 }
 
 const toGame = (r: Row): LibraryGame => ({
@@ -82,6 +86,7 @@ const toGame = (r: Row): LibraryGame => ({
   color: r.color,
   leadMode: r.lead_mode,
   leadLabel: r.lead_label,
+  board: r.board ?? null,
 });
 
 /** null/'' = unset (GM picks per game). */
@@ -90,6 +95,8 @@ export function leadModeOf(v: unknown): LeadMode | null {
   if (!LEAD_MODES.includes(v as LeadMode)) throw bad('bad_lead_mode', 'Lead mode must be high, low or manual.');
   return v as LeadMode;
 }
+/** Board module key: lowercase letters, digits and dashes; anything else = no board. */
+export const boardKeyOf = (v: unknown): string | null => (typeof v === 'string' && /^[a-z0-9-]{1,32}$/.test(v.trim()) ? v.trim() : null);
 export const leadLabelOf = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 24) : null);
 
 /** Validates and normalizes one entry. */
@@ -120,6 +127,7 @@ export function normalizeGame(input: LibraryGameInput): Omit<LibraryGame, 'id'> 
     color,
     leadMode: leadModeOf(input.leadMode),
     leadLabel: leadLabelOf(input.leadLabel),
+    board: boardKeyOf(input.board),
   };
 }
 
@@ -138,18 +146,18 @@ export function getLibraryGame(ctx: Ctx, id: number): LibraryGame | null {
 function insert(ctx: Ctx, g: Omit<LibraryGame, 'id'>): number {
   const r = ctx.db
     .prepare(
-      'INSERT INTO library_game (name, min_players, max_players, default_duration, mode, rerolls_allowed, sound_theme, rule_entry_id, icon, color, lead_mode, lead_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO library_game (name, min_players, max_players, default_duration, mode, rerolls_allowed, sound_theme, rule_entry_id, icon, color, lead_mode, lead_label, board) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
     )
-    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color, g.leadMode, g.leadLabel);
+    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color, g.leadMode, g.leadLabel, g.board);
   return Number(r.lastInsertRowid);
 }
 
 function update(ctx: Ctx, id: number, g: Omit<LibraryGame, 'id'>) {
   ctx.db
     .prepare(
-      'UPDATE library_game SET name=?, min_players=?, max_players=?, default_duration=?, mode=?, rerolls_allowed=?, sound_theme=?, rule_entry_id=?, icon=?, color=?, lead_mode=?, lead_label=? WHERE id=?',
+      'UPDATE library_game SET name=?, min_players=?, max_players=?, default_duration=?, mode=?, rerolls_allowed=?, sound_theme=?, rule_entry_id=?, icon=?, color=?, lead_mode=?, lead_label=?, board=? WHERE id=?',
     )
-    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color, g.leadMode, g.leadLabel, id);
+    .run(g.name, g.minPlayers, g.maxPlayers, g.defaultDuration, g.mode, g.rerollsAllowed ? 1 : 0, g.soundTheme, ruleRef(ctx, g.ruleEntryId), g.icon, g.color, g.leadMode, g.leadLabel, g.board, id);
 }
 
 const masterOnly = (a: GmAuth) => {
@@ -241,8 +249,8 @@ export function importPack(ctx: Ctx, actor: GmAuth | null, pack: unknown): { add
 }
 
 /** First boot only: load the bundled generic examples. Never re-seeds after that (even if the library is emptied). */
-export function seedLibraryOnce(ctx: Ctx, packFile: string): boolean {
-  if (ctx.db.prepare("SELECT 1 FROM meta WHERE key = 'library_seeded'").get()) return false;
+export function seedLibraryOnce(ctx: Ctx, packFile: string, flag = 'library_seeded'): boolean {
+  if (ctx.db.prepare('SELECT 1 FROM meta WHERE key = ?').get(flag)) return false;
   let pack: unknown;
   try {
     pack = JSON.parse(readFileSync(packFile, 'utf8'));
@@ -250,6 +258,6 @@ export function seedLibraryOnce(ctx: Ctx, packFile: string): boolean {
     return false;
   }
   importPack(ctx, null, pack);
-  ctx.db.prepare("INSERT INTO meta (key, value) VALUES ('library_seeded', ?)").run(String(ctx.now()));
+  ctx.db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(flag, String(ctx.now()));
   return true;
 }

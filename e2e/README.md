@@ -26,6 +26,8 @@ for r in e2e/rounds/r*.mjs; do NODE_PATH=$(npm root -g) node $r; done   # all te
 | r08-messages | trade-in and buy spam, tip taps, memo reject/reassign, peek twice, long/HTML messages, Minter mashing, tip to a leaver |
 | r09-junk | RTL names, fake/huge photos, script/markdown injection everywhere, junk settings, broken pack file, 2 MB payload, nonsense API calls |
 | r10-load (60×) | 14 phones + 2 GMs + TV, simultaneous buys, score storms, group refresh, Wi-Fi drops, crash under load, latency |
+| seating (`e2e/seating/run.mjs`) | table resize handles and limits, moving tables, drag players onto seats, swap, unseat, dropdown fallback, TV floor dots + table close-up |
+| boards (`e2e/boards/run.mjs`) | Risk board end to end: tab appears, edits save and move the crown, re-roll spends once, eliminator takes territories, second GM syncs, result pre-fill, recap on phones |
 
 **Known false positives** (checked by hand; not app bugs): r03 "selling locked…" and "past the invest cap" (the app
 correctly answers "one trade per tick" / "not enough gold"); r05 "Start disabled while paused" (timing; it is disabled);

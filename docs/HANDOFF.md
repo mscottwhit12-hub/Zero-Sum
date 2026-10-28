@@ -208,10 +208,24 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 | Oct 27a | Score entry, payout curve, index growth, crypto trend, hint rewards, handicaps; test-only time scale + Catan/Risk test pack | `2d663c4` |
 | Oct 27b | Fixes from 10 bug-hunt rounds; Fastify 5.12.7 | `00c462c` |
 | Oct 27c | Performance fixes 1–6 (price-history cache, lean broadcasts, cached snapshots, compression) | `5d5a40f` |
-| Oct 27d | This handoff + browser harnesses committed under `e2e/` | (this commit) |
+| Oct 27d | This handoff + browser harnesses committed under `e2e/` | `1c9d0de` |
+| Oct 27e | Seating rework (resize, drag-to-seat + swap, 2–8 seats, TV floor/table rotation); sim models index growth; per-game GM boards + Risk board; classics pack | see §4a |
+
+### 4a. Oct 27e update (seating, sim, game boards)
+- **Seating:** tables are resizable rectangles (right edge = length, bottom = width, corner = both; sizes are fractions of the plan width on a fixed 3:2 plan). Players are dragged onto seat icons (dropdowns kept as fallback); a seated player dropped on an occupied seat swaps. **2–8 seats per table**; a table's minimum size grows with its seats. Shared `shared/FloorPlan.svelte` draws GM + TV.
+- **TV rotation:** up next → market → full floor (seats filled/empty only) → one close-up per seated table (`tv/TableView.svelte`, names readable at 1080p) → minters.
+- **Sim:** `runner.ts` passes index growth (`indexExtra`) like the server. Index now ~+7–8%/night in the sim: **accepted as an intended nerf**.
+- **Game boards** (decision: GM gets a per-game tab while a game runs):
+  - Contract `packages/client/src/gm/boards/contract.ts` (v1.1). Boards live in `gm/boards/<key>/` (`def.ts` pure logic + `Board.svelte` + tests) and are registered in `gm/boards/index.ts`.
+  - Library/pack field `board` (key). `assets/classics.json` is seeded once on boot (`meta.classics_seeded`), so existing installs get Risk; trademarked names in the default install are now allowed (user decision).
+  - Server `services/boards.ts`: versioned `game_board` state (stale writes → 409 `board_stale`, client reloads), board settings (Master only, `board_setting`, shown on GM Settings), recap sent once as private phone messages when the result is submitted. `POST /api/rerolls` takes a `requestId` (no double spend).
+  - Client `gm/screens/BoardHost.svelte`: builds the context, saves (debounced), posts the board score to the crown, pre-fills the result screen from `placements()`.
+  - **Risk board:** crown = reinforcements per turn; finish = territories, armies, then elimination order; an eliminated player's territories go to the eliminator (undo reverses it); 4–6 players.
+- Migrations: **9** `game_table.map_w/map_h`; **10** `library_game.board`, `game_board`, `board_setting`, `reroll_use.request_id`.
+- Tests: client 51 (Risk), engine 112, server 81, sim 4. Browser harnesses `e2e/seating` (21 checks) and `e2e/boards` (12 checks).
 
 ### Immediately next
-1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations 7 and 8 run automatically.
+1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
 3. **Re-run the headless sim** (`npm run sim -w @gn/sim`). The payout curve, index growth, crypto drift and handicaps all changed the economy after the sim tuning (§11). The §18 targets are **not re-verified**.
 4. Work the open items in **§16** and **§14** as the user prioritises them. Don't start them unasked.

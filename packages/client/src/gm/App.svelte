@@ -27,6 +27,8 @@
   import Archive from './screens/Archive.svelte';
   import JoinQr from './screens/JoinQr.svelte';
   import Handicaps from './screens/Handicaps.svelte';
+  import BoardHost from './screens/BoardHost.svelte';
+  import { BOARDS } from './boards';
 
   type Phase = 'loading' | 'setup' | 'login' | 'ready';
   let phase = $state<Phase>('loading');
@@ -55,21 +57,28 @@
     { id: 'devices', label: 'Devices & GMs', field: false },
     { id: 'audit', label: 'Audit log', field: false },
   ] as const;
-  type Route = (typeof ROUTES)[number]['id'];
-  /** Phone bottom bar: the first four field actions; everything else under More. */
-  const BAR = ROUTES.filter((r) => r.field).slice(0, 4);
+  type Route = (typeof ROUTES)[number]['id'] | `board-${number}`;
+  type Nav = { id: Route; label: string; field: boolean };
+  /** One tab per running game that has an installed board. */
+  const boardTabs = $derived<Nav[]>(
+    (gmState?.games ?? []).filter((g) => g.status === 'active' && g.board && BOARDS[g.board]).map((g) => ({ id: `board-${g.id}` as Route, label: g.name, field: true })),
+  );
+  const NAV = $derived<Nav[]>([ROUTES[0], ...boardTabs, ...ROUTES.slice(1)]);
+  /** Phone bottom bar: board tabs first, then field actions, four buttons in all; everything else under More. */
+  const BAR = $derived<Nav[]>([...boardTabs.slice(0, 2), ...ROUTES.filter((r) => r.field).slice(0, 4 - Math.min(2, boardTabs.length))]);
   const readRoute = (): Route => {
     const h = location.hash.replace(/^#\/?/, '') as Route;
-    return ROUTES.some((r) => r.id === h) ? h : 'dashboard';
+    return ROUTES.some((r) => r.id === h) || /^board-\d+$/.test(h) ? h : 'dashboard';
   };
   let route = $state<Route>(readRoute());
+  const boardGame = $derived(route.startsWith('board-') ? (gmState?.games.find((g) => g.id === Number(route.slice(6)) && g.status === 'active' && g.board) ?? null) : null);
   let moreOpen = $state(false);
   const go = (r: Route) => {
     location.hash = `/${r}`;
     moreOpen = false;
   };
 
-  let wizard = $state<{ game: GameInfo; correction: boolean } | null>(null);
+  let wizard = $state<{ game: GameInfo; correction: boolean; prefill?: number[][] | null } | null>(null);
 
   async function boot() {
     phase = 'loading';
@@ -94,6 +103,7 @@
         toast(`${x.kind === 'rejoin' ? 'Rejoin' : 'Late join'} request: ${x.displayName}`);
         navigator.vibrate?.(80);
       },
+      'board:update': (d) => window.dispatchEvent(new CustomEvent('gn:board-update', { detail: d })),
       'gm:device_pause': async () => {
         const me = await get<{ gm: WhoAmI }>('/api/gm/me').catch(() => null);
         if (me) whoami = me.gm;
@@ -146,8 +156,8 @@
 
     {#if layout === 'laptop'}
       <nav class="side">
-        {#each ROUTES as r (r.id)}
-          <button class:on={route === r.id} onclick={() => go(r.id)}>{r.label}</button>
+        {#each NAV as r (r.id)}
+          <button class:on={route === r.id} class:board={r.id.startsWith('board-')} onclick={() => go(r.id)}>{r.label}</button>
         {/each}
       </nav>
     {/if}
@@ -170,6 +180,9 @@
       {:else if route === 'settings'}<Settings gs={gmState} {whoami} />
       {:else if route === 'devices'}<Devices {whoami} onlogout={() => { live?.close(); phase = 'login'; }} ondevice={(d) => whoami && (whoami = { ...whoami, deviceType: d })} />
       {:else if route === 'audit'}<Audit />
+      {:else if boardGame}
+        {#key boardGame.id}<BoardHost gs={gmState} game={boardGame} onfinish={(p) => (wizard = { game: boardGame!, correction: false, prefill: p })} />{/key}
+      {:else if route.startsWith('board-')}<p class="muted">That game has finished. Its result is on the Dashboard.</p>
       {/if}
     </main>
 
@@ -183,7 +196,7 @@
       </nav>
       {#if moreOpen}
         <div class="more panel">
-          {#each ROUTES.filter((r) => !BAR.some((x) => x.id === r.id)) as r (r.id)}
+          {#each NAV.filter((r) => !BAR.some((x) => x.id === r.id)) as r (r.id)}
             <button class="big" onclick={() => go(r.id)}>{r.label}</button>
           {/each}
         </div>
@@ -192,7 +205,7 @@
   </div>
 
   {#if wizard}
-    <ResultWizard gs={gmState} game={wizard.game} correction={wizard.correction} onclose={() => (wizard = null)} />
+    <ResultWizard gs={gmState} game={wizard.game} correction={wizard.correction} prefill={wizard.prefill ?? null} onclose={() => (wizard = null)} />
   {/if}
 {/if}
 
@@ -219,6 +232,10 @@
     gap: 0.25rem;
     padding: 0.8rem;
     border-right: 1px solid var(--line);
+  }
+  .side button.board::before {
+    content: '▸ ';
+    color: var(--accent);
   }
   .side button {
     text-align: left;

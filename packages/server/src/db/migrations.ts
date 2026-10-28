@@ -440,4 +440,24 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE game_table ADD COLUMN map_w REAL NOT NULL DEFAULT 0.2;
   ALTER TABLE game_table ADD COLUMN map_h REAL NOT NULL DEFAULT 0.12;
   `,
+  /* 10 — per-game GM boards: library board key, saved board state (versioned), board settings, re-roll request ids */ `
+  ALTER TABLE library_game ADD COLUMN board TEXT;
+  CREATE TABLE game_board (
+    game_id INTEGER PRIMARY KEY REFERENCES game(id) ON DELETE CASCADE,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    state TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    recap TEXT,
+    recap_sent INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE TABLE board_setting (
+    board TEXT NOT NULL,
+    name TEXT NOT NULL,
+    value REAL NOT NULL,
+    PRIMARY KEY (board, name)
+  );
+  ALTER TABLE reroll_use ADD COLUMN request_id TEXT;
+  CREATE UNIQUE INDEX reroll_use_request ON reroll_use(request_id) WHERE request_id IS NOT NULL;
+  `,
 ];

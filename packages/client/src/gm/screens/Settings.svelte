@@ -2,6 +2,7 @@
   import { patch } from '@shared/api';
   import { run } from '@shared/ui';
   import type { GmState, WhoAmI } from '@shared/types';
+  import BoardSettings from './BoardSettings.svelte';
   let { gs, whoami }: { gs: GmState | null; whoami: WhoAmI } = $props();
 
   type Leaf = { path: string; value: unknown };
@@ -94,6 +95,7 @@
     {/each}
   </div>
 {/if}
+{#if whoami.role === 'master'}<BoardSettings {gs} master />{/if}
 
 <style>
   .setting {

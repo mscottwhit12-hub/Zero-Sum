@@ -52,10 +52,19 @@ export function moodGmView(ctx: Ctx, n: NightRow) {
 // ---------------------------------------------------------------- re-rolls
 
 /** Log a re-roll spend in a flagged game. Drives Second Chance Insurance Co. (hinted only, so GM-only feed). */
-export function logReroll(ctx: Ctx, actor: GmAuth, input: { gameId: unknown; playerId: unknown }) {
+/** `requestId` (optional, from boards) makes the call idempotent: the same id never spends twice. */
+export function logReroll(ctx: Ctx, actor: GmAuth, input: { gameId: unknown; playerId: unknown; requestId?: unknown }) {
   const n = liveNight(ctx);
   const gameId = Number(input.gameId);
   const playerId = Number(input.playerId);
+  const requestId = typeof input.requestId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(input.requestId) ? input.requestId : null;
+  if (requestId) {
+    const done = ctx.db.prepare('SELECT player_id FROM reroll_use WHERE request_id = ?').get(requestId) as { player_id: number } | undefined;
+    if (done) {
+      const left = ctx.db.prepare('SELECT reroll_tokens_left FROM player WHERE id = ?').get(done.player_id) as { reroll_tokens_left: number };
+      return { left: left.reroll_tokens_left };
+    }
+  }
   const g = ctx.db.prepare('SELECT id, name, status, rerolls_allowed FROM game WHERE id = ? AND night_id = ?').get(gameId, n.id) as
     | { id: number; name: string; status: string; rerolls_allowed: number }
     | undefined;
@@ -67,7 +76,7 @@ export function logReroll(ctx: Ctx, actor: GmAuth, input: { gameId: unknown; pla
   if (p.reroll_tokens_left <= 0) throw conflict('no_rerolls', 'No re-rolls left.');
   ctx.db.transaction(() => {
     ctx.db.prepare('UPDATE player SET reroll_tokens_left = reroll_tokens_left - 1 WHERE id = ?').run(playerId);
-    ctx.db.prepare('INSERT INTO reroll_use (player_id, game_id, gm_id, created_at) VALUES (?,?,?,?)').run(playerId, gameId, actor.gmId, ctx.now());
+    ctx.db.prepare('INSERT INTO reroll_use (player_id, game_id, gm_id, created_at, request_id) VALUES (?,?,?,?,?)').run(playerId, gameId, actor.gmId, ctx.now(), requestId);
     const imp = rerollImpulse(loadSecurities(ctx, n.id), nightSettings(n));
     if (imp) queueImpulse(ctx, n.id, imp);
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'reroll.log', entity: 'player', entityId: playerId, after: { gameId } });

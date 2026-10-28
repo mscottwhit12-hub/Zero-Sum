@@ -56,6 +56,8 @@ export interface GameInfo {
   leadLabel: string | null;
   scores: Record<number, number>;
   leadFixed: boolean;
+  /** GM board module key (packages/client/src/gm/boards/<key>); null = generic score entry. */
+  board: string | null;
 }
 export type LeadMode = 'high' | 'low' | 'manual';
 export interface FeedItem {
@@ -197,6 +199,8 @@ export interface GmExtras {
   notifications: { id: number; to: string; message: string; readCount: number; createdAt: number }[];
   rerolls: Record<number, number>;
   seating: SeatingTable[];
+  /** Board settings set by the Master: board key -> setting -> value (defaults come from each board's def). */
+  boardSettings: Record<string, Record<string, number>>;
   sounds: SoundInfo[];
   ambient: { current: Ambient | null; off: boolean };
   prompts: { closeTradingAt: number | null; endNight: boolean };

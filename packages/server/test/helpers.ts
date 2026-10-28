@@ -35,7 +35,7 @@ export async function loginAs(t: App, name: string, password: string, deviceType
   return cookieOf(res);
 }
 
-export const call = (t: App, cookie: string | null, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: unknown) =>
+export const call = (t: App, cookie: string | null, method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, payload?: unknown) =>
   t.app.inject({ method, url, payload: payload as object | undefined, headers: cookie ? { cookie } : {} });
 
 /** Master + night with joins open + N players. Returns device tokens. */
