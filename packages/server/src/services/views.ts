@@ -21,6 +21,7 @@ import { moodGmView, sentNotifications } from './field';
 import { gmChallenges, playerChallenges } from './espionage';
 import { seatingView } from './seating';
 import { boardSettings } from './boards';
+import { chatUnread } from './chat';
 import { ambientOff, currentAmbient, listSounds } from './sounds';
 import { minterLeaderboard } from './minter';
 import { finale, type Finale } from './recap';
@@ -134,6 +135,8 @@ export interface PlayerView extends PublicView {
     holdings: { securityId: string; sharesH: number; costBasisH: GoldH; valueH: GoldH; lots: { sharesH: number; unlockNms: number }[] }[];
     achievements: { type: string; createdAt: number }[];
     messages: { id: number; message: string; createdAt: number; read: boolean }[];
+    /** Unread player-chat messages (phone badge). */
+    chatUnread: number;
     trades: ReturnType<typeof myTrades>;
     vote: ReturnType<typeof voteView>;
     challenges: ReturnType<typeof playerChallenges>;
@@ -183,6 +186,7 @@ export function playerView(ctx: Ctx, st: NightState, playerId: number, base?: Pu
       }),
       achievements: ach.map((a) => ({ type: a.type, createdAt: a.created_at })),
       messages: playerMessages(ctx, st.night.id, playerId),
+      chatUnread: chatUnread(ctx, playerId),
       trades: myTrades(ctx, p),
       vote: voteView(ctx, st, playerId),
       challenges: playerChallenges(ctx, playerId, st.night.id),

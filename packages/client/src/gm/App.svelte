@@ -28,6 +28,8 @@
   import JoinQr from './screens/JoinQr.svelte';
   import Handicaps from './screens/Handicaps.svelte';
   import BoardHost from './screens/BoardHost.svelte';
+  import OverrunPrompt from './screens/OverrunPrompt.svelte';
+  import Chats from './screens/Chats.svelte';
   import { BOARDS } from './boards';
 
   type Phase = 'loading' | 'setup' | 'login' | 'ready';
@@ -44,6 +46,7 @@
     { id: 'mood', label: 'Mood', field: true },
     { id: 'espionage', label: 'Espionage', field: true },
     { id: 'notify', label: 'Messages', field: true },
+    { id: 'chats', label: 'Player chats', field: true },
     { id: 'players', label: 'Players', field: true },
     { id: 'market', label: 'Market', field: false },
     { id: 'handicaps', label: 'Handicaps', field: false },
@@ -104,6 +107,8 @@
         navigator.vibrate?.(80);
       },
       'board:update': (d) => window.dispatchEvent(new CustomEvent('gn:board-update', { detail: d })),
+      'chat:message': () => window.dispatchEvent(new Event('gn:gm-chat')),
+      'chat:thread': () => window.dispatchEvent(new Event('gn:gm-chat')),
       'gm:device_pause': async () => {
         const me = await get<{ gm: WhoAmI }>('/api/gm/me').catch(() => null);
         if (me) whoami = me.gm;
@@ -163,12 +168,14 @@
     {/if}
 
     <main class="content">
+      {#if whoami.role === 'master'}<OverrunPrompt gs={gmState} />{/if}
       {#if route === 'dashboard'}<Dashboard gs={gmState} {whoami} onresult={(g) => openWizard(g)} />
       {:else if route === 'games'}<Games gs={gmState} {whoami} onresult={openWizard} />
       {:else if route === 'players'}<Players gs={gmState} {whoami} />
       {:else if route === 'mood'}<Mood gs={gmState} />
       {:else if route === 'espionage'}<Espionage gs={gmState} />
       {:else if route === 'notify'}<Notify gs={gmState} />
+      {:else if route === 'chats'}<Chats gs={gmState} />
       {:else if route === 'market'}<Market gs={gmState} {whoami} />
       {:else if route === 'handicaps'}<Handicaps gs={gmState} {whoami} />
       {:else if route === 'seating'}<Seating gs={gmState} {whoami} />
@@ -247,10 +254,12 @@
     background: var(--accent);
     color: var(--accent-ink);
   }
+  /* Laptop: content fills a centred 4:3 area of the screen (never narrower than 1100px); margins only beyond it. */
   .content {
     padding: 1rem;
-    max-width: 1100px;
+    max-width: max(1100px, calc(100vh * 4 / 3));
     width: 100%;
+    margin-inline: auto;
   }
   .shell.phone .content {
     padding: 0.75rem 0.75rem 84px;

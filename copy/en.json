@@ -117,7 +117,8 @@
       "rules": "Rules",
       "profile": "Profile",
       "vote": "Vote",
-      "minter": "NFT Minter"
+      "minter": "NFT Minter",
+      "chat": "Chat"
     },
     "paused_title": "Markets suspended",
     "paused_body": "Pending a routine review. Please remain calm and keep your hands visible.",
@@ -161,7 +162,9 @@
       "peek": "One look at an associate's trade history",
       "dead_clue": "A tip on the market",
       "custom": "{text}",
-      "hint": "An anonymous {tier} tip"
+      "hint": "An anonymous {tier} tip",
+      "wiretap": "A wiretap: one random message from someone else's chat",
+      "wiretap_pair": "A wiretap: one random message between two associates you choose"
     },
     "dead_clue": "A tip from Logistics: the near-dead stock trades thin. A few determined buyers could move it a long way.",
     "peek_pick": "Choose one associate to investigate. One look only.",
@@ -277,7 +280,22 @@
     "leaderboard": "Top minters",
     "nobody": "No one has minted yet.",
     "lock_open": "Open NFT Minter",
-    "lock_close": "Back to lock screen"
+    "lock_close": "Back to lock screen",
+    "credits_label": "Credits",
+    "minted_small": "{n} NFTs minted tonight",
+    "per_sec": "{rate}/s",
+    "per_tap": "+{n} per tap",
+    "upgrades": "Upgrades",
+    "managers_hint": "Generators only mint while this app is open. Hire a manager to keep one minting while you're away.",
+    "hire": "Hire manager",
+    "managed": "Managed",
+    "milestone": "{owned}/{next} for ×2",
+    "rebrand": "Rebrand",
+    "rebrand_body": "Start over with fresh credits and hardware. You keep your NFTs minted (the leaderboard) and gain investors: +{pct}% to everything each.",
+    "rebrand_button": "Rebrand for {n} investor(s)",
+    "rebrand_none": "Mint more to attract investors.",
+    "investors": "{n} investors · +{pct}% output",
+    "rebrand_confirm": "Rebrand? Credits, hardware, upgrades and managers reset. Your NFTs minted stay."
   },
   "gm": {
     "prompt_close": "Close trading? The last scheduled game ends at {time}.",
@@ -371,6 +389,14 @@
     "bad_board_state": "That board update was not valid.",
     "board_too_large": "The board has too much history. Lower its history size in Settings.",
     "bad_recap": "The recap was not valid.",
-    "bad_board": "Unknown board."
+    "bad_board": "Unknown board.",
+    "chat_closed": "Chat is closed right now.",
+    "chat_not_found": "That chat isn't available.",
+    "chat_no_members": "Pick at least one associate.",
+    "chat_bad_member": "One of those associates is not here tonight.",
+    "chat_empty": "Type a message first.",
+    "no_wiretap": "There is no wiretap to use here.",
+    "wiretap_pick_two": "Pick two different associates.",
+    "wiretap_nothing": "Nothing on the line yet. Your wiretap is still unused."
   }
 }

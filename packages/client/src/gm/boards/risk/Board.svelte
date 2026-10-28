@@ -36,7 +36,10 @@
   let showAll = $state(false);
   let showRecap = $state(false);
   let busy = $state<Record<number, boolean>>({});
-  let rerollFailed = $state(false);
+  let rerollFailed = $state<Record<number, boolean>>({});
+  /** Board width: wide (laptop) shows every player's panel at once in a scrolling right column. */
+  let RW = $state(0);
+  const wide = $derived(RW >= 900);
   let W = $state(0);
 
   /** Only pass on a genuinely new state (the host may also dedupe, but this keeps double taps quiet). */
@@ -50,7 +53,6 @@
   // ---- derived
   const sel = $derived(picked !== null && ctx.players.some((p) => p.id === picked) ? picked : (ctx.players[0]?.id ?? null));
   const selPlayer = $derived(ctx.players.find((p) => p.id === sel) ?? null);
-  const selData = $derived(sel === null ? null : pl(game, sel));
   const stat = $derived(status(game, ctx));
   const standings = $derived(recap(game, ctx));
   const assigned = $derived(ctx.players.reduce((n, p) => n + pl(game, p.id).territories, 0));
@@ -90,7 +92,8 @@
   const pick = (id: number) => {
     picked = id;
     elimFor = null;
-    rerollFailed = false;
+    rerollFailed = {};
+    if (wide) document.getElementById(`risk-p-${id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   };
 
   const commitNumber = (e: Event, current: number, set: (v: number) => void) => {
@@ -103,12 +106,12 @@
   async function useReroll(pid: number) {
     if (busy[pid] || leftOf(pid) <= 0) return;
     busy[pid] = true;
-    rerollFailed = false;
+    rerollFailed = { ...rerollFailed, [pid]: false };
     try {
       await ctx.useReroll(pid);
       apply(recordReroll(game, ctx, pid, now()));
     } catch {
-      rerollFailed = true;
+      rerollFailed = { ...rerollFailed, [pid]: true };
     } finally {
       busy[pid] = false;
     }
@@ -143,7 +146,72 @@
   </div>
 {/snippet}
 
-<div class="risk">
+{#snippet playerPanel(p: BoardPlayer)}
+  {@const d = pl(game, p.id)}
+    <section class="panel pp" class:cur={p.id === sel} id={`risk-p-${p.id}`}>
+      <div class="spread">
+        <div class="row">
+          <Avatar name={p.name} color={p.color} src={p.avatarPath} size={36} />
+          <h2>{p.name}</h2>
+        </div>
+        <span class="badge" class:live={!d.eliminated}>
+          {d.eliminated ? 'Eliminated' : `+${reinforcements(d, ctx.settings)} per turn`}
+        </span>
+      </div>
+
+      {#if d.eliminated}
+        <p>
+          Out{d.eliminatedBy !== null ? `, eliminated by ${nameOf(d.eliminatedBy)}` : ''}.
+          {#if d.eliminatedAt !== null}<span class="muted small">{time(d.eliminatedAt)}</span>{/if}
+        </p>
+        <button class="big" onclick={() => apply(restore(game, ctx, p.id, now()))}>Undo elimination</button>
+      {:else}
+        {@render stepper('Territories', d.territories, [1, 5], (v) => apply(setTerritories(game, ctx, p.id, v, now())))}
+        {@render stepper(`Armies (up to ${armiesMax})`, d.armies, [1, 5], (v) => apply(setArmies(game, ctx, p.id, v, now())))}
+
+        <div class="field">
+          <span class="small muted">Continents held at the start of their turn</span>
+          <div class="row">
+            {#each CONTINENTS as c (c.key)}
+              {@const held = d.continents.includes(c.key)}
+              <button class="chip" class:on={held} aria-pressed={held} onclick={() => apply(setContinent(game, ctx, p.id, c.key, !held, now()))}>
+                {c.label} +{cfg(ctx.settings, c.setting)}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        {#if ctx.rerollsAllowed}
+          <div class="field">
+            <div class="spread">
+              <span>Re-rolls left: <strong class="mono">{leftOf(p.id)}</strong></span>
+              <button class="big" disabled={busy[p.id] || leftOf(p.id) <= 0} onclick={() => useReroll(p.id)}>Use a re-roll</button>
+            </div>
+            {#if rerollFailed[p.id]}<p class="error">That re-roll could not be used. Check how many are left and try again.</p>{/if}
+          </div>
+        {/if}
+
+        {#if elimFor === p.id}
+          <div class="field">
+            <p><strong>Who eliminated {p.name}?</strong></p>
+            <div class="row">
+              {#each ctx.players.filter((o) => o.id !== p.id && !pl(game, o.id).eliminated) as o (o.id)}
+                <button class="big" onclick={() => doEliminate(p.id, o.id)}>{first(o.name)}</button>
+              {/each}
+              <button class="big" onclick={() => doEliminate(p.id, null)}>Not sure</button>
+              <button class="big" onclick={() => (elimFor = null)}>Cancel</button>
+            </div>
+          </div>
+        {:else}
+          <button class="big danger" disabled={stat.alive.length <= 1} onclick={() => (elimFor = p.id)}>Eliminate {first(p.name)}</button>
+        {/if}
+      {/if}
+    </section>
+{/snippet}
+
+<div class="riskhost" bind:clientWidth={RW}>
+<div class="risk" class:wide>
+<div class="left">
   <section class="panel">
     <div class="spread">
       <h2>Risk</h2>
@@ -211,67 +279,7 @@
     </section>
   {/if}
 
-  {#if selPlayer && selData}
-    <section class="panel">
-      <div class="spread">
-        <div class="row">
-          <Avatar name={selPlayer.name} color={selPlayer.color} src={selPlayer.avatarPath} size={36} />
-          <h2>{selPlayer.name}</h2>
-        </div>
-        <span class="badge" class:live={!selData.eliminated}>
-          {selData.eliminated ? 'Eliminated' : `+${reinforcements(selData, ctx.settings)} per turn`}
-        </span>
-      </div>
-
-      {#if selData.eliminated}
-        <p>
-          Out{selData.eliminatedBy !== null ? `, eliminated by ${nameOf(selData.eliminatedBy)}` : ''}.
-          {#if selData.eliminatedAt !== null}<span class="muted small">{time(selData.eliminatedAt)}</span>{/if}
-        </p>
-        <button class="big" onclick={() => apply(restore(game, ctx, selPlayer.id, now()))}>Undo elimination</button>
-      {:else}
-        {@render stepper('Territories', selData.territories, [1, 5], (v) => apply(setTerritories(game, ctx, selPlayer.id, v, now())))}
-        {@render stepper(`Armies (up to ${armiesMax})`, selData.armies, [1, 5], (v) => apply(setArmies(game, ctx, selPlayer.id, v, now())))}
-
-        <div class="field">
-          <span class="small muted">Continents held at the start of their turn</span>
-          <div class="row">
-            {#each CONTINENTS as c (c.key)}
-              {@const held = selData.continents.includes(c.key)}
-              <button class="chip" class:on={held} aria-pressed={held} onclick={() => apply(setContinent(game, ctx, selPlayer.id, c.key, !held, now()))}>
-                {c.label} +{cfg(ctx.settings, c.setting)}
-              </button>
-            {/each}
-          </div>
-        </div>
-
-        {#if ctx.rerollsAllowed}
-          <div class="field">
-            <div class="spread">
-              <span>Re-rolls left: <strong class="mono">{leftOf(selPlayer.id)}</strong></span>
-              <button class="big" disabled={busy[selPlayer.id] || leftOf(selPlayer.id) <= 0} onclick={() => useReroll(selPlayer.id)}>Use a re-roll</button>
-            </div>
-            {#if rerollFailed}<p class="error">That re-roll could not be used. Check how many are left and try again.</p>{/if}
-          </div>
-        {/if}
-
-        {#if elimFor === selPlayer.id}
-          <div class="field">
-            <p><strong>Who eliminated {selPlayer.name}?</strong></p>
-            <div class="row">
-              {#each ctx.players.filter((p) => p.id !== selPlayer.id && !pl(game, p.id).eliminated) as p (p.id)}
-                <button class="big" onclick={() => doEliminate(selPlayer.id, p.id)}>{first(p.name)}</button>
-              {/each}
-              <button class="big" onclick={() => doEliminate(selPlayer.id, null)}>Not sure</button>
-              <button class="big" onclick={() => (elimFor = null)}>Cancel</button>
-            </div>
-          </div>
-        {:else}
-          <button class="big danger" disabled={stat.alive.length <= 1} onclick={() => (elimFor = selPlayer.id)}>Eliminate {first(selPlayer.name)}</button>
-        {/if}
-      {/if}
-    </section>
-  {/if}
+  {#if !wide && selPlayer}{@render playerPanel(selPlayer)}{/if}
 
   <section class="panel">
     <h3>Standings if the game ended now</h3>
@@ -352,11 +360,48 @@
     {/if}
   </section>
 </div>
+{#if wide}
+  <div class="right" aria-label="All players">
+    {#each ctx.players as p (p.id)}{@render playerPanel(p)}{/each}
+  </div>
+{/if}
+</div>
+</div>
 
 <style>
   .risk {
     max-width: 40rem;
     margin: 0 auto;
+  }
+  .risk.wide {
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 27rem);
+    gap: 0.75rem;
+    align-items: start;
+  }
+  .right {
+    position: sticky;
+    top: 0.5rem;
+    max-height: calc(100vh - 5rem);
+    overflow-y: auto;
+    display: grid;
+    gap: 0.5rem;
+    padding-right: 2px;
+  }
+  .right :global(.panel) {
+    margin: 0;
+    min-width: 0;
+  }
+  .right :global(.stepper) {
+    min-width: 0;
+  }
+  .right :global(.stepper input) {
+    min-width: 0;
+    width: 100%;
+  }
+  .pp.cur {
+    outline: 2px solid var(--accent);
   }
   .win {
     margin: 0.6rem 0 0;

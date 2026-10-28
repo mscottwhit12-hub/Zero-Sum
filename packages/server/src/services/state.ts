@@ -7,7 +7,9 @@ import {
   deriveLedger,
   nightClockMs,
   quarterSchedule,
+  quartersFromPlan,
   resolveSettings,
+  type QuarterSpan,
   type DeepPartial,
   type GameResult,
   type LedgerInput,
@@ -41,6 +43,14 @@ export interface NightRow {
   last_tick_at: number | null;
   settings: string;
   created_at: number;
+  /** JSON QuarterSpan[] once the length changed mid-night; null = computed from the length. */
+  quarter_plan: string | null;
+}
+
+/** The night's quarters: the stored plan (if any, and still the right count), else computed from the length. */
+export function nightQuarters(night: NightRow, settings: Settings) {
+  const plan = night.quarter_plan ? j.parse<QuarterSpan[]>(night.quarter_plan, []) : [];
+  return plan.length === settings.votes.quarterCount ? quartersFromPlan(plan, settings.votes) : quarterSchedule(night.length_minutes, settings.votes);
 }
 
 export interface PlayerRow {
@@ -226,6 +236,6 @@ export function computeNightState(ctx: Ctx, nightId: number): NightState | null 
     ledger,
     standings,
     nightMs: nightMs(ctx, night),
-    quarters: quarterSchedule(night.length_minutes, settings.votes),
+    quarters: nightQuarters(night, settings),
   };
 }

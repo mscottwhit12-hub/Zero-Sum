@@ -5,6 +5,7 @@ import {
   createSecurities,
   endNight as engineEndNight,
   resolveSettings,
+  respreadQuarters,
   toH,
   validateSettings,
   type DeepPartial,
@@ -22,7 +23,10 @@ import {
   loadLedgerInput,
   loadLots,
   loadSecurities,
+  nightMs,
   nightOverrides,
+  nightQuarters,
+  nightSettings,
   pid,
   players,
   upsertSecurities,
@@ -301,9 +305,18 @@ export function updateNightInfo(ctx: Ctx, actor: GmAuth, input: { name?: unknown
   const length = input.lengthMinutes === undefined ? n.length_minutes : Number(input.lengthMinutes);
   if (!name) throw bad('bad_name');
   if (!Number.isInteger(length) || length < 30 || length > 24 * 60) throw bad('bad_length', 'Night length must be 30–1440 minutes.');
-  checkSettings(nightOverrides(n) as DeepPartial<Settings>, length);
+  // Mid-night: never shorter than what's been played; started quarters keep their times, later ones re-spread.
+  let plan: string | null = n.quarter_plan;
+  if (length !== n.length_minutes && (n.status === 'live' || n.status === 'paused')) {
+    const settings = nightSettings(n);
+    const nowMin = nightMs(ctx, n) / 60_000;
+    if (length < Math.ceil(nowMin) + 1) throw bad('bad_length', `The night has already run ${Math.ceil(nowMin)} minutes.`);
+    const spans = respreadQuarters(nightQuarters(n, settings), nowMin, length, settings.votes);
+    if (!spans) throw bad('bad_length', `Too short: the quarters still to come need at least ${settings.votes.windowMinutes} minutes each for their polls.`);
+    plan = JSON.stringify(spans);
+  } else checkSettings(nightOverrides(n) as DeepPartial<Settings>, length);
   ctx.db.transaction(() => {
-    ctx.db.prepare('UPDATE night SET name = ?, length_minutes = ? WHERE id = ?').run(name, length, n.id);
+    ctx.db.prepare('UPDATE night SET name = ?, length_minutes = ?, quarter_plan = ? WHERE id = ?').run(name, length, plan, n.id);
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'night.update', entity: 'night', entityId: n.id, before: { name: n.name, length: n.length_minutes }, after: { name, length } });
   })();
   ctx.bus.all('night:update', { name, lengthMinutes: length });

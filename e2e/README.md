@@ -27,6 +27,8 @@ for r in e2e/rounds/r*.mjs; do NODE_PATH=$(npm root -g) node $r; done   # all te
 | r09-junk | RTL names, fake/huge photos, script/markdown injection everywhere, junk settings, broken pack file, 2 MB payload, nonsense API calls |
 | r10-load (60×) | 14 phones + 2 GMs + TV, simultaneous buys, score storms, group refresh, Wi-Fi drops, crash under load, latency |
 | seating (`e2e/seating/run.mjs`) | table resize handles and limits, moving tables, drag players onto seats, swap, unseat, dropdown fallback, TV floor dots + table close-up |
+| r11-account-switch | sign out and in as someone else in one tab with a second tab open: lands on home, Minter counts for the right account, tabs never mix accounts |
+| features (`e2e/features/run.mjs`) | Oct 28 round: gold 0.01/TV 0.1, Dashboard timeline + length edit, time guards, schedule drag + clashes, seating timing, chat + GM read, wiretap, Minter rework, upload progress |
 | boards (`e2e/boards/run.mjs`) | Risk board end to end: tab appears, edits save and move the crown, re-roll spends once, eliminator takes territories, second GM syncs, result pre-fill, recap on phones |
 
 **Known false positives** (checked by hand; not app bugs): r03 "selling locked…" and "past the invest cap" (the app

@@ -33,7 +33,12 @@ export interface JoinInput {
   ticker: unknown;
   color?: unknown;
   avatarData?: unknown;
+  /** Permanent random id this phone keeps even after signing out. */
+  phoneId?: unknown;
 }
+
+/** Hash of a phone id, or null if it isn't a plausible one. */
+const phoneHash = (v: unknown): string | null => (typeof v === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(v) ? tokenHash(`phone:${v}`) : null);
 
 /** Joins open → instant player. Night live → a late-join request awaiting GM approval. */
 export function join(ctx: Ctx, input: JoinInput): { deviceToken: string; player?: PlayerRow; pending: boolean } {
@@ -45,33 +50,48 @@ export function join(ctx: Ctx, input: JoinInput): { deviceToken: string; player?
   const ticker = checkTicker(input.ticker);
   assertAvailable(ctx, n.id, name, ticker);
   const avatarPath = saveAvatar(ctx, input.avatarData);
+  const home = phoneHash(input.phoneId);
   if (info.mode === 'join') {
     const r = createPlayer(ctx, { displayName: name, ticker, color: input.color, avatarPath });
+    if (home) ctx.db.prepare('UPDATE player SET home_phone_hash = ? WHERE id = ?').run(home, r.player.id);
     return { deviceToken: r.deviceToken, player: r.player, pending: false };
   }
   const { token, hash } = newToken();
   const r = ctx.db
     .prepare("INSERT INTO device_request (night_id, player_id, token_hash, kind, payload, created_at) VALUES (?, NULL, ?, 'late_join', ?, ?)")
-    .run(n.id, hash, j.str({ displayName: name, ticker, color: checkColor(input.color), avatarPath }), ctx.now());
+    .run(n.id, hash, j.str({ displayName: name, ticker, color: checkColor(input.color), avatarPath, home }), ctx.now());
   ctx.bus.gm('device:approval', { id: Number(r.lastInsertRowid), kind: 'late_join', displayName: name });
   ctx.bus.refresh(n.id);
   return { deviceToken: token, pending: true };
 }
 
-export function requestRejoin(ctx: Ctx, playerId: unknown): { deviceToken: string } {
+/** Rejoin. From the phone the player joined on, it's approved at once; otherwise a GM approves it. */
+export function requestRejoin(ctx: Ctx, playerId: unknown, phoneId?: unknown): { deviceToken: string; approved: boolean } {
   const n = currentNight(ctx);
   if (!n || n.status === 'ended' || n.status === 'archived' || n.status === 'setup') throw conflict('rejoin_closed');
-  const p = ctx.db.prepare('SELECT id, display_name FROM player WHERE id = ? AND night_id = ? AND left_at IS NULL').get(Number(playerId), n.id) as
-    | { id: number; display_name: string }
+  const p = ctx.db.prepare('SELECT id, display_name, home_phone_hash FROM player WHERE id = ? AND night_id = ? AND left_at IS NULL').get(Number(playerId), n.id) as
+    | { id: number; display_name: string; home_phone_hash: string | null }
     | undefined;
   if (!p) throw notFound('player_not_found');
   const { token, hash } = newToken();
+  const home = phoneHash(phoneId);
+  if (home && p.home_phone_hash === home) {
+    ctx.db.transaction(() => {
+      ctx.db.prepare('INSERT INTO device (player_id, token_hash, approved_by_gm_id, created_at) VALUES (?,?,NULL,?)').run(p.id, hash, ctx.now());
+      const r = ctx.db
+        .prepare("INSERT INTO device_request (night_id, player_id, token_hash, kind, payload, status, created_at) VALUES (?,?,?, 'rejoin', '{\"auto\":true}', 'approved', ?)")
+        .run(n.id, p.id, hash, ctx.now());
+      audit(ctx, { nightId: n.id, gmId: null, action: 'device.auto_approve', entity: 'device_request', entityId: Number(r.lastInsertRowid), after: { kind: 'rejoin', playerId: p.id, reason: 'same phone' } });
+    })();
+    ctx.bus.refresh(n.id);
+    return { deviceToken: token, approved: true };
+  }
   const r = ctx.db
     .prepare("INSERT INTO device_request (night_id, player_id, token_hash, kind, payload, created_at) VALUES (?,?,?, 'rejoin', '{}', ?)")
     .run(n.id, p.id, hash, ctx.now());
   ctx.bus.gm('device:approval', { id: Number(r.lastInsertRowid), kind: 'rejoin', displayName: p.display_name });
   ctx.bus.refresh(n.id);
-  return { deviceToken: token };
+  return { deviceToken: token, approved: false };
 }
 
 /** Polled by the waiting phone. */
@@ -117,9 +137,10 @@ export function decideRequest(ctx: Ctx, actor: GmAuth, id: number, approve: bool
         ctx.db.prepare('INSERT INTO device (player_id, token_hash, approved_by_gm_id, created_at) VALUES (?,?,?,?)').run(req.player_id, req.token_hash, actor.gmId, ctx.now());
       } else {
         if (n.status !== 'live' && n.status !== 'paused') throw conflict('bad_night_state');
-        const x = j.parse<{ displayName: string; ticker: string; color: string | null; avatarPath: string | null }>(req.payload, {} as never);
+        const x = j.parse<{ displayName: string; ticker: string; color: string | null; avatarPath: string | null; home?: string | null }>(req.payload, {} as never);
         const p = createLatePlayer(ctx, n.id, { displayName: x.displayName, ticker: x.ticker, color: x.color, avatarPath: x.avatarPath }, req.token_hash, actor.gmId);
         playerId = p.id;
+        if (x.home) ctx.db.prepare('UPDATE player SET home_phone_hash = ? WHERE id = ?').run(x.home, p.id);
         ctx.db.prepare('UPDATE device_request SET player_id = ? WHERE id = ?').run(p.id, id);
       }
     }

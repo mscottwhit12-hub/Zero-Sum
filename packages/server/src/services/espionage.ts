@@ -16,10 +16,13 @@ import { pushFeed } from './feed';
 import type { GmAuth } from './gm';
 import { queueImpulse } from './market';
 import { currentNight, loadSecurities, nightSettings, pid, type NightRow, type PlayerRow } from './state';
+import { wiretapResult } from './chat';
 
-export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint';
+export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap';
 export interface Reward {
   type: RewardType;
+  /** wiretap rewards: one random message from any chat, or between two players the holder picks. */
+  mode?: 'any' | 'pair';
   gold?: number;
   text?: string;
   /** hint rewards: which tier of tip. */
@@ -42,6 +45,7 @@ interface ChallengeRow {
   reassigned_from: number | null;
   peek_target: number | null;
   read_at: number | null;
+  wiretap_message_id: number | null;
 }
 
 function liveNight(ctx: Ctx): NightRow {
@@ -59,7 +63,8 @@ function getChallenge(ctx: Ctx, id: number): ChallengeRow {
 
 function normalizeReward(ctx: Ctx, n: NightRow, r: unknown): Reward {
   const x = (r ?? {}) as Reward;
-  if (!['gold', 'reroll', 'peek', 'dead_clue', 'custom', 'hint'].includes(x.type)) throw bad('bad_reward');
+  if (!['gold', 'reroll', 'peek', 'dead_clue', 'custom', 'hint', 'wiretap'].includes(x.type)) throw bad('bad_reward');
+  if (x.type === 'wiretap') return { type: 'wiretap', mode: x.mode === 'pair' ? 'pair' : 'any' };
   if (x.type === 'hint') {
     const tier = x.tier ?? 'common';
     if (!['common', 'rarer', 'rarest'].includes(tier)) throw bad('bad_reward', 'Pick a tip tier.');
@@ -232,6 +237,7 @@ export function playerChallenges(ctx: Ctx, playerId: number, nightId: number) {
       reward,
       createdAt: c.created_at,
       peek: reward.type === 'peek' && c.status === 'succeeded' ? { used: c.peek_target != null, targetId: c.peek_target, trades: c.peek_target != null ? peekTrades(ctx, c.peek_target) : [] } : null,
+      wiretap: reward.type === 'wiretap' && c.status === 'succeeded' ? { mode: reward.mode ?? 'any', result: wiretapResult(ctx, c.wiretap_message_id) } : null,
     };
   });
 }

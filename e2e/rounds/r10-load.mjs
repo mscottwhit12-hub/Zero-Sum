@@ -97,7 +97,7 @@ try {
     await openApp(p.page, 'Wallet').catch(() => {});
     await sleep(300);
     const txt = await p.page.locator('body').innerText();
-    const cash = (ledger.find((l) => l.playerId === p.id).cashH / 100).toFixed(1);
+    const cash = (ledger.find((l) => l.playerId === p.id).cashH / 100).toFixed(2);
     if (!txt.includes(cash)) mismatch++;
     await home(p.page);
   }

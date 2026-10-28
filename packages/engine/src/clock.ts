@@ -46,6 +46,36 @@ export function quarterSchedule(lengthMinutes: number, votes: Settings['votes'])
   return out;
 }
 
+/** Quarter boundaries in night-clock minutes (a stored plan after the night length changed mid-night). */
+export type QuarterSpan = { startMin: number; endMin: number };
+
+/** Builds quarters from stored spans, recomputing each vote window from the current settings. */
+export function quartersFromPlan(plan: QuarterSpan[], votes: Settings['votes']): Quarter[] {
+  return plan.map((q, i) => ({ n: i + 1, startMin: q.startMin, endMin: q.endMin, windowEndMin: Math.min(q.endMin, q.startMin + votes.windowMinutes) }));
+}
+
+/**
+ * The night length changed at `nowMin`: quarters that have started keep their times; the quarters still to come are
+ * spread evenly from the end of the last started quarter to the new end buffer. Returns null if they no longer fit
+ * (each must still hold a full poll window). Before Q1 starts, returns the plain schedule for the new length.
+ */
+export function respreadQuarters(current: Quarter[], nowMin: number, newLength: number, votes: Settings['votes']): QuarterSpan[] | null {
+  const started = current.filter((q) => q.startMin <= nowMin);
+  if (!started.length) {
+    const fresh = quarterSchedule(newLength, votes);
+    return fresh.every((q) => q.endMin - q.startMin >= votes.windowMinutes && q.startMin >= nowMin) ? fresh.map(({ startMin, endMin }) => ({ startMin, endMin })) : null;
+  }
+  const keep = started.map(({ startMin, endMin }) => ({ startMin, endMin }));
+  const future = current.length - started.length;
+  if (!future) return keep;
+  const from = Math.max(keep[keep.length - 1]!.endMin, nowMin);
+  const to = newLength - newLength * votes.bufferFrac;
+  const each = (to - from) / future;
+  if (!(each >= votes.windowMinutes)) return null;
+  for (let i = 0; i < future; i++) keep.push({ startMin: from + i * each, endMin: from + (i + 1) * each });
+  return keep;
+}
+
 export type QuarterPhase = 'pre' | 'window' | 'drift' | 'post';
 
 export interface QuarterPosition {

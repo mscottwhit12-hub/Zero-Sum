@@ -1,9 +1,9 @@
 import { t } from './copy';
-import { gold, signedGold } from './format';
+import { gold, signedGold, signedGoldTv } from './format';
 import type { FeedItem, PlayerInfo } from './types';
 
 /** Renders a feed entry from its copy key + data. */
-export function feedText(f: FeedItem, players: PlayerInfo[]): string {
+export function feedText(f: FeedItem, players: PlayerInfo[], opts: { tv?: boolean } = {}): string {
   const name = (id: unknown) => players.find((p) => p.id === Number(id))?.displayName ?? '?';
   const d = f.data as Record<string, unknown>;
   const vars: Record<string, string> = {
@@ -12,7 +12,7 @@ export function feedText(f: FeedItem, players: PlayerInfo[]): string {
     to: name(d.to),
     by: String(d.by ?? ''),
     player: name(d.playerId),
-    gold: typeof d.goldH === 'number' ? signedGold(d.goldH) : '',
+    gold: typeof d.goldH === 'number' ? (opts.tv ? signedGoldTv(d.goldH) : signedGold(d.goldH)) : '',
     reason: String(d.reason ?? ''),
     quarter: String(d.quarter ?? ''),
     correct: String(d.correct ?? 0),

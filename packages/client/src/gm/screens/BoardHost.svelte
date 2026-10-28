@@ -9,6 +9,7 @@
   import { errorText, run, toast } from '@shared/ui';
   import type { GameInfo, GmState } from '@shared/types';
   import { BOARDS, boardSettingsFor } from '../boards';
+  import { gameClock, gameTag } from '@shared/gameTime';
   import type { BoardContext, BoardPlayer } from '../boards/contract';
 
   let { gs, game, onfinish }: { gs: GmState | null; game: GameInfo; onfinish: (placements: number[][] | null) => void } = $props();
@@ -118,11 +119,14 @@
     const d = (e as CustomEvent<{ gameId: number; version: number }>).detail;
     if (d.gameId === game.id && d.version > version && !dirty && !saving) void load();
   }
+  let now = $state(Date.now());
+  const tick = setInterval(() => (now = Date.now()), 15_000);
   onMount(() => {
     void load();
     window.addEventListener('gn:board-update', onRemote);
   });
   onDestroy(() => {
+    clearInterval(tick);
     window.removeEventListener('gn:board-update', onRemote);
     if (timer) clearTimeout(timer);
     if (dirty) void flush();
@@ -131,7 +135,10 @@
 
 <section class="panel">
   <div class="spread">
-    <h2>{game.name}</h2>
+    <div>
+      <h2>{game.name} {#if gameTag(game, now) === 'filibuster'}<span class="badge warn">Filibuster</span>{/if}</h2>
+      <p class="small muted">{gameClock(game, now)}</p>
+    </div>
     <button onclick={finish}>Enter result</button>
   </div>
   {#if !entry}

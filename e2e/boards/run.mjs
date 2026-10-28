@@ -5,6 +5,8 @@ const R = makeRound('boards');
 const s = await startServer('boards', { scale: 1 });
 const b = await browser();
 const night = async (gm) => (await api(gm.req, s.base, 'GET', '/api/night')).body;
+/** A player's panel on the Risk board (every player has one on wide screens; only the selected one on narrow). */
+const panel = (page, name) => page.locator('.pp', { has: page.locator('h2', { hasText: name }) });
 const board = async (gm, id) => (await api(gm.req, s.base, 'GET', `/api/games/${id}/board`)).body;
 try {
   const gm = await gmSetup(b, s, R, { viaUi: false });
@@ -28,11 +30,12 @@ try {
   let bd = await board(gm, g.id);
   R.check(bd.version >= 1 && bd.state?.players?.[ann]?.territories === 11, 'load', 'board initialised and saved on first open', `v${bd.version} ann=${bd.state?.players?.[ann]?.territories}`);
   await page.screenshot({ path: `${s.dir}/shots/01-board-laptop.png`, fullPage: true });
+  R.check((await page.locator('.risk.wide .right .pp').count()) === 4, 'layout', 'laptop: every player panel shows at once in the right column', String(await page.locator('.risk.wide .right .pp').count()));
 
   // Edit: select Ann, +5 territories twice -> 21 territories = 7 reinforcements; crown follows.
   await page.locator('button.seat', { hasText: 'Ann' }).first().click(); await sleep(200);
-  await page.getByRole('button', { name: 'Territories plus 5' }).click();
-  await page.getByRole('button', { name: 'Territories plus 5' }).click();
+  await panel(page, 'Ann').getByRole('button', { name: 'Territories plus 5' }).click();
+  await panel(page, 'Ann').getByRole('button', { name: 'Territories plus 5' }).click();
   await sleep(1500);
   bd = await board(gm, g.id);
   const ng = (await night(gm)).games.find((x) => x.id === g.id);
@@ -41,7 +44,7 @@ try {
 
   // Re-roll: double click spends exactly one.
   const before = (await night(gm)).gm.rerolls[ann];
-  const rr = page.getByRole('button', { name: /Use a re-roll/ });
+  const rr = panel(page, 'Ann').getByRole('button', { name: /Use a re-roll/ });
   await rr.dblclick().catch(() => {}); await sleep(1500);
   const after = (await night(gm)).gm.rerolls[ann];
   R.check(after === before - 1, 'reroll', 'double-clicking re-roll spends one token', `${before} -> ${after}`);
@@ -51,14 +54,14 @@ try {
   await gmRoute(gm2.page, `board-${g.id}`); await sleep(1500);
   await gm2.page.screenshot({ path: `${s.dir}/shots/02-board-phone.png`, fullPage: true });
   await page.locator('button.seat', { hasText: 'Ben' }).first().click(); await sleep(200);
-  await page.getByRole('button', { name: 'Territories plus 1' }).click(); await sleep(2000);
+  await panel(page, 'Ben').getByRole('button', { name: 'Territories plus 1' }).click(); await sleep(2000);
   const benOnPhone = await gm2.page.locator('table').filter({ hasText: 'Ben' }).first().textContent().catch(() => '');
   R.check(/12/.test(benOnPhone ?? ''), 'sync', "the other GM's board reloads with the change", (benOnPhone ?? '').replace(/\s+/g, ' ').slice(0, 120));
 
   // Eliminate Dev by Ann: Dev's 10 territories go to Ann.
   await page.locator('button.seat', { hasText: 'Dev' }).first().click(); await sleep(200);
-  await page.getByRole('button', { name: 'Eliminate Dev' }).click(); await sleep(200);
-  await page.locator('button.big', { hasText: 'Ann' }).first().click(); await sleep(1500);
+  await panel(page, 'Dev').getByRole('button', { name: 'Eliminate Dev' }).click(); await sleep(200);
+  await panel(page, 'Dev').locator('button.big', { hasText: /^Ann$/ }).click(); await sleep(1500);
   bd = await board(gm, g.id);
   R.check(bd.state.players[dev].eliminated && bd.state.players[ann].territories === 31, 'elim', "eliminated player's territories go to the eliminator", `ann=${bd.state.players[ann].territories}`);
 

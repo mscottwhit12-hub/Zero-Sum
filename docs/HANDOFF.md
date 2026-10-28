@@ -209,6 +209,7 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 | Oct 27b | Fixes from 10 bug-hunt rounds; Fastify 5.12.7 | `00c462c` |
 | Oct 27c | Performance fixes 1–6 (price-history cache, lean broadcasts, cached snapshots, compression) | `5d5a40f` |
 | Oct 27d | This handoff + browser harnesses committed under `e2e/` | `1c9d0de` |
+| Oct 28 | Feedback round: gold to 0.01, auto-rejoin on the home phone, night length edit + running-over offer, time guards, schedule timeline, player chat + wiretap, Minter idle rework, wide GM layout | see §4b |
 | Oct 27e | Seating rework (resize, drag-to-seat + swap, 2–8 seats, TV floor/table rotation); sim models index growth; per-game GM boards + Risk board; classics pack | see §4a |
 
 ### 4a. Oct 27e update (seating, sim, game boards)
@@ -223,6 +224,20 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
   - **Risk board:** crown = reinforcements per turn; finish = territories, armies, then elimination order; an eliminated player's territories go to the eliminator (undo reverses it); 4–6 players.
 - Migrations: **9** `game_table.map_w/map_h`; **10** `library_game.board`, `game_board`, `board_setting`, `reroll_use.request_id`.
 - Tests: client 51 (Risk), engine 112, server 81, sim 4. Browser harnesses `e2e/seating` (21 checks) and `e2e/boards` (12 checks).
+
+### 4b. Oct 28 update (feedback round)
+- **Gold** shows to 0.01 everywhere (`format.gold`); the TV keeps 0.1 (`goldTv`, `feedText(..., { tv: true })`). Storage was already hundredths.
+- **Rejoin on the home phone is auto-approved.** Phones keep a permanent `gn_phone` id (survives sign-out); `player.home_phone_hash` (migration 11) is set at join / late-join approval; `POST /api/join/rejoin {playerId, phoneId}` returns `{approved}`. Audit `device.auto_approve`. Any other phone still needs a GM.
+- **Account switching on one browser:** the phone returns to home on any identity change, other tabs reload when `gn_device` changes (identity is per browser by design; per-tab identity was rejected), and the Minter only syncs as the account it opened with. Harness `e2e/rounds/r11-account-switch.mjs`.
+- **Night length** is editable live (Dashboard → Edit length, Master). Never below time played; started quarters keep their times and later ones re-spread (`respreadQuarters`, stored in `night.quarter_plan`, migration 12).
+- **Running over** (`prompts.overrunDivisor`, default 8): when the night's end arrives with games running, a Master banner on every GM screen offers +planned length ÷ divisor, biggest first; "no" moves to the next game; "yes" extends and the cycle repeats. `POST /api/night/overrun {gameId, accept}`.
+- **Time guards:** confirm before starting out of order / with a player already playing / at a busy table; double-booking warning when scheduling; a game scheduled in the past (live night) just starts. Tags: **Filibuster** (running past planned length), **Tardy** (scheduled, past its start). One clock style (`shared/gameTime.ts`) on game cards, Games list, board header, Seating plan and TV tables. Dashboard **night timeline**.
+- **Schedule timeline** (Games screen, `ScheduleTimeline.svelte`): blocks sized by time; rows = tables (drag between rows to change table) or players; drag to move (5-min steps, never into the past), drag the right edge to resize, drag unscheduled games in. Overlaps stack in lanes; clashes (player or table double-booked) show red.
+- **Player chat** (`services/chat.ts`, migration 13): one-to-one (reused) and group threads; every message kept with its time; members get `chat:message`; phone **Chat** app with unread badge; GM **Player chats** screen; included in the night export. **Wiretap** memo reward (`mode: any | pair`): one random message from a chat the holder isn't in (any chat, or between two chosen players); victims are never told; audit `wiretap.use`.
+- **NFT Minter** (Adventure Capitalist style; still fun only): credits are the big number, NFTs minted secondary; leaderboard = lifetime NFTs minted. Milestones (×2 at 10/25/50/100/200 owned), upgrades (Overclock ×3 per generator, mouse/keyboard tap multipliers), managers (unmanaged generators only mint while the app is open), Rebrand for investors (+5% each). State extras in `minter_state.extra` (migration 14). Numbers are placeholders in `engine/src/minter.ts`.
+- **Wide GM layout:** content fills a centred 4:3 area (min 1100px). Risk board on wide screens: table/standings/history left, every player's panel in a scrolling right column.
+- **Sound upload** shows a progress bar.
+- Tests: client 51, engine 116, server 90, sim 4. Browser: `e2e/features/run.mjs` (21 checks), `r11` (5).
 
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.

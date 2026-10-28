@@ -229,6 +229,10 @@ th {
   color: var(--warn);
   border-color: var(--warn);
 }
+.badge.bad {
+  color: var(--bad);
+  border-color: var(--bad);
+}
 .error {
   color: var(--bad);
   font-size: 0.9rem;

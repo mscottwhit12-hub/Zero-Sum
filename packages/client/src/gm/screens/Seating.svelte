@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
+  import { gameClockShort, gameTag } from '@shared/gameTime';
   import { del, patch, post } from '@shared/api';
   import { run } from '@shared/ui';
   import type { GmState, SeatingTable, WhoAmI } from '@shared/types';
@@ -9,7 +11,17 @@
   const master = $derived(whoami.role === 'master');
   const tables = $derived(gs?.gm?.seating ?? []);
   const seated = $derived(new Set(tables.flatMap((t) => t.assignments.map((a) => a.playerId))));
-  const gameName = (id: number | null) => (id == null ? '' : (gs?.games.find((g) => g.id === id)?.name ?? ''));
+  let now = $state(Date.now());
+  const tick = setInterval(() => (now = Date.now()), 15_000);
+  onDestroy(() => clearInterval(tick));
+  /** Table label: its game plus when it started (and for how long) or when it's due. */
+  const gameName = (id: number | null) => {
+    const g = id == null ? null : (gs?.games.find((x) => x.id === id) ?? null);
+    if (!g) return '';
+    const c = gameClockShort(g, now);
+    const tag = gameTag(g, now);
+    return [g.name, c, tag === 'filibuster' ? 'Filibuster' : tag === 'tardy' ? 'Tardy' : ''].filter(Boolean).join(' · ');
+  };
 
   const moveTable = (id: number, x: number, y: number) => run(() => patch(`/api/tables/${id}`, { x, y }));
   const resizeTable = (id: number, g: { x: number; y: number; w: number; h: number }) => run(() => patch(`/api/tables/${id}`, g));

@@ -1,6 +1,10 @@
 /** Gold is integer hundredths; display to 1 decimal (spec §5.3). */
-export const gold = (h: number | null | undefined) => (h == null ? '—' : (Math.round(h / 10) / 10).toFixed(1));
+/** Gold (stored in hundredths) to 0.01 on phones and GM screens. */
+export const gold = (h: number | null | undefined) => (h == null ? '—' : (h / 100).toFixed(2));
 export const signedGold = (h: number) => `${h >= 0 ? '+' : '−'}${gold(Math.abs(h))}`;
+/** The TV rounds gold to 0.1 (read from the couch). */
+export const goldTv = (h: number | null | undefined) => (h == null ? '—' : (Math.round(h / 10) / 10).toFixed(1));
+export const signedGoldTv = (h: number) => `${h >= 0 ? '+' : '−'}${goldTv(Math.abs(h))}`;
 
 export function clock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));

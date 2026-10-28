@@ -3,7 +3,22 @@
  * Server-authoritative state per player per night; phones sync taps + purchases every few seconds.
  * Playable on the pause lock screen with the intermission bonus (locked decision #5).
  */
-import { applyMinterSync, emptyMinter, MINTER_TIERS, minterRate, tierCost, type MinterState } from '@gn/engine';
+import {
+  applyMinterSync,
+  claimableInvestors,
+  emptyMinter,
+  investorMult,
+  managerCost,
+  MINTER_RULES,
+  MINTER_TIERS,
+  MINTER_UPGRADES,
+  minterRate,
+  nextMilestone,
+  tapValue,
+  tierCost,
+  tierRate,
+  type MinterState,
+} from '@gn/engine';
 import { hintsForMinter } from './hints';
 import { j } from '../db';
 import { conflict, type Ctx } from '../context';
@@ -14,15 +29,17 @@ interface Row {
   currency: number;
   tiers: string;
   taps: number;
+  extra: string;
   updated_at: number;
 }
+type Extra = Pick<MinterState, 'upgrades' | 'managers' | 'investors' | 'rebrands'>;
 
 const MINTING: NightRow['status'][] = ['joins_open', 'live', 'paused'];
 
 function load(ctx: Ctx, playerId: number, nightId: number): { s: MinterState; updatedAt: number | null } {
-  const r = ctx.db.prepare('SELECT minted, currency, tiers, taps, updated_at FROM minter_state WHERE player_id = ? AND night_id = ?').get(playerId, nightId) as Row | undefined;
+  const r = ctx.db.prepare('SELECT minted, currency, tiers, taps, extra, updated_at FROM minter_state WHERE player_id = ? AND night_id = ?').get(playerId, nightId) as Row | undefined;
   if (!r) return { s: emptyMinter(), updatedAt: null };
-  return { s: { minted: r.minted, credits: r.currency, tiers: j.parse(r.tiers, {}), taps: r.taps }, updatedAt: r.updated_at };
+  return { s: { ...emptyMinter(), ...j.parse<Extra>(r.extra, {}), minted: r.minted, credits: r.currency, tiers: j.parse(r.tiers, {}), taps: r.taps }, updatedAt: r.updated_at };
 }
 
 function view(n: NightRow, s: MinterState) {
@@ -32,11 +49,38 @@ function view(n: NightRow, s: MinterState) {
     minted: Math.floor(s.minted),
     credits: Math.floor(s.credits),
     tiers: s.tiers,
-    ratePerSec: minterRate(s.tiers) * mult,
+    ratePerSec: minterRate(s) * mult,
+    tapValue: tapValue(s) * mult,
     mult,
     paused,
     active: MINTING.includes(n.status),
-    shop: MINTER_TIERS.map((t) => ({ id: t.id, name: t.name, rate: t.rate, owned: s.tiers[t.id] ?? 0, cost: tierCost(t, s.tiers[t.id] ?? 0), intermissionOnly: !!t.intermissionOnly, available: !t.intermissionOnly || paused })),
+    shop: MINTER_TIERS.map((t) => {
+      const owned = s.tiers[t.id] ?? 0;
+      return {
+        id: t.id,
+        name: t.name,
+        rate: t.rate,
+        owned,
+        cost: tierCost(t, owned),
+        output: tierRate(s, t) * mult,
+        nextMilestone: nextMilestone(owned),
+        managed: (s.managers ?? []).includes(t.id),
+        managerCost: managerCost(t),
+        intermissionOnly: !!t.intermissionOnly,
+        available: !t.intermissionOnly || paused,
+      };
+    }),
+    upgrades: MINTER_UPGRADES.map((u) => ({
+      id: u.id,
+      name: u.name,
+      cost: u.cost,
+      target: u.target,
+      mult: u.mult,
+      bought: (s.upgrades ?? []).includes(u.id),
+      available: u.target === 'tap' || (s.tiers[u.target] ?? 0) > 0,
+    })),
+    investors: { have: s.investors ?? 0, claimable: claimableInvestors(s), bonusPct: Math.round((investorMult(s) - 1) * 100), perInvestorPct: Math.round(MINTER_RULES.investorBonus * 100) },
+    rebrands: s.rebrands ?? 0,
   };
 }
 export type MinterView = ReturnType<typeof view>;
@@ -58,10 +102,19 @@ export function minterSync(ctx: Ctx, player: PlayerRow, input: { taps?: unknown;
   const r = applyMinterSync(s, { taps: Number(input.taps) || 0, buys }, elapsed, { paused: n.status === 'paused', mult: nightSettings(n).minter.pauseMultiplier });
   ctx.db
     .prepare(
-      `INSERT INTO minter_state (player_id, night_id, minted, currency, tiers, taps, updated_at) VALUES (?,?,?,?,?,?,?)
-       ON CONFLICT (player_id, night_id) DO UPDATE SET minted = excluded.minted, currency = excluded.currency, tiers = excluded.tiers, taps = excluded.taps, updated_at = excluded.updated_at`,
+      `INSERT INTO minter_state (player_id, night_id, minted, currency, tiers, taps, extra, updated_at) VALUES (?,?,?,?,?,?,?,?)
+       ON CONFLICT (player_id, night_id) DO UPDATE SET minted = excluded.minted, currency = excluded.currency, tiers = excluded.tiers, taps = excluded.taps, extra = excluded.extra, updated_at = excluded.updated_at`,
     )
-    .run(player.id, n.id, r.state.minted, r.state.credits, j.str(r.state.tiers), r.state.taps, now);
+    .run(
+      player.id,
+      n.id,
+      r.state.minted,
+      r.state.credits,
+      j.str(r.state.tiers),
+      r.state.taps,
+      j.str({ upgrades: r.state.upgrades ?? [], managers: r.state.managers ?? [], investors: r.state.investors ?? 0, rebrands: r.state.rebrands ?? 0 }),
+      now,
+    );
   scheduleLeaderboard(ctx, n.id);
   const firsts = Object.keys(r.state.tiers).filter((t) => ((r.state.tiers as Record<string, number>)[t] ?? 0) > 0 && !(((s.tiers as Record<string, number>)[t] ?? 0) > 0));
   if (firsts.length) hintsForMinter(ctx, n, player.id, firsts);

@@ -135,7 +135,7 @@ export function scheduleGame(ctx: Ctx, actor: GmAuth, input: ScheduleInput): Gam
   // The library (pack) decides how the crown works; if it doesn't say, the GM picks (default: score, higher wins).
   const leadMode: LeadMode = lib?.leadMode ?? leadModeOf(input.leadMode) ?? 'high';
   const leadLabel = lib?.leadMode ? lib.leadLabel : (leadLabelOf(input.leadLabel) ?? lib?.leadLabel ?? null);
-  return ctx.db.transaction(() => {
+  const created = ctx.db.transaction(() => {
     const r = ctx.db
       .prepare(
         "INSERT INTO game (night_id, library_game_id, name, table_id, mode, planned_start, planned_duration_hours, status, rerolls_allowed, lead_mode, lead_label) VALUES (?,?,?,?,?,?,?, 'scheduled', ?,?,?)",
@@ -147,6 +147,9 @@ export function scheduleGame(ctx: Ctx, actor: GmAuth, input: ScheduleInput): Gam
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.schedule', entity: 'game', entityId: id, after: { ...g, participants: parts } });
     return g;
   })();
+  // Scheduled for a time that has already passed, during a live night: it just starts.
+  if (n.status === 'live' && plannedStart != null && plannedStart <= ctx.now()) return startGame(ctx, actor, created.id);
+  return created;
 }
 
 export function updateScheduledGame(ctx: Ctx, actor: GmAuth, id: number, input: ScheduleInput): GameRow {

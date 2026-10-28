@@ -12,9 +12,10 @@ import { logReroll, recordMood, sendNotification, setOffset } from '../services/
 import { createRule, deleteRule, listRules, updateRule } from '../services/rules';
 import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '../services/seating';
 import { getBoard, saveBoard, setBoardSettings } from '../services/boards';
+import { chatMessages, gmChatMessages, gmChats, markChatRead, myChats, sendChat, startChat, useWiretap } from '../services/chat';
 import { deleteSound, listSounds, playSound, soundFileMime, uploadSound } from '../services/sounds';
 import { minterGet, minterSync } from '../services/minter';
-import { dismissPrompt } from '../services/prompts';
+import { answerOverrun, dismissPrompt } from '../services/prompts';
 import { statement } from '../services/recap';
 import { statementPdf } from '../services/pdf';
 import { CSV_KINDS, exportNightCsv, exportNightJson, listNights } from '../services/exports';
@@ -242,10 +243,10 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/join', async () => joinInfo(ctx));
   app.post('/api/join', async (req) => {
     const x = b(req.body);
-    const r = join(ctx, { displayName: x.displayName, ticker: x.ticker, color: x.color, avatarData: x.avatarData });
+    const r = join(ctx, { displayName: x.displayName, ticker: x.ticker, color: x.color, avatarData: x.avatarData, phoneId: x.phoneId });
     return { deviceToken: r.deviceToken, pending: r.pending, playerId: r.player?.id ?? null };
   });
-  app.post('/api/join/rejoin', async (req) => requestRejoin(ctx, b(req.body).playerId));
+  app.post('/api/join/rejoin', async (req) => requestRejoin(ctx, b(req.body).playerId, b(req.body).phoneId));
   app.get('/api/join/status', async (req) => requestStatus(ctx, req.headers['x-device-token']));
 
   // Player (device token)
@@ -307,6 +308,23 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   });
   app.post('/api/me/tips/trade-reroll', async (req) => tradeRerollForHint(ctx, device(req)));
   app.post<Id>('/api/me/challenges/:id/respond', async (req) => respondChallenge(ctx, device(req), Number(req.params.id), b(req.body).accept === true));
+  // Player chat (device auth) + wiretap reward
+  app.get('/api/me/chats', async (req) => ({ chats: myChats(ctx, device(req)) }));
+  app.post('/api/me/chats', async (req) => ({ chat: startChat(ctx, device(req), b(req.body)) }));
+  app.get<Id & { Querystring: { before?: string } }>('/api/me/chats/:id', async (req) => chatMessages(ctx, device(req), Number(req.params.id), req.query.before));
+  app.post<Id>('/api/me/chats/:id/messages', async (req) => ({ message: sendChat(ctx, device(req), Number(req.params.id), b(req.body)) }));
+  app.post<Id>('/api/me/chats/:id/read', async (req) => markChatRead(ctx, device(req), Number(req.params.id), b(req.body).upTo));
+  app.post<Id>('/api/me/challenges/:id/wiretap', async (req) => useWiretap(ctx, device(req), Number(req.params.id), b(req.body)));
+  app.get('/api/gm/chats', async (req) => {
+    requireGm(ctx, req);
+    const n = currentNight(ctx);
+    return { chats: n ? gmChats(ctx, n.id) : [] };
+  });
+  app.get<Id & { Querystring: { before?: string } }>('/api/gm/chats/:id', async (req) => {
+    requireGm(ctx, req);
+    const n = currentNight(ctx);
+    return gmChatMessages(ctx, n?.id ?? -1, Number(req.params.id), req.query.before);
+  });
   app.post<Id>('/api/me/challenges/:id/peek', async (req) => usePeek(ctx, device(req), Number(req.params.id), b(req.body).targetPlayerId));
 
   // Phase 6 — GM field actions (any GM) and Master-only market offset
@@ -362,6 +380,7 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // Phase 8 — prompts, finale, statements, exports, archive
   app.post('/api/night/prompts/dismiss', async (req) => dismissPrompt(ctx, requireGm(ctx, req), b(req.body).prompt));
+  app.post('/api/night/overrun', async (req) => answerOverrun(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
   app.post('/api/night/finale/skip', async (req) => skipFinale(ctx, requireGm(ctx, req, { master: true })));
   app.post('/api/night/finale/replay', async (req) => replayFinale(ctx, requireGm(ctx, req, { master: true })));
   app.get('/api/me/statement', async (req) => statement(ctx, device(req)));

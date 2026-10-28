@@ -4,7 +4,10 @@
   import { hours, timeOfDay } from '@shared/format';
   import { run } from '@shared/ui';
   import type { GameInfo, GmState, WhoAmI } from '@shared/types';
-  import { activePlayers, epochToTime, playerName, timeToEpoch } from '../lib';
+  import { activePlayers, confirmStart, doubleBooked, epochToTime, playerName, timeToEpoch } from '../lib';
+  import { gameClock, gameTag } from '@shared/gameTime';
+  import { onDestroy } from 'svelte';
+  import ScheduleTimeline from './ScheduleTimeline.svelte';
 
   let { gs, whoami, onresult }: { gs: GmState | null; whoami: WhoAmI; onresult: (g: GameInfo, correction: boolean) => void } = $props();
   const master = $derived(whoami.role === 'master');
@@ -80,12 +83,20 @@
       participants: picked,
       ...(leadFixed ? {} : { leadMode, leadLabel }),
     };
+    const clash = doubleBooked(gs, body.plannedStart, body.plannedDurationHours, picked, editing ?? undefined);
+    if (clash.length && !confirm(`${clash.join('\n')}\n\nSchedule anyway?`)) return;
     const r = editing ? await run(() => patch(`/api/games/${editing}`, body), 'Game updated') : await run(() => post('/api/games', body), 'Game scheduled');
     if (r) reset();
   }
   const toggle = (id: number) => (picked = picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id]);
   const statusOrder = { active: 0, scheduled: 1, final: 2, cancelled: 3 } as const;
+  let now = $state(Date.now());
+  const tick = setInterval(() => (now = Date.now()), 15_000);
+  onDestroy(() => clearInterval(tick));
+  const startGame = (g: GameInfo) => confirmStart(gs, g) && run(() => post(`/api/games/${g.id}/start`), 'Started');
 </script>
+
+<ScheduleTimeline {gs} editable={master} />
 
 {#if master}
   <form class="panel" onsubmit={save}>
@@ -144,13 +155,16 @@
   <h2>Tonight's games</h2>
   <div class="scroll-x">
     <table>
-      <thead><tr><th>Game</th><th>Status</th><th>Start</th><th>Length</th><th>Players</th><th></th></tr></thead>
+      <thead><tr><th>Game</th><th>Status</th><th>Time</th><th>Length</th><th>Players</th><th></th></tr></thead>
       <tbody>
         {#each [...games].sort((a, b) => statusOrder[a.status] - statusOrder[b.status]) as g (g.id)}
           <tr>
             <td>{g.name} <span class="muted small">{t(`modes.${g.mode}`)}</span></td>
-            <td><span class="badge" class:live={g.status === 'active'}>{g.status}</span></td>
-            <td class="small">{timeOfDay(g.startedAt ?? g.plannedStart)}</td>
+            <td>
+              <span class="badge" class:live={g.status === 'active'}>{g.status}</span>
+              {#if gameTag(g, now) === 'filibuster'}<span class="badge warn">Filibuster</span>{:else if gameTag(g, now) === 'tardy'}<span class="badge bad">Tardy</span>{/if}
+            </td>
+            <td class="small">{gameClock(g, now) || timeOfDay(g.startedAt ?? g.plannedStart)}</td>
             <td class="small mono">{hours(g.hours ?? g.plannedDurationHours)}</td>
             <td class="small">
               {#if g.status === 'final'}
@@ -162,7 +176,7 @@
             <td class="actions">
               <div class="row" style="justify-content:flex-end">
                 {#if g.status === 'scheduled'}
-                  <button disabled={gs?.night?.status !== 'live'} onclick={() => run(() => post(`/api/games/${g.id}/start`), 'Started')}>Start</button>
+                  <button disabled={gs?.night?.status !== 'live'} onclick={() => startGame(g)}>Start</button>
                 {/if}
                 {#if g.status === 'scheduled' || g.status === 'active'}
                   <button class="primary" onclick={() => onresult(g, false)}>Result</button>

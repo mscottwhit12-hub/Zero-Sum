@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { del, post } from '@shared/api';
+  import { ApiError, del, post } from '@shared/api';
   import { run } from '@shared/ui';
   import type { GmState, WhoAmI } from '@shared/types';
 
@@ -19,6 +19,31 @@
   let kind = $state<'soundboard' | 'cue' | 'ambient'>('soundboard');
   let theme = $state('');
   let file = $state<File | null>(null);
+  /** Upload progress 0–1 while sending; null when idle. */
+  let progress = $state<number | null>(null);
+  /** POST with upload progress (fetch can't report it). Errors become ApiError like the rest of the app. */
+  function sendWithProgress(url: string, body: string, onProgress: (f: number) => void): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('POST', url);
+      x.withCredentials = true;
+      x.setRequestHeader('content-type', 'application/json');
+      x.upload.onprogress = (ev) => ev.lengthComputable && onProgress(ev.loaded / ev.total);
+      x.onload = () => {
+        const data = (() => {
+          try {
+            return x.responseText ? JSON.parse(x.responseText) : {};
+          } catch {
+            return {};
+          }
+        })();
+        if (x.status >= 200 && x.status < 300) resolve(data);
+        else reject(new ApiError(x.status, data.error ?? 'error', data.message ?? data.error ?? x.statusText));
+      };
+      x.onerror = () => reject(new ApiError(0, 'network', 'Upload failed. Check the connection and try again.'));
+      x.send(body);
+    });
+  }
   async function upload(e: Event) {
     e.preventDefault();
     if (!file) return;
@@ -28,7 +53,10 @@
       r.onerror = rej;
       r.readAsDataURL(file!);
     });
-    const ok = await run(() => post('/api/sounds', { name: name || file!.name.replace(/\.\w+$/, ''), kind, theme, data }), 'Uploaded');
+    progress = 0;
+    const body = JSON.stringify({ name: name || file!.name.replace(/\.\w+$/, ''), kind, theme, data });
+    const ok = await run(() => sendWithProgress('/api/sounds', body, (f) => (progress = f)), 'Uploaded');
+    progress = null;
     if (ok) {
       name = '';
       theme = '';
@@ -82,7 +110,13 @@
         <label class="field"><span>Theme (matches a library game's sound theme)</span><input bind:value={theme} required maxlength="40" /></label>
       {/if}
     </div>
-    <div class="actions"><button class="primary" type="submit" disabled={!file}>Upload</button></div>
+    {#if progress !== null}
+      <div class="upbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(progress * 100)}>
+        <i style="width:{Math.round(progress * 100)}%"></i>
+      </div>
+      <p class="small muted">{progress < 1 ? `Uploading… ${Math.round(progress * 100)}%` : 'Saving on the server…'}</p>
+    {/if}
+    <div class="actions"><button class="primary" type="submit" disabled={!file || progress !== null}>Upload</button></div>
   </form>
 
   <section class="panel">
@@ -97,3 +131,8 @@
     {/each}
   </section>
 {/if}
+
+<style>
+  .upbar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 0.5rem; }
+  .upbar i { display: block; height: 100%; background: var(--accent); transition: width 0.15s; }
+</style>

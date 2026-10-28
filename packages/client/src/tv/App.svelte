@@ -7,10 +7,11 @@
   import { onDestroy } from 'svelte';
   import { copy, t } from '@shared/copy';
   import { feedText } from '@shared/feedText';
-  import { clock, gold, timeOfDay } from '@shared/format';
+  import { clock, goldTv, timeOfDay } from '@shared/format';
   import { connectLive, nightNow } from '@shared/socket';
   import FloorPlan from '@shared/FloorPlan.svelte';
   import TableView from './TableView.svelte';
+  import { gameClockShort } from '@shared/gameTime';
   import Sparkline from '@shared/Sparkline.svelte';
   import type { FeedItem, TvState } from '@shared/types';
   import { cueTone } from './tones';
@@ -107,7 +108,7 @@
   $effect(() => {
     const feed: FeedItem[] = s?.feed ?? [];
     const top = feed[0]?.id ?? 0;
-    if (lastFeedId >= 0) for (const f of [...feed].reverse()) if (f.id > lastFeedId && f.message === 'feed.dethroned') pushBanner(feedText(f, s!.players), 'info');
+    if (lastFeedId >= 0) for (const f of [...feed].reverse()) if (f.id > lastFeedId && f.message === 'feed.dethroned') pushBanner(feedText(f, s!.players, { tv: true }), 'info');
     lastFeedId = Math.max(lastFeedId, top);
   });
 
@@ -136,7 +137,11 @@
   rot = setTimeout(advance, PANEL_MS);
   const step = $derived(steps[Math.min(stepIdx, steps.length - 1)]!);
   const stepTable = $derived(step.kind === 'table' ? ((s?.tv?.seating ?? []).find((tb) => tb.id === step.tableId) ?? null) : null);
-  const gameName = (id: number | null) => (id == null ? '' : (s?.games.find((g) => g.id === id)?.name ?? ''));
+  /** A table's game for the TV: name plus a short clock ("1:12 in" / "at 9:00 PM"). */
+  const gameName = (id: number | null) => {
+    const g = id == null ? null : (s?.games.find((x) => x.id === id) ?? null);
+    return g ? [g.name, gameClockShort(g as never, now)].filter(Boolean).join(' · ') : '';
+  };
 
   onDestroy(() => {
     u1();
@@ -175,7 +180,7 @@
       return `${m.ticker} ${m.price.toFixed(2)} ${c >= 0 ? '▲' : '▼'}${Math.abs(c * 100).toFixed(1)}%`;
     }),
   ]);
-  const headline = $derived(s?.feed?.[0] ? feedText(s.feed[0], s.players) : '');
+  const headline = $derived(s?.feed?.[0] ? feedText(s.feed[0], s.players, { tv: true }) : '');
 
   // Ambient loop (per-game theme); silent during intermission.
   $effect(() => {
@@ -232,7 +237,7 @@
                   <td class="rank">{r.rank}</td>
                   <td>{name(r.playerId)}</td>
                   <td class="mono muted">{ticker(r.playerId)}</td>
-                  <td class="num mono">{gold(r.netWorthH)}</td>
+                  <td class="num mono">{goldTv(r.netWorthH)}</td>
                 </tr>
               {/each}
             </tbody>
@@ -284,7 +289,7 @@
                 </tbody>
               </table>
             {:else if step.kind === 'floor'}
-              <FloorPlan tables={s.tv?.seating ?? []} players={s.players} dots />
+              <FloorPlan tables={s.tv?.seating ?? []} players={s.players} dots {gameName} />
             {:else if step.kind === 'table'}
               {#if stepTable}<TableView table={stepTable} players={s.players} game={gameName(stepTable.gameId)} />{/if}
             {:else}

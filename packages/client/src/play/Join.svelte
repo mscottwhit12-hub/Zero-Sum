@@ -3,7 +3,7 @@
   import { get, post } from '@shared/api';
   import { t } from '@shared/copy';
   import { run, toast, errorText } from '@shared/ui';
-  import { prepareAvatar, setDeviceToken, setPendingToken } from './device';
+  import { phoneId, prepareAvatar, setDeviceToken, setPendingToken } from './device';
 
   let { ondone, rejoin: startRejoin = false }: { ondone: () => void; rejoin?: boolean } = $props();
   type Info = { nightName: string | null; status: string | null; mode: 'join' | 'late' | 'closed'; players: { id: number; displayName: string }[] };
@@ -48,7 +48,7 @@
   async function submit(e: Event) {
     e.preventDefault();
     busy = true;
-    const r = await run(() => post<{ deviceToken: string; pending: boolean }>('/api/join', { displayName: name, ticker, color, avatarData: avatar }));
+    const r = await run(() => post<{ deviceToken: string; pending: boolean }>('/api/join', { displayName: name, ticker, color, avatarData: avatar, phoneId: phoneId() }));
     busy = false;
     if (!r) return;
     if (r.pending) setPendingToken(r.deviceToken);
@@ -56,9 +56,11 @@
     ondone();
   }
   async function requestRejoin(playerId: number) {
-    const r = await run(() => post<{ deviceToken: string }>('/api/join/rejoin', { playerId }));
+    const r = await run(() => post<{ deviceToken: string; approved: boolean }>('/api/join/rejoin', { playerId, phoneId: phoneId() }));
     if (r) {
-      setPendingToken(r.deviceToken);
+      // Same phone the player joined on: straight back in. Otherwise wait for a GM.
+      if (r.approved) setDeviceToken(r.deviceToken);
+      else setPendingToken(r.deviceToken);
       ondone();
     }
   }

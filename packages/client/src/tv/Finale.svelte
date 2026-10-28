@@ -5,7 +5,7 @@
    * Timed from the server's recap clock (phones unlock when it ends); `replayFrom` restarts it locally.
    */
   import { t } from '@shared/copy';
-  import { gold } from '@shared/format';
+  import { goldTv } from '@shared/format';
   import type { RecapSlide, TvState } from '@shared/types';
 
   let { s, now, replayFrom }: { s: TvState; now: number; replayFrom: number | null } = $props();
@@ -30,9 +30,9 @@
     switch (x.id) {
       case 'top_trade':
       case 'best_investment':
-        return t(`tv.recap.${x.id}_body`, { player: name(x.playerId), ticker: x.ticker, gold: gold(x.profitH) });
+        return t(`tv.recap.${x.id}_body`, { player: name(x.playerId), ticker: x.ticker, gold: goldTv(x.profitH) });
       case 'worst_investment':
-        return t('tv.recap.worst_investment_body', { player: name(x.playerId), ticker: x.ticker, gold: gold(-x.profitH) });
+        return t('tv.recap.worst_investment_body', { player: name(x.playerId), ticker: x.ticker, gold: goldTv(-x.profitH) });
       case 'most_predicted':
         return t('tv.recap.most_predicted_body', { player: name(x.playerId), votes: x.votes });
       case 'long_reigns':
@@ -65,7 +65,7 @@
         <div class="step r{r}">
           {#each shown.filter((p) => p.rank === r) as p (p.playerId)}
             <div class="who">{name(p.playerId)}</div>
-            <div class="mono gold">{gold(p.goldH)}</div>
+            <div class="mono gold">{goldTv(p.goldH)}</div>
           {/each}
           <div class="block mono">{placeLabel(r)}</div>
         </div>

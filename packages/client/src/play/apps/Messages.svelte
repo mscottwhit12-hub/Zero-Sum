@@ -27,6 +27,7 @@
     if (r.type === 'gold') return t('phone.rewards.gold', { gold: r.gold ?? '' });
     if (r.type === 'hint') return t('phone.rewards.hint', { tier: t(`phone.tip_tiers.${r.tier ?? 'common'}`) });
     if (r.type === 'custom') return t('phone.rewards.custom', { text: r.text ?? '' });
+    if (r.type === 'wiretap') return t(r.mode === 'pair' ? 'phone.rewards.wiretap_pair' : 'phone.rewards.wiretap');
     return t(`phone.rewards.${r.type}`);
   }
   const scramble = (len: number) => Array.from({ length: len }, () => '▓▒░█'[Math.floor(Math.random() * 4)]).join('');
@@ -37,6 +38,13 @@
   const ticker = (id: string) => s.market.find((m) => m.id === id)?.ticker ?? id;
   const usePeek = (c: MyChallenge) => run(() => dapi('POST', `/api/me/challenges/${c.id}/peek`, { targetPlayerId: Number(peekTarget[c.id]) }));
   const nameOf = (id: number | null) => s.players.find((p) => p.id === id)?.displayName ?? '?';
+  // Wiretap tool
+  let tapA = $state<Record<number, number | ''>>({});
+  let tapB = $state<Record<number, number | ''>>({});
+  const useTap = (c: MyChallenge) =>
+    run(() => dapi('POST', `/api/me/challenges/${c.id}/wiretap`, c.wiretap?.mode === 'pair' ? { a: Number(tapA[c.id]), b: Number(tapB[c.id]) } : {}));
+  const tapThread = (th: { kind: string; name: string | null; members: number[] }, from: number) =>
+    th.kind === 'dm' ? `to ${th.members.filter((m) => m !== from).map(nameOf).join(', ')}` : `in ${th.name ?? th.members.map(nameOf).join(', ')}`;
 
   // Anonymous tips and gifts, newest first.
   const inbox = $derived(
@@ -123,6 +131,31 @@
       {/if}
       {#if c.status === 'succeeded' && c.reward.type === 'dead_clue'}
         <span class="small">{t('phone.dead_clue')}</span>
+      {/if}
+      {#if c.wiretap}
+        {#if !c.wiretap.result}
+          {#if c.wiretap.mode === 'pair'}
+            <span class="small">Pick two associates. You'll hear one random message between them.</span>
+            <div class="actions">
+              <select bind:value={tapA[c.id]} aria-label="First associate">
+                <option value="">—</option>
+                {#each others as p (p.id)}<option value={p.id}>{p.displayName}</option>{/each}
+              </select>
+              <select bind:value={tapB[c.id]} aria-label="Second associate">
+                <option value="">—</option>
+                {#each others as p (p.id)}<option value={p.id}>{p.displayName}</option>{/each}
+              </select>
+              <button class="primary" disabled={!tapA[c.id] || !tapB[c.id] || tapA[c.id] === tapB[c.id]} onclick={() => useTap(c)}>Listen in</button>
+            </div>
+          {:else}
+            <span class="small">One random message from a chat you're not in. One use.</span>
+            <div class="actions"><button class="primary" onclick={() => useTap(c)}>Listen in</button></div>
+          {/if}
+        {:else}
+          {@const r = c.wiretap.result}
+          <span class="small muted">{time(r.message.createdAt)} · {nameOf(r.message.playerId)} {tapThread(r.thread, r.message.playerId)}</span>
+          <span class="tap">“{r.message.text}”</span>
+        {/if}
       {/if}
       {#if c.peek}
         {#if !c.peek.used}

@@ -154,6 +154,8 @@ export interface Settings {
   };
   prompts: {
     tradingCloseMinutesBefore: number;
+    /** Running over: when the night's end arrives with a game running, offer to extend by that game's planned length ÷ this. */
+    overrunDivisor: number;
   };
   /** End-of-night TV sequence timing (seconds). Phones unlock when it finishes. */
   finale: {
@@ -273,7 +275,7 @@ export const DEFAULT_SETTINGS: Settings = {
   achievements: {
     gold: { first_blood: 2, hat_trick: 5, regular: 2, oracle: 1 },
   },
-  prompts: { tradingCloseMinutesBefore: 15 },
+  prompts: { tradingCloseMinutesBefore: 15, overrunDivisor: 8 },
   finale: { collapseSeconds: 10, podiumStepSeconds: 5, recapSlideSeconds: 8 },
   minter: { pauseMultiplier: 2, tvCrawlMinutes: 10 },
   hints: {
@@ -400,6 +402,7 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   need(s.espionage.revealDelayMaxSec >= s.espionage.revealDelayMinSec, 'espionage.revealDelayMaxSec', 'must be ≥ min');
   for (const [id, g] of Object.entries(s.achievements.gold)) nonNeg(g, `achievements.gold.${id}`);
   nonNeg(s.prompts.tradingCloseMinutesBefore, 'prompts.tradingCloseMinutesBefore');
+  pos(s.prompts.overrunDivisor, 'prompts.overrunDivisor');
   pos(s.finale.collapseSeconds, 'finale.collapseSeconds');
   pos(s.finale.podiumStepSeconds, 'finale.podiumStepSeconds');
   pos(s.finale.recapSlideSeconds, 'finale.recapSlideSeconds');

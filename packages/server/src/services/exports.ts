@@ -5,6 +5,7 @@
  */
 import { scoreGame } from '@gn/engine';
 import { j } from '../db';
+import { chatExport } from './chat';
 import { notFound, type Ctx } from '../context';
 import { masterOnly, type GmAuth } from './gm';
 import { computeNightState, currentNight, getNight, loadResults, nightOverrides, nightSettings } from './state';
@@ -66,6 +67,8 @@ export function exportNightJson(ctx: Ctx, actor: GmAuth, nightId?: unknown) {
       reward: j.parse(c.reward, {}),
     })),
     notifications: q('SELECT target, message, created_at AS createdAt FROM notification WHERE night_id = ? ORDER BY id'),
+    // Player chat, every message with its time (GM export only).
+    chat: chatExport(ctx, n.id),
     minter: q('SELECT player_id AS playerId, CAST(minted AS INTEGER) AS minted, tiers FROM minter_state WHERE night_id = ?'),
     standingsSnapshots: q<{ data: string; createdAt: number }>('SELECT data, created_at AS createdAt FROM standings_snapshot WHERE night_id = ? ORDER BY id').map((s) => ({ createdAt: s.createdAt, standings: JSON.parse(s.data) })),
     feed: q<{ data: string }>('SELECT type, message, data, gm_only AS gmOnly, created_at AS createdAt FROM feed_event WHERE night_id = ? ORDER BY id').map((f) => ({ ...f, data: j.parse(f.data, {}) })),

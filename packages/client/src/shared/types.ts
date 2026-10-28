@@ -203,7 +203,7 @@ export interface GmExtras {
   boardSettings: Record<string, Record<string, number>>;
   sounds: SoundInfo[];
   ambient: { current: Ambient | null; off: boolean };
-  prompts: { closeTradingAt: number | null; endNight: boolean };
+  prompts: { closeTradingAt: number | null; endNight: boolean; overrun: { gameId: number; name: string; extendMinutes: number } | null };
   tips: { id: number; playerId: number; hintId: string; tier: TipTier; source: string; costH: number; nightMs: number; createdAt: number; read: boolean }[];
   handicap: {
     autoEnabled: boolean;
@@ -220,13 +220,35 @@ export interface VoteInfo {
   quarterEndsNms: number | null;
   myTarget: number | null;
 }
-export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint';
+export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap';
 export type TipTier = 'common' | 'rarer' | 'rarest';
 export interface Reward {
   type: RewardType;
   gold?: number;
   text?: string;
   tier?: TipTier;
+  /** wiretap: one random message from any chat, or between two players the holder picks */
+  mode?: 'any' | 'pair';
+}
+export interface ChatMessage {
+  id: number;
+  threadId: number;
+  playerId: number;
+  text: string;
+  createdAt: number;
+}
+export interface ChatThread {
+  id: number;
+  kind: 'dm' | 'group';
+  name: string | null;
+  members: number[];
+  last: ChatMessage | null;
+  unread: number;
+  count: number;
+}
+export interface WiretapResult {
+  message: ChatMessage;
+  thread: { kind: 'dm' | 'group'; name: string | null; members: number[] };
 }
 export type ChallengeStatus = 'sent' | 'read' | 'accepted' | 'rejected' | 'succeeded' | 'failed' | 'reassigned';
 export interface GmChallenge {
@@ -252,6 +274,7 @@ export interface MyChallenge {
   reward: Reward;
   createdAt: number;
   peek: { used: boolean; targetId: number | null; trades: PeekTrade[] } | null;
+  wiretap: { mode: 'any' | 'pair'; result: WiretapResult | null } | null;
 }
 export interface WhoAmI {
   name: string;
@@ -284,6 +307,8 @@ export interface Me {
   holdings: Holding[];
   achievements: { type: string; createdAt: number }[];
   messages: { id: number; message: string; createdAt: number; read: boolean }[];
+  /** Unread player-chat messages. */
+  chatUnread: number;
   trades: { securityId: string; side: 'buy' | 'sell'; sharesH: number; price: number; cashH: number; feeH: number; forced: number; createdAt: number }[];
   vote: VoteInfo | null;
   challenges: MyChallenge[];

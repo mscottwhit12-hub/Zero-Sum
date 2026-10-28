@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { post } from '@shared/api';
+  import { patch, post } from '@shared/api';
   import { t } from '@shared/copy';
   import { clock, gold, hours, timeOfDay } from '@shared/format';
   import { nightNow } from '@shared/socket';
   import { run } from '@shared/ui';
   import type { GameInfo, GmState, WhoAmI } from '@shared/types';
-  import { playerName } from '../lib';
+  import { confirmStart, playerName } from '../lib';
+  import { gameClock, gameTag } from '@shared/gameTime';
   import ScoreEntry from './ScoreEntry.svelte';
+  import NightTimeline from './NightTimeline.svelte';
 
   let { gs, whoami, onresult }: { gs: GmState | null; whoami: WhoAmI; onresult: (g: GameInfo) => void } = $props();
   const master = $derived(whoami.role === 'master');
@@ -46,11 +48,18 @@
   const promptLead = $derived((((gs?.gm?.settings.resolved as { prompts?: { tradingCloseMinutesBefore: number } })?.prompts?.tradingCloseMinutesBefore) ?? 15) * 60_000);
   let starting = $state<number | null>(null);
   const start = async (g: GameInfo) => {
-    if (starting === g.id) return;
+    if (starting === g.id || !confirmStart(gs, g)) return;
     starting = g.id;
     await run(() => post(`/api/games/${g.id}/start`), `${g.name} started`);
     starting = null;
   };
+  // Night length (Master): started quarters keep their times, later ones re-spread over the new remaining time.
+  let editLen = $state<number | null>(null);
+  async function saveLength() {
+    if (editLen == null) return;
+    const r = await run(() => patch('/api/night', { lengthMinutes: Math.round(Number(editLen)) }), 'Night length saved');
+    if (r) editLen = null;
+  }
 </script>
 
 {#if !night}
@@ -75,7 +84,17 @@
           <span class="badge" class:live={night.status === 'live'} class:warn={night.status === 'paused'}>{t(`status.${night.status}`)}</span>
           {#if night.tradingClosed}<span class="badge warn">Trading closed</span>{/if}
           <span class="mono">{clock(nightNow(night, now))}</span>
-          <span class="muted">/ {Math.floor(night.lengthMinutes / 60)}h{String(night.lengthMinutes % 60).padStart(2, '0')}</span>
+          {#if master && editLen !== null}
+            <form class="row" onsubmit={(e) => (e.preventDefault(), saveLength())}>
+              <input class="mono" type="number" min="30" max="1440" step="5" bind:value={editLen} style="width:6rem" aria-label="Night length in minutes" />
+              <span class="muted">min</span>
+              <button class="primary" type="submit">Save</button>
+              <button type="button" onclick={() => (editLen = null)}>Cancel</button>
+            </form>
+          {:else}
+            <span class="muted">/ {Math.floor(night.lengthMinutes / 60)}h{String(night.lengthMinutes % 60).padStart(2, '0')}</span>
+            {#if master && night.status !== 'ended' && night.status !== 'archived'}<button class="small" title="Change the night length" onclick={() => (editLen = night.lengthMinutes)}>Edit length</button>{/if}
+          {/if}
           <span class="muted">· {quarterLabel}</span>
           <span class="muted">· {gs?.players.length ?? 0} players</span>
         </div>
@@ -159,15 +178,17 @@
   {/if}
 
   <section>
+    <NightTimeline {gs} {now} />
     <h2>Active games</h2>
     {#if !active.length}<p class="muted panel">No games running.</p>{/if}
     <div class="grid2">
       {#each active as g (g.id)}
         <div class="panel">
           <div class="spread">
-            <strong>{g.name}</strong>
+            <span><strong>{g.name}</strong>{#if gameTag(g, now) === 'filibuster'} <span class="badge warn">Filibuster</span>{/if}</span>
             <span class="muted small mono">{hours(g.hours)}{g.plannedDurationHours ? ` / ${hours(g.plannedDurationHours)}` : ''}</span>
           </div>
+          <p class="small muted clockline">{gameClock(g, now)}</p>
           {#if g.leadMode === 'manual'}
             <p class="small muted">Tap the current leader</p>
             <div class="row">
@@ -200,8 +221,8 @@
       <tbody>
         {#each upcoming as g (g.id)}
           <tr>
-            <td>{g.name}</td>
-            <td class="muted small">{timeOfDay(g.plannedStart)}</td>
+            <td>{g.name} {#if gameTag(g, now) === 'tardy'}<span class="badge bad">Tardy</span>{/if}</td>
+            <td class="muted small">{gameClock(g, now)}</td>
             <td class="muted small">{g.participants.map((p) => playerName(gs, p.playerId)).join(', ') || 'No players yet'}</td>
             <td class="actions">
               <button disabled={night.status !== 'live' || starting === g.id} onclick={() => start(g)}>Start</button>

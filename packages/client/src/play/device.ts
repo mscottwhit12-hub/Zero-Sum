@@ -28,6 +28,18 @@ export const pendingToken = () => safe.get(PENDING);
 export const setPendingToken = (t: string | null) => safe.set(PENDING, t);
 export const store = safe;
 
+/** A permanent random id for this phone. Kept after signing out, so rejoining on the same phone needs no approval. */
+export function phoneId(): string {
+  let id = safe.get('gn_phone');
+  if (!id || !/^[A-Za-z0-9_-]{16,64}$/.test(id)) {
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    id = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    safe.set('gn_phone', id);
+  }
+  return id;
+}
+
 /** API call authenticated as this device. */
 export async function dapi<T = unknown>(method: string, url: string, body?: unknown, token = deviceToken()): Promise<T> {
   const res = await fetch(url, {

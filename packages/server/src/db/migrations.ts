@@ -460,4 +460,45 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE reroll_use ADD COLUMN request_id TEXT;
   CREATE UNIQUE INDEX reroll_use_request ON reroll_use(request_id) WHERE request_id IS NOT NULL;
   `,
+  /* 11 — the phone a player joined on (hashed permanent phone id), for auto-approved rejoins */ `
+  ALTER TABLE player ADD COLUMN home_phone_hash TEXT;
+  `,
+  /* 12 — stored quarter plan after the night length changes mid-night (started quarters keep their times) */ `
+  ALTER TABLE night ADD COLUMN quarter_plan TEXT;
+  `,
+  /* 13 — player chat (one-to-one + groups; every message kept with its time) and the wiretap memo reward */ `
+  CREATE TABLE chat_thread (
+    id INTEGER PRIMARY KEY,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    kind TEXT NOT NULL CHECK (kind IN ('dm','group')),
+    name TEXT,
+    created_by INTEGER REFERENCES player(id),
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX chat_thread_night ON chat_thread(night_id);
+  CREATE TABLE chat_member (
+    thread_id INTEGER NOT NULL REFERENCES chat_thread(id) ON DELETE CASCADE,
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    last_read_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (thread_id, player_id)
+  );
+  CREATE INDEX chat_member_player ON chat_member(player_id);
+  CREATE TABLE chat_message (
+    id INTEGER PRIMARY KEY,
+    thread_id INTEGER NOT NULL REFERENCES chat_thread(id) ON DELETE CASCADE,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    text TEXT NOT NULL,
+    client_id TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX chat_message_thread ON chat_message(thread_id, id);
+  CREATE INDEX chat_message_night ON chat_message(night_id, id);
+  CREATE UNIQUE INDEX chat_message_client ON chat_message(player_id, client_id) WHERE client_id IS NOT NULL;
+  ALTER TABLE challenge ADD COLUMN wiretap_message_id INTEGER;
+  ALTER TABLE challenge ADD COLUMN wiretap_pair TEXT;
+  `,
+  /* 14 — NFT Minter idle features: upgrades, managers, investors (JSON) */ `
+  ALTER TABLE minter_state ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
+  `,
 ];

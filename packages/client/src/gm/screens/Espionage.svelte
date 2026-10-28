@@ -14,17 +14,19 @@
   let rewardGold = $state<number | ''>('');
   let rewardText = $state('');
   let rewardTier = $state<'common' | 'rarer' | 'rarest'>('common');
+  let rewardTap = $state<'any' | 'pair'>('any');
   const REWARDS: { id: RewardType; label: string }[] = [
     { id: 'gold', label: 'Gold' },
     { id: 'reroll', label: 'Re-roll' },
     { id: 'peek', label: 'Peek' },
     { id: 'dead_clue', label: 'Dead-stock clue' },
     { id: 'hint', label: 'Mechanic tip' },
+    { id: 'wiretap', label: 'Wiretap' },
     { id: 'custom', label: 'Custom' },
   ];
   async function assign(e: Event) {
     e.preventDefault();
-    const reward = rewardType === 'gold' ? { type: 'gold', gold: rewardGold === '' ? undefined : Number(rewardGold) } : rewardType === 'custom' ? { type: 'custom', text: rewardText } : rewardType === 'hint' ? { type: 'hint', tier: rewardTier } : { type: rewardType };
+    const reward = rewardType === 'gold' ? { type: 'gold', gold: rewardGold === '' ? undefined : Number(rewardGold) } : rewardType === 'custom' ? { type: 'custom', text: rewardText } : rewardType === 'hint' ? { type: 'hint', tier: rewardTier } : rewardType === 'wiretap' ? { type: 'wiretap', mode: rewardTap } : { type: rewardType };
     const r = await run(() => post('/api/challenges', { playerId: Number(playerId), text, reward }), 'Memo sent');
     if (r) {
       text = '';
@@ -58,6 +60,13 @@
     {:else if rewardType === 'hint'}
       <label class="field"><span>Tip tier</span>
         <select bind:value={rewardTier}><option value="common">Common</option><option value="rarer">Rarer</option><option value="rarest">Rarest</option></select>
+      </label>
+    {:else if rewardType === 'wiretap'}
+      <label class="field"><span>Wiretap</span>
+        <select bind:value={rewardTap}>
+          <option value="any">One random message from any chat</option>
+          <option value="pair">One random message between two players they pick (stronger)</option>
+        </select>
       </label>
     {:else if rewardType === 'custom'}
       <label class="field"><span>Custom reward (granted by hand)</span><input maxlength="200" bind:value={rewardText} required /></label>

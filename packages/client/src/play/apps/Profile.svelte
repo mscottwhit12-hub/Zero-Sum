@@ -22,7 +22,7 @@
 </div>
 <div class="panel small">
   <p class="muted">This phone is signed in as you. To use another phone, choose “Return to my desk” on it and the GM will approve it.</p>
-  <button class="danger" onclick={() => confirm('Sign this phone out? You will need GM approval to come back.') && (setDeviceToken(null), onsignout())}>Sign out this phone</button>
+  <button class="danger" onclick={() => confirm('Sign this phone out? You can come straight back on this phone; another phone needs GM approval.') && (setDeviceToken(null), onsignout())}>Sign out this phone</button>
 </div>
 
 <style>

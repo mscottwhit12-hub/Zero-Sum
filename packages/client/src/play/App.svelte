@@ -10,6 +10,7 @@
   import Feed from './apps/Feed.svelte';
   import Market from './apps/Market.svelte';
   import Messages from './apps/Messages.svelte';
+  import Chat from './apps/Chat.svelte';
   import Profile from './apps/Profile.svelte';
   import Rules from './apps/Rules.svelte';
   import Standings from './apps/Standings.svelte';
@@ -40,6 +41,7 @@
     { id: 'market', icon: '↗' },
     { id: 'standings', icon: '≡' },
     { id: 'messages', icon: '✉' },
+    { id: 'chat', icon: '❝' },
     { id: 'feed', icon: '☰' },
     { id: 'rules', icon: '§' },
     { id: 'profile', icon: '☺' },
@@ -48,15 +50,27 @@
   const funApp = (id: string | null) => FUN_APPS.find((f) => f.id === id) ?? null;
   let lockApp = $state<string | null>(null);
 
+  let routedAs: string | null = null;
   function route() {
     stopPoll();
-    if (deviceToken()) {
+    const tok = deviceToken();
+    // A different account (or none) on this phone: start on the home screen, never inside the last account's app.
+    if (tok !== routedAs) {
+      app = null;
+      routedAs = tok;
+    }
+    if (tok) {
       phase = 'phone';
       connect();
     } else if (pendingToken()) {
       phase = 'waiting';
       startPoll();
     } else phase = 'join';
+  }
+  // Another tab on this browser signed in as someone else: identity is per browser, so follow it rather than mix
+  // two accounts in one tab (e.g. a Minter syncing taps under the wrong player).
+  function onStorage(e: StorageEvent) {
+    if (e.key === 'gn_device' && e.newValue !== routedAs) location.reload();
   }
 
   async function boot() {
@@ -87,6 +101,7 @@
         live?.close();
         route();
       },
+      'chat:message': (d) => window.dispatchEvent(new CustomEvent('gn:chat', { detail: d })),
       'vote:bounty': (d) => toast(t('phone.vote_bounty', { gold: signedGold((d as { goldH: number }).goldH) })),
       'espionage:result': (d) => toast((d as { success: boolean }).success ? t('phone.espionage_success') : t('phone.espionage_fail'), (d as { success: boolean }).success ? 'ok' : 'error'),
       'achievement:new': (d) => {
@@ -122,8 +137,12 @@
   }
   const stopPoll = () => poll && (clearInterval(poll), (poll = null));
 
-  onMount(boot);
+  onMount(() => {
+    window.addEventListener('storage', onStorage);
+    void boot();
+  });
   onDestroy(() => {
+    window.removeEventListener('storage', onStorage);
     live?.close();
     unsub.forEach((u) => u());
     stopPoll();
@@ -161,10 +180,11 @@
     if (app === 'vote' && !voteOpen && vote == null) app = null;
   });
   const unseenFeed = $derived((s?.feed ?? []).filter((f) => f.id > feedSeen).length);
-  const badges = $derived<Record<string, number>>({ messages: unreadMessages, feed: unseenFeed, vote: voteBadge });
+  const chatUnread = $derived(s?.me?.chatUnread ?? 0);
+  const badges = $derived<Record<string, number>>({ messages: unreadMessages, chat: chatUnread, feed: unseenFeed, vote: voteBadge });
   let lastTotal = -1;
   $effect(() => {
-    const total = unreadMessages + unseenFeed + voteBadge;
+    const total = unreadMessages + chatUnread + unseenFeed + voteBadge;
     if (lastTotal >= 0 && total > lastTotal) navigator.vibrate?.(60);
     lastTotal = total;
   });
@@ -263,6 +283,7 @@
         {:else if app === 'market'}<Market {s} />
         {:else if app === 'standings'}<Standings {s} />
         {:else if app === 'messages'}<Messages {s} />
+        {:else if app === 'chat'}<Chat {s} />
         {:else if app === 'feed'}<Feed {s} />
         {:else if app === 'rules'}<Rules {s} />
         {:else if app === 'profile'}<Profile {s} onsignout={() => { live?.close(); route(); }} />
