@@ -13,6 +13,30 @@
       "leadMode": "high",
       "leadLabel": "Reinforcements",
       "board": "risk"
+    },
+    {
+      "name": "Ticket to Ride",
+      "minPlayers": 2,
+      "maxPlayers": 5,
+      "defaultDuration": 1,
+      "mode": "competitive",
+      "rerollsAllowed": false,
+      "color": "#1c7ed6",
+      "leadMode": "high",
+      "leadLabel": "Final score",
+      "board": "ticket-to-ride"
+    },
+    {
+      "name": "Ticket to Ride: Europe",
+      "minPlayers": 2,
+      "maxPlayers": 5,
+      "defaultDuration": 1,
+      "mode": "competitive",
+      "rerollsAllowed": false,
+      "color": "#2f9e44",
+      "leadMode": "high",
+      "leadLabel": "Final score",
+      "board": "ticket-to-ride-europe"
     }
   ]
 }

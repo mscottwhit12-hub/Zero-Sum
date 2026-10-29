@@ -248,6 +248,34 @@ export function importPack(ctx: Ctx, actor: GmAuth | null, pack: unknown): { add
   return { added, updated };
 }
 
+/**
+ * Bundled classic games (with GM boards): each game is added once, by name, so games added in later versions reach
+ * existing installs too. A game the GM deletes is not re-added (its flag stays).
+ */
+export function seedClassics(ctx: Ctx, packFile: string): number {
+  let pack: { games?: { name?: unknown }[] };
+  try {
+    pack = JSON.parse(readFileSync(packFile, 'utf8'));
+  } catch {
+    return 0;
+  }
+  let added = 0;
+  for (const g of pack.games ?? []) {
+    if (typeof g.name !== 'string') continue;
+    const flag = `classic:${g.name}`;
+    if (ctx.db.prepare('SELECT 1 FROM meta WHERE key = ?').get(flag)) continue;
+    // Installs that ran the old once-only seed already have the games from that pack.
+    if (ctx.db.prepare("SELECT 1 FROM meta WHERE key = 'classics_seeded'").get() && g.name === 'Risk') {
+      ctx.db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(flag, String(ctx.now()));
+      continue;
+    }
+    importPack(ctx, null, { format: PACK_FORMAT, games: [g] });
+    ctx.db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(flag, String(ctx.now()));
+    added++;
+  }
+  return added;
+}
+
 /** First boot only: load the bundled generic examples. Never re-seeds after that (even if the library is emptied). */
 export function seedLibraryOnce(ctx: Ctx, packFile: string, flag = 'library_seeded'): boolean {
   if (ctx.db.prepare('SELECT 1 FROM meta WHERE key = ?').get(flag)) return false;

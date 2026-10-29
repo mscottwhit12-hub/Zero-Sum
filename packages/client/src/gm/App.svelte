@@ -279,7 +279,12 @@
   }
   .bottom button {
     min-height: 48px;
+    min-width: 0;
     border-color: transparent;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-inline: 0.3rem;
   }
   .more {
     position: fixed;

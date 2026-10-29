@@ -4,7 +4,7 @@ import { buildApp } from './app';
 import type { Config } from './context';
 import { openDb } from './db';
 import { startTickLoop } from './tickLoop';
-import { seedLibraryOnce } from './services/library';
+import { seedLibraryOnce, seedClassics } from './services/library';
 import { loadBlocklist } from './services/players';
 import { seedRulesOnce } from './services/rules';
 import { loopIntervalMs, parseTimeScale, scaledClock } from './timeScale';
@@ -24,7 +24,7 @@ const { app, ctx } = await buildApp({ db, config, logger: true, clientDir, now: 
 if (timeScale !== 1) app.log.warn(`TEST MODE: ZS_TIME_SCALE=${timeScale}. The server clock runs ${timeScale}x real time. Do not use with a real night.`);
 seedLibraryOnce(ctx, process.env.SAMPLE_LIBRARY ?? fileURLToPath(new URL('../../../assets/sample-library.json', import.meta.url)));
 // Classic games with GM boards (Risk, …): added once, so existing installs get them too.
-seedLibraryOnce(ctx, process.env.CLASSICS_LIBRARY ?? fileURLToPath(new URL('../../../assets/classics.json', import.meta.url)), 'classics_seeded');
+seedClassics(ctx, process.env.CLASSICS_LIBRARY ?? fileURLToPath(new URL('../../../assets/classics.json', import.meta.url)));
 seedRulesOnce(ctx, process.env.HOUSE_RULES ?? fileURLToPath(new URL('../../../assets/house-rules.json', import.meta.url)));
 loadBlocklist(process.env.NAME_BLOCKLIST ?? fileURLToPath(new URL('../../../assets/name-blocklist.txt', import.meta.url)));
 const stop = startTickLoop(ctx, loopIntervalMs(timeScale));

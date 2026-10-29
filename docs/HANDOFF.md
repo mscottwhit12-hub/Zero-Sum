@@ -239,6 +239,11 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - **Sound upload** shows a progress bar.
 - Tests: client 51, engine 116, server 90, sim 4. Browser: `e2e/features/run.mjs` (21 checks), `r11` (5).
 
+### 4c. Ticket to Ride boards (No, Oct 28)
+- Two boards: `ticket-to-ride` (USA) and `ticket-to-ride-europe` (stations). Final-score boards: trains left (final-round warning), last turn done, the final score the players count, tickets (tie-break), optional points breakdown and a copyable stats report. No live leader: the crown sees scores only once every player has one; a tie at the top keeps no crown (locked rule).
+- Classic games now seed **per game by name** (`seedClassics`, meta `classic:<name>`), so new classics reach existing installs; deleted ones stay deleted.
+- Bug log: `docs/boards/ttr-bug-log.xlsx`. Browser test `e2e/boards/ttr.mjs` (8 checks). Client tests now 198 (Risk + both TTR).
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
