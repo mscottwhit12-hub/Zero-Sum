@@ -244,6 +244,11 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - Screen scripts unchanged; only markup/CSS. Browser tests now select by the new class names: `button.app`, `.nb`, `button.r`/`span.t`, `button.pick`, `button.tipc`/`.rd`.
 - Open (Server's next drop): serif digits/apostrophes, Minter button size, toasts over dock, stamp overflow. Claude: move the new hardcoded English to copy. TV theme is phase 2.
 
+### 4e. iPhone home-screen app (Oct 29)
+- `/play` is installable on iPhone (Share → Add to Home Screen): opens full screen, dark status bar, Zero-Sum icon. Files: `packages/client/public/` (manifest, icons), tags in `play.html`. GM/TV not installable.
+- iPhone Safari shows a dismissible hint on the join screen to add to the home screen **before** joining: the home-screen app has its own storage, so a player who joined in Safari would need a GM-approved rejoin there.
+- No service worker / offline (the app needs the server; avoids stale builds). Android: over plain http it's only a shortcut; a real Android app is a later idea (Tate).
+
 ### 4c. Ticket to Ride boards (No, Oct 28)
 - Two boards: `ticket-to-ride` (USA) and `ticket-to-ride-europe` (stations). Final-score boards: trains left (final-round warning), last turn done, the final score the players count, tickets (tie-break), optional points breakdown and a copyable stats report. No live leader: the crown sees scores only once every player has one; a tie at the top keeps no crown (locked rule).
 - Classic games now seed **per game by name** (`seedClassics`, meta `classic:<name>`), so new classics reach existing installs; deleted ones stay deleted.

@@ -190,3 +190,7 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 .phone .toasts { bottom: calc(max(env(safe-area-inset-bottom, 0px), 24px) + 20px); }
 .phone .toasts .toast { background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: 14px; padding: 0.7rem 1rem; font-size: 0.85rem; }
 .phone .toasts .toast.error { background: var(--panel); color: var(--text); border-color: var(--bad); }
+
+/* iPhone add-to-home-screen hint (Join) */
+.phone .a2hs { margin: 0 0 1rem; padding: 0.8rem 0.9rem; border: 1px solid var(--accent); border-radius: 12px; }
+.phone .a2hs p { margin: 0.35rem 0 0.6rem; color: var(--muted); }

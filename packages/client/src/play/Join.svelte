@@ -15,6 +15,8 @@
   let color = $state('#4c6ef5');
   let avatar = $state<string | null>(null);
   let busy = $state(false);
+  // iPhone Safari (not the home-screen app): suggest installing first, since the home-screen app keeps its own storage.
+  let a2hs = $state(typeof navigator !== 'undefined' && (navigator as Navigator & { standalone?: boolean }).standalone === false);
   const COLORS = ['#4c6ef5', '#2f9e44', '#e8590c', '#ae3ec9', '#1098ad', '#c92a2a', '#5c940d', '#495057'];
 
   onMount(() => {
@@ -84,6 +86,13 @@
     <p class="muted">{t('phone.closed')}</p>
     {#if info.players.length}<button onclick={() => (rejoin = true)}>{t('landing.rejoin')}</button>{/if}
   {:else}
+    {#if a2hs}
+      <div class="a2hs panel">
+        <strong>{t('phone.a2hs_title')}</strong>
+        <p class="small">{t('phone.a2hs_body')}</p>
+        <button class="small" onclick={() => (a2hs = false)}>{t('phone.a2hs_dismiss')}</button>
+      </div>
+    {/if}
     <h1>{info.mode === 'join' ? t('phone.join_title') : t('phone.join_late')}</h1>
     {#if info.nightName}<p class="muted small">{info.nightName}</p>{/if}
     <form onsubmit={submit}>
