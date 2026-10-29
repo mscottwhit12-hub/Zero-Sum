@@ -31,6 +31,7 @@ for r in e2e/rounds/r*.mjs; do NODE_PATH=$(npm root -g) node $r; done   # all te
 | features (`e2e/features/run.mjs`) | Oct 28 round: gold 0.01/TV 0.1, Dashboard timeline + length edit, time guards, schedule drag + clashes, seating timing, chat + GM read, wiretap, Minter rework, upload progress |
 | pwa (`e2e/features/pwa.mjs`) | iPhone home-screen app: manifest + icons served, iPhone tags on /play only, Add to Home Screen hint only in iPhone Safari, joining from the home-screen app |
 | ttr (`e2e/boards/ttr.mjs`) | Ticket to Ride USA + Europe boards in the real app: library entries, render on laptop/phone, final scores saved, tie keeps no crown, recap on phones |
+| monopoly (`e2e/boards/monopoly.mjs`) | Monopoly board in the real app: library entry ("Assets" crown), properties given on the board are saved, crown follows assets, bankruptcy, phone width, call time, recap on phones |
 | boards (`e2e/boards/run.mjs`) | Risk board end to end: tab appears, edits save and move the crown, re-roll spends once, eliminator takes territories, second GM syncs, result pre-fill, recap on phones |
 
 **Known false positives** (checked by hand; not app bugs): r03 "selling locked…" and "past the invest cap" (the app

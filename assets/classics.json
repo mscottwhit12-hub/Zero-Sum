@@ -37,6 +37,18 @@
       "leadMode": "high",
       "leadLabel": "Final score",
       "board": "ticket-to-ride-europe"
+    },
+    {
+      "name": "Monopoly",
+      "minPlayers": 2,
+      "maxPlayers": 8,
+      "defaultDuration": 3,
+      "mode": "competitive",
+      "rerollsAllowed": true,
+      "color": "#2b8a3e",
+      "leadMode": "high",
+      "leadLabel": "Assets",
+      "board": "monopoly"
     }
   ]
 }

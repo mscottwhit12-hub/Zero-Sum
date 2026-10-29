@@ -98,12 +98,12 @@ try {
   const chatBadge = await pb.locator('button.app', { hasText: 'Chat' }).locator('.nb').textContent().catch(() => '');
   R.check(chatBadge === '1', 'chat', 'the other player gets an unread badge', String(chatBadge));
   await openApp(pb, 'Chat'); await sleep(600);
-  await pb.locator('button.r').first().click(); await sleep(800);
+  await pb.locator('button.row-btn').first().click(); await sleep(800);
   R.check(((await pb.locator('.msgs').textContent()) ?? '').includes('Sell CAT before the poll'), 'chat', 'the message arrives');
   await pb.getByLabel('Message').fill('Deal'); await pb.getByRole('button', { name: 'Send' }).click(); await sleep(1500);
   R.check(((await pa.locator('.msgs').textContent()) ?? '').includes('Deal'), 'chat', 'replies show live on the other phone');
   await gmRoute(gp, 'chats'); await sleep(1000);
-  await gp.locator('button.r').first().click(); await sleep(800);
+  await gp.locator('button.row-btn').first().click(); await sleep(800);
   const gmChat = (await gp.locator('table').last().textContent()) ?? '';
   R.check(gmChat.includes('Sell CAT') && gmChat.includes('Deal'), 'chat', 'GMs can read the chat with times');
   await shot(gp, '05-gm-chats');
