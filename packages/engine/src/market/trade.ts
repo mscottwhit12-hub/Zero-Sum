@@ -12,6 +12,17 @@ export interface Lot {
   /** Night-clock ms. */
   createdAt: number;
   unlockAt: number;
+  /**
+   * Short ("inverse share"): the player staked gold at `entry`; the position is worth sharesH × (2·entry − price),
+   * never below 0. Gains the stock's % drop, loses its % rise, loss capped at the stake.
+   */
+  short?: boolean;
+  entry?: number;
+}
+
+/** Per-share value of a position at `price`: the price for a long, the inverse-share value for a short. */
+export function positionPrice(price: number, short?: boolean, entry?: number): number {
+  return short ? Math.max(0, 2 * (entry ?? price) - price) : price;
 }
 
 export interface TradeRecord {
@@ -27,6 +38,8 @@ export interface TradeRecord {
   basisH?: GoldH;
   realizedH?: GoldH;
   forced?: boolean;
+  /** Short position: side 'sell' opens it (sell short), side 'buy' closes it (buy to cover). */
+  short?: boolean;
 }
 
 export type TradeError =
@@ -37,7 +50,8 @@ export type TradeError =
   | 'over_cap'
   | 'too_small'
   | 'no_shares'
-  | 'locked';
+  | 'locked'
+  | 'own_stock';
 
 export interface TradeGate {
   /** False while paused or after trading closes. */
@@ -144,7 +158,7 @@ export function sell(input: SellInput, settings: Settings): SellResult {
   const g = gateCheck(input.gate);
   if (g) return g;
   const now = input.gate.now;
-  const mine = input.lots.filter((l) => l.playerId === input.playerId && l.securityId === input.security.id && l.sharesH > 0);
+  const mine = input.lots.filter((l) => l.playerId === input.playerId && l.securityId === input.security.id && l.sharesH > 0 && !l.short);
   const total = mine.reduce((a, l) => a + l.sharesH, 0);
   if (total === 0) return { ok: false, error: 'no_shares' };
   const unlocked = unlockedSharesH(mine, now);
@@ -205,7 +219,7 @@ export function liquidateAll(lots: Lot[], priceBySecurity: Map<string, number>, 
   const groups = new Map<string, Lot[]>();
   for (const l of lots) {
     if (l.sharesH <= 0) continue;
-    const k = `${l.playerId}\u0000${l.securityId}`;
+    const k = `${l.playerId}\u0000${l.securityId}\u0000${l.short ? 's' : 'l'}`;
     const g = groups.get(k) ?? [];
     g.push(l);
     groups.set(k, g);
@@ -217,13 +231,13 @@ export function liquidateAll(lots: Lot[], priceBySecurity: Map<string, number>, 
     if (price === undefined) throw new Error(`no price for ${first.securityId}`);
     const sharesH = g.reduce((a, l) => a + l.sharesH, 0);
     const basisH = g.reduce((a, l) => a + l.costBasisH, 0);
-    const grossH = valueH(sharesH, price);
+    const grossH = g.reduce((a, l) => a + valueH(l.sharesH, positionPrice(price, l.short, l.entry)), 0);
     const feeH = grossH > basisH ? Math.round((grossH - basisH) * profitFeeFrac) : 0;
     const cashH = grossH - feeH;
     trades.push({
       playerId: first.playerId,
       securityId: first.securityId,
-      side: 'sell',
+      side: first.short ? 'buy' : 'sell',
       sharesH,
       price,
       cashH,
@@ -231,7 +245,93 @@ export function liquidateAll(lots: Lot[], priceBySecurity: Map<string, number>, 
       basisH,
       realizedH: cashH - basisH,
       forced: true,
+      ...(first.short ? { short: true } : {}),
     });
   }
   return trades;
+}
+
+export interface ShortInput {
+  playerId: string;
+  security: SecurityState;
+  /** Gold staked (hundredths), fee included. */
+  goldH: GoldH;
+  cashH: GoldH;
+  lots: Lot[];
+  gate: TradeGate;
+  lotId: string;
+}
+
+/**
+ * Open a short (inverse share) by gold amount: same minimum, fee, invest cap (shared with longs) and lockout as a buy.
+ * Price impact is a sale's. Your own stock can't be shorted.
+ */
+export function openShort(input: ShortInput, settings: Settings): BuyResult {
+  if (input.security.kind === 'player' && input.security.playerId === input.playerId) return { ok: false, error: 'own_stock' };
+  const g = gateCheck(input.gate);
+  if (g) return g;
+  const m = settings.market;
+  if (input.goldH < toH(m.minTrade)) return { ok: false, error: 'below_minimum' };
+  if (input.goldH > input.cashH) return { ok: false, error: 'insufficient_gold' };
+  const price = fillPrice(input.security, 'sell', settings);
+  const feeOnRequest = Math.round(input.goldH * m.feeFrac);
+  const sharesH = Math.floor((input.goldH - feeOnRequest) / price);
+  if (sharesH <= 0) return { ok: false, error: 'too_small' };
+  const costH = valueH(sharesH, price);
+  const feeH = Math.round(costH * m.feeFrac);
+  const totalH = costH + feeH;
+  if (openCostBasisH(input.lots, input.playerId) + totalH > toH(m.investCap)) return { ok: false, error: 'over_cap' };
+  const now = input.gate.now;
+  const lot: Lot = {
+    id: input.lotId,
+    playerId: input.playerId,
+    securityId: input.security.id,
+    sharesH,
+    costBasisH: totalH,
+    createdAt: now,
+    unlockAt: now + m.lockoutMinutes * 60_000,
+    short: true,
+    entry: price,
+  };
+  return {
+    ok: true,
+    lot,
+    trade: { playerId: input.playerId, securityId: input.security.id, side: 'sell', sharesH, price, cashH: -totalH, feeH, short: true },
+    impulse: tradeImpulse(input.security, 'sell', settings),
+  };
+}
+
+/** Close (cover) a short FIFO across unlocked short lots: paid out at each lot's inverse value minus the fee. */
+export function coverShort(input: SellInput, settings: Settings): SellResult {
+  const g = gateCheck(input.gate);
+  if (g) return g;
+  const now = input.gate.now;
+  const mine = input.lots.filter((l) => l.playerId === input.playerId && l.securityId === input.security.id && l.sharesH > 0 && l.short);
+  const total = mine.reduce((a, l) => a + l.sharesH, 0);
+  if (total === 0) return { ok: false, error: 'no_shares' };
+  const unlocked = unlockedSharesH(mine, now);
+  const want = input.sharesH === 'all' ? unlocked : input.sharesH;
+  if (want <= 0) return { ok: false, error: unlocked === 0 ? 'locked' : 'too_small' };
+  if (want > unlocked) return { ok: false, error: want > total ? 'no_shares' : 'locked' };
+  const price = fillPrice(input.security, 'buy', settings);
+  // Value the covered shares lot by lot (FIFO) at each lot's own entry.
+  const ordered = [...mine].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  let left = want;
+  let grossH = 0;
+  for (const l of ordered) {
+    if (left === 0) break;
+    if (l.unlockAt > now) continue;
+    const take = Math.min(left, l.sharesH);
+    grossH += valueH(take, positionPrice(price, true, l.entry));
+    left -= take;
+  }
+  const feeH = Math.round(grossH * settings.market.feeFrac);
+  const r = consumeFifo(mine, want, now, false);
+  const cashH = grossH - feeH;
+  return {
+    ok: true,
+    lots: r.lots,
+    trade: { playerId: input.playerId, securityId: input.security.id, side: 'buy', sharesH: want, price, cashH, feeH, basisH: r.basisH, realizedH: cashH - r.basisH, short: true },
+    impulse: tradeImpulse(input.security, 'buy', settings),
+  };
 }

@@ -6,7 +6,7 @@ import { join as joinPath } from 'node:path';
 import { HttpError, notFound, type Ctx } from '../context';
 import { decideRequest, join, joinInfo, requestRejoin, requestStatus } from '../services/join';
 import { markLeft, overrideTicker, playerFromDevice } from '../services/players';
-import { playerBuy, playerSell } from '../services/trading';
+import { playerBuy, playerCover, playerSell, playerShort } from '../services/trading';
 import { castBallot, openVoteEarly } from '../services/votes';
 import { logReroll, recordMood, sendNotification, setOffset } from '../services/field';
 import { createRule, deleteRule, listRules, updateRule } from '../services/rules';
@@ -256,6 +256,8 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   });
   app.post('/api/trade/buy', async (req) => playerBuy(ctx, device(req), { securityId: b(req.body).securityId, gold: b(req.body).gold }));
   app.post('/api/trade/sell', async (req) => playerSell(ctx, device(req), { securityId: b(req.body).securityId, shares: b(req.body).shares }));
+  app.post('/api/trade/short', async (req) => playerShort(ctx, device(req), { securityId: b(req.body).securityId, gold: b(req.body).gold }));
+  app.post('/api/trade/cover', async (req) => playerCover(ctx, device(req), { securityId: b(req.body).securityId, shares: b(req.body).shares }));
   app.post<Id>('/api/me/messages/:id/read', async (req) => {
     const p = device(req);
     const row = ctx.db.prepare('SELECT read_by FROM notification WHERE id = ? AND night_id = ?').get(Number(req.params.id), p.night_id) as { read_by: string } | undefined;

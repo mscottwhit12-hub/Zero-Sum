@@ -17,10 +17,10 @@
 
 <div class="cd">
   <h3>Holdings</h3>
-  {#each me.holdings as h (h.securityId)}
+  {#each me.holdings as h (h.securityId + (h.short ? ':s' : ''))}
     {@const m = sec(h.securityId)}
     <div class="hl">
-      <span>{m ? securityName(s, m) : h.securityId} <span class="muted small mono">{(h.sharesH / 100).toFixed(2)} sh</span></span>
+      <span>{m ? securityName(s, m) : h.securityId} <span class="muted small mono">{h.short ? 'short' : `${(h.sharesH / 100).toFixed(2)} sh`}</span></span>
       <span class="mono">{gold(h.valueH)} <span class="small" class:good={h.valueH >= h.costBasisH} class:bad={h.valueH < h.costBasisH}>{signedGold(h.valueH - h.costBasisH)}</span></span>
     </div>
   {/each}
@@ -32,7 +32,7 @@
   {#each me.trades.slice(0, 15) as tr, i (i)}
     {@const m = sec(tr.securityId)}
     <div class="hl small">
-      <span>{tr.forced ? 'Auto-sell' : tr.side === 'buy' ? 'Bought' : 'Sold'} {m ? securityName(s, m) : tr.securityId}</span>
+      <span>{tr.forced ? (tr.short ? 'Auto-closed short' : 'Auto-sell') : tr.short ? (tr.side === 'sell' ? 'Shorted' : 'Closed short') : tr.side === 'buy' ? 'Bought' : 'Sold'} {m ? securityName(s, m) : tr.securityId}</span>
       <span class="mono">{(tr.sharesH / 100).toFixed(2)} @ {price(tr.price)} · {signedGold(tr.cashH)}</span>
     </div>
   {/each}

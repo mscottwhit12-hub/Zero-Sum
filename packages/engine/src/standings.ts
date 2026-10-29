@@ -80,6 +80,9 @@ export interface Holding {
   playerId: string;
   securityId: string;
   sharesH: SharesH;
+  /** Short (inverse share) opened at `entry`. */
+  short?: boolean;
+  entry?: number;
 }
 
 /** Sell value of a position at the current price, net of the trade fee. */
@@ -107,7 +110,7 @@ export function computeStandings(
   for (const h of holdings) {
     const price = priceBySecurity.get(h.securityId);
     if (price === undefined) throw new Error(`no price for ${h.securityId}`);
-    held.set(h.playerId, (held.get(h.playerId) ?? 0) + sellValueH(h.sharesH, price, settings.market.feeFrac));
+    held.set(h.playerId, (held.get(h.playerId) ?? 0) + sellValueH(h.sharesH, h.short ? Math.max(0, 2 * (h.entry ?? price) - price) : price, settings.market.feeFrac));
   }
   const rows = [...ledger.values()].map((l) => {
     const holdingsH = held.get(l.playerId) ?? 0;

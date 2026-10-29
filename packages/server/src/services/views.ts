@@ -5,7 +5,7 @@
  *  - Player only (own): holdings, lots, cash.
  * Views are built field-by-field from DB/engine data; nothing is spread wholesale.
  */
-import { capRemainingH, hoursPlayed, sellValueH, type GoldH } from '@gn/engine';
+import { capRemainingH, hoursPlayed, positionPrice, sellValueH, type GoldH } from '@gn/engine';
 import { gmHintLog, playerHints, tipShop } from './hints';
 import { handicapGmView, playerGifts } from './handicap';
 import { indexTerms } from './indexTerms';
@@ -157,7 +157,11 @@ export function playerView(ctx: Ctx, st: NightState, playerId: number, base?: Pu
   const standing = st.standings.find((r) => r.playerId === id);
   const mine = st.lots.filter((l) => l.playerId === id);
   const bySec = new Map<string, typeof mine>();
-  for (const l of mine) (bySec.get(l.securityId) ?? bySec.set(l.securityId, []).get(l.securityId)!).push(l);
+  // Longs and shorts of the same stock are separate positions ("x" and "x:short").
+  for (const l of mine) {
+    const k = l.short ? `${l.securityId}:short` : l.securityId;
+    (bySec.get(k) ?? bySec.set(k, []).get(k)!).push(l);
+  }
   const price = new Map(st.securities.map((s) => [s.id, s.price]));
   const ach = ctx.db.prepare('SELECT type, created_at FROM achievement WHERE night_id = ? AND player_id = ? ORDER BY id').all(st.night.id, playerId) as {
     type: string;
@@ -174,14 +178,18 @@ export function playerView(ctx: Ctx, st: NightState, playerId: number, base?: Pu
       rank: standing?.rank ?? null,
       rerollsLeft: p.reroll_tokens_left,
       capRemainingH: capRemainingH(st.lots, id, st.settings),
-      holdings: [...bySec].map(([securityId, ls]) => {
+      holdings: [...bySec].map(([, ls]) => {
+        const securityId = ls[0]!.securityId;
+        const short = !!ls[0]!.short;
         const sharesH = ls.reduce((a, l) => a + l.sharesH, 0);
+        const px = price.get(securityId) ?? 0;
         return {
           securityId,
+          short,
           sharesH,
           costBasisH: ls.reduce((a, l) => a + l.costBasisH, 0),
-          valueH: sellValueH(sharesH, price.get(securityId) ?? 0, st.settings.market.feeFrac),
-          lots: ls.map((l) => ({ sharesH: l.sharesH, unlockNms: l.unlockAt })),
+          valueH: ls.reduce((a, l) => a + sellValueH(l.sharesH, positionPrice(px, l.short, l.entry), st.settings.market.feeFrac), 0),
+          lots: ls.map((l) => ({ sharesH: l.sharesH, unlockNms: l.unlockAt, ...(l.short ? { entry: l.entry } : {}) })),
         };
       }),
       achievements: ach.map((a) => ({ type: a.type, createdAt: a.created_at })),

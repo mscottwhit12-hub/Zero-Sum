@@ -37,7 +37,7 @@ export interface EndNightResult {
  */
 export function endNight(input: EndNightInput, settings: Settings): EndNightResult {
   const prices = new Map(input.securities.map((s) => [s.id, s.price]));
-  const holdings = input.lots.map((l) => ({ playerId: l.playerId, securityId: l.securityId, sharesH: l.sharesH }));
+  const holdings = input.lots.map((l) => ({ playerId: l.playerId, securityId: l.securityId, sharesH: l.sharesH, short: l.short, entry: l.entry }));
 
   let quarter: QuarterResolution | null = null;
   let ledgerInput = input.ledger;

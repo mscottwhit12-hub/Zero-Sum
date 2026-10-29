@@ -191,6 +191,8 @@ export function loadLots(ctx: Ctx, nightId: number): Lot[] {
     cost_basis_h: number;
     created_nms: number;
     unlock_nms: number;
+    short: number;
+    entry: number | null;
   }[]).map((l) => ({
     id: String(l.id),
     playerId: pid(l.player_id),
@@ -199,6 +201,7 @@ export function loadLots(ctx: Ctx, nightId: number): Lot[] {
     costBasisH: l.cost_basis_h,
     createdAt: l.created_nms,
     unlockAt: l.unlock_nms,
+    ...(l.short ? { short: true, entry: l.entry ?? undefined } : {}),
   }));
 }
 
@@ -225,7 +228,7 @@ export function computeNightState(ctx: Ctx, nightId: number): NightState | null 
   const ledger = deriveLedger(loadLedgerInput(ctx, nightId), settings);
   const prices = new Map(securities.map((s) => [s.id, s.price]));
   const standings = securities.length
-    ? computeStandings(ledger, lots.map((l) => ({ playerId: l.playerId, securityId: l.securityId, sharesH: l.sharesH })), prices, settings)
+    ? computeStandings(ledger, lots.map((l) => ({ playerId: l.playerId, securityId: l.securityId, sharesH: l.sharesH, short: l.short, entry: l.entry })), prices, settings)
     : computeStandings(ledger, [], prices, settings);
   return {
     night,

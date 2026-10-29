@@ -24,7 +24,11 @@
   const order = { player: 0, index: 1, crypto: 2, event: 3, dead: 4 } as const;
   const list = $derived([...s.market].sort((a, b) => order[a.kind] - order[b.kind] || securityName(s, a).localeCompare(securityName(s, b))));
   const sec = $derived(s.market.find((m) => m.id === selected) ?? null);
-  const holding = $derived(me.holdings.find((h) => h.securityId === selected) ?? null);
+  const holding = $derived(me.holdings.find((h) => h.securityId === selected && !h.short) ?? null);
+  const shortPos = $derived(me.holdings.find((h) => h.securityId === selected && h.short) ?? null);
+  const shortUnlocked = $derived(shortPos ? shortPos.lots.filter((l) => l.unlockNms <= nms).reduce((a, l) => a + l.sharesH, 0) : 0);
+  let shortAmount = $state<number | ''>('');
+  const canShort = $derived(!!sec && sec.playerId !== me.id);
   const nms = $derived(nightNow(s.night, now));
   const unlocked = $derived(holding ? holding.lots.filter((l) => l.unlockNms <= nms).reduce((a, l) => a + l.sharesH, 0) : 0);
   const maxBuy = $derived(Math.floor(Math.min(me.cashH, me.capRemainingH) / 10) / 10);
@@ -48,6 +52,22 @@
     busy = false;
     if (r) sellShares = '';
   }
+  async function doShort() {
+    if (!sec || !shortAmount) return;
+    busy = true;
+    const r = await run(() => dapi('POST', '/api/trade/short', { securityId: sec.id, gold: Number(shortAmount) }));
+    busy = false;
+    if (r) {
+      shortAmount = '';
+      navigator.vibrate?.(30);
+    }
+  }
+  async function doCover() {
+    if (!sec) return;
+    busy = true;
+    await run(() => dapi('POST', '/api/trade/cover', { securityId: sec.id, shares: 'all' }));
+    busy = false;
+  }
   void msg;
   const change = (m: Security) => pct(m.price, m.history[0] ?? m.price);
 </script>
@@ -57,13 +77,14 @@
   <div class="sub">All prices final. Until they aren’t.</div>
   <div class="grp">
     {#each list as m (m.id)}
-      {@const h = me.holdings.find((x) => x.securityId === m.id)}
+      {@const h = me.holdings.find((x) => x.securityId === m.id && !x.short)}
+      {@const hs = me.holdings.find((x) => x.securityId === m.id && x.short)}
       {@const c = Number(change(m))}
       <button class="r k-{m.kind}" class:dead={m.kind === 'dead'} class:me={m.playerId === me.id} onclick={() => (selected = m.id)}>
         <span class="mono-t">{m.ticker.slice(0, 2)}</span>
         <b>{securityName(s, m)}</b>
         <span class="pr">{price(m.price)}</span>
-        <span class="t">{m.ticker}{m.playerId === me.id ? ' · you' : ''}{h ? ` · ${(h.sharesH / 100).toFixed(2)} sh` : ''}</span>
+        <span class="t">{m.ticker}{m.playerId === me.id ? ' · you' : ''}{h ? ` · ${(h.sharesH / 100).toFixed(2)} sh` : ''}{hs ? ' · short' : ''}</span>
         <span class="ch" class:up={c > 0} class:dn={c < 0} class:flat={c === 0}>{c > 0 ? `▲ +${change(m)}` : c < 0 ? `▼ −${change(m).replace('-', '')}` : '■ 0.0'}%</span>
       </button>
     {/each}
@@ -99,6 +120,30 @@
     <p>Fee {Math.round(rules.feeFrac * 100)}% · shares lock for {rules.lockoutMinutes} min · you can invest {gold(me.capRemainingH)} more</p>
     <button class="primary big" disabled={!open || busy || !amount} onclick={doBuy}>Buy</button>
   </div>
+
+  {#if shortPos}
+    <div class="cd">
+      <div class="kv"><span>Your short</span><b>{gold(shortPos.valueH)}</b></div>
+      <div class="kv"><span>Staked</span><b>{gold(shortPos.costBasisH)} ({signedGold(shortPos.valueH - shortPos.costBasisH)})</b></div>
+      {#each shortPos.lots as l, i (i)}
+        <div class="kv"><span>Short {i + 1}: from {price(l.entry ?? 0)}</span><b>{l.unlockNms > nms ? `locked ${mmss(l.unlockNms - nms)}` : 'unlocked'}</b></div>
+      {/each}
+      <button class="primary" disabled={!open || busy || shortUnlocked === 0} onclick={doCover}>Close short (unlocked)</button>
+    </div>
+  {/if}
+
+  {#if canShort}
+    <div class="cd">
+      <h3>Short</h3>
+      <p>Bet it falls: gain its % drop, lose its % rise. You can't lose more than you stake.</p>
+      <div class="row">
+        <input type="number" step="any" min="1" placeholder="Gold" bind:value={shortAmount} style="width:110px" />
+        {#each [1, 5, 10] as q}<button class="chip" onclick={() => (shortAmount = q)}>{q}</button>{/each}
+        <button class="chip" onclick={() => (shortAmount = maxBuy)}>Max</button>
+      </div>
+      <button class="big" disabled={!open || busy || !shortAmount} onclick={doShort}>Short</button>
+    </div>
+  {/if}
 
   {#if holding}
     <div class="cd">

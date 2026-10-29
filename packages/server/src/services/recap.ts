@@ -44,7 +44,7 @@ function sells(ctx: Ctx, nightId: number): SellRow[] {
     .prepare(
       `SELECT t.player_id, t.security_id, s.ticker, (t.cash_h - t.basis_h) AS profit FROM trade t
        JOIN security s ON s.id = t.security_id AND s.night_id = t.night_id
-       WHERE t.night_id = ? AND t.side = 'sell' AND t.basis_h IS NOT NULL`,
+       WHERE t.night_id = ? AND t.basis_h IS NOT NULL`,
     )
     .all(nightId) as SellRow[];
 }
@@ -137,7 +137,7 @@ export function markRecapDone(ctx: Ctx, nightId: number) {
 
 export interface StatementTrade {
   at: number;
-  side: 'buy' | 'sell';
+  side: 'buy' | 'sell' | 'short' | 'cover';
   ticker: string;
   sharesH: number;
   price: number;
@@ -155,19 +155,19 @@ export function statement(ctx: Ctx, player: PlayerRow) {
   const me = st.standings.find((r) => r.playerId === pid(player.id));
   const trades = (ctx.db
     .prepare(
-      `SELECT t.created_at, t.side, s.ticker, t.shares_h, t.price, t.cash_h, t.fee_h, t.basis_h, t.forced FROM trade t
+      `SELECT t.created_at, t.side, t.short, s.ticker, t.shares_h, t.price, t.cash_h, t.fee_h, t.basis_h, t.forced FROM trade t
        JOIN security s ON s.id = t.security_id AND s.night_id = t.night_id WHERE t.player_id = ? ORDER BY t.id`,
     )
-    .all(player.id) as { created_at: number; side: 'buy' | 'sell'; ticker: string; shares_h: number; price: number; cash_h: number; fee_h: number; basis_h: number | null; forced: number }[]).map(
+    .all(player.id) as { created_at: number; side: 'buy' | 'sell'; short: number; ticker: string; shares_h: number; price: number; cash_h: number; fee_h: number; basis_h: number | null; forced: number }[]).map(
     (t): StatementTrade => ({
       at: t.created_at,
-      side: t.side,
+      side: t.short ? (t.side === 'sell' ? 'short' : 'cover') : t.side,
       ticker: t.ticker,
       sharesH: t.shares_h,
       price: t.price,
       cashH: t.cash_h,
       feeH: t.fee_h,
-      profitH: t.side === 'sell' && t.basis_h != null ? t.cash_h - t.basis_h : null,
+      profitH: t.basis_h != null ? t.cash_h - t.basis_h : null,
       forced: !!t.forced,
     }),
   );

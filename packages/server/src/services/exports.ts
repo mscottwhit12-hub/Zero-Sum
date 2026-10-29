@@ -129,7 +129,8 @@ export function exportNightCsv(ctx: Ctx, actor: GmAuth, kind: string, nightId?: 
       basis_h: number | null;
       forced: number;
       created_at: number;
-    }[]).map((t) => [iso(t.created_at), name(t.player_id), t.forced ? 'auto-sell' : t.side, tick.get(t.security_id) ?? t.security_id, (t.shares_h / 100).toFixed(2), t.price.toFixed(2), gold(t.cash_h), gold(t.fee_h), t.side === 'sell' && t.basis_h != null ? gold(t.cash_h - t.basis_h) : '']);
+      short?: number;
+    }[]).map((t) => [iso(t.created_at), name(t.player_id), (t.forced ? 'auto-' : '') + (t.short ? (t.side === 'sell' ? 'short' : 'cover') : t.side), tick.get(t.security_id) ?? t.security_id, (t.shares_h / 100).toFixed(2), t.price.toFixed(2), gold(t.cash_h), gold(t.fee_h), t.basis_h != null ? gold(t.cash_h - t.basis_h) : '']);
     return { name: `${base}-trades.csv`, csv: toCsv(['time', 'player', 'side', 'stock', 'shares', 'price', 'gold', 'fee', 'profit'], rows) };
   }
   throw notFound('bad_export');

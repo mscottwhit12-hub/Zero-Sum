@@ -507,4 +507,9 @@ export const MIGRATIONS: string[] = [
   /* 16 — live-standings bias per scored game: {playerId: band units}, kept after the game (JSON) */ `
   ALTER TABLE game ADD COLUMN live_levels TEXT;
   `,
+  /* 17 — shorts (inverse shares): short lots with their entry price; trades flag short open/cover */ `
+  ALTER TABLE lot ADD COLUMN short INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE lot ADD COLUMN entry REAL;
+  ALTER TABLE trade ADD COLUMN short INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

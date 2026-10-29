@@ -3,7 +3,7 @@
  * fractional shares, fee, 1 trade per stock per player per tick, frozen while paused/closed.
  * Trade impact is queued and applies on the next tick. Holdings stay private to the player.
  */
-import { buy, sell, toH, type TradeError } from '@gn/engine';
+import { buy, coverShort, openShort, sell, toH, type TradeError } from '@gn/engine';
 import { bad, conflict, HttpError, notFound, type Ctx } from '../context';
 import { queueImpulse } from './market';
 import { computeNightState, currentNight, nightMs, pid, type PlayerRow } from './state';
@@ -17,6 +17,7 @@ const MESSAGES: Record<TradeError, string> = {
   too_small: 'That amount buys less than 0.01 shares.',
   no_shares: "You don't hold that many shares.",
   locked: 'Those shares are still locked.',
+  own_stock: "You can't short your own stock.",
 };
 
 const tradeError = (e: TradeError) => new HttpError(e === 'market_closed' ? 409 : 400, e, MESSAGES[e]);
@@ -79,7 +80,7 @@ export function playerSell(ctx: Ctx, player: PlayerRow, input: { securityId: unk
       .prepare('INSERT INTO trade (night_id, player_id, security_id, side, shares_h, price, cash_h, fee_h, basis_h, tick, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
       .run(n.id, player.id, security.id, 'sell', r.trade.sharesH, r.trade.price, r.trade.cashH, r.trade.feeH, r.trade.basisH ?? null, gate.tick, now);
     // Replace this player's lots for the security with the engine's FIFO result.
-    ctx.db.prepare('DELETE FROM lot WHERE night_id = ? AND player_id = ? AND security_id = ?').run(n.id, player.id, security.id);
+    ctx.db.prepare('DELETE FROM lot WHERE night_id = ? AND player_id = ? AND security_id = ? AND short = 0').run(n.id, player.id, security.id);
     const ins = ctx.db.prepare('INSERT INTO lot (night_id, player_id, security_id, shares_h, cost_basis_h, created_nms, unlock_nms) VALUES (?,?,?,?,?,?,?)');
     for (const l of r.lots) ins.run(n.id, player.id, security.id, l.sharesH, l.costBasisH, l.createdAt, l.unlockAt);
     if (r.impulse) queueImpulse(ctx, n.id, r.impulse);
@@ -88,9 +89,58 @@ export function playerSell(ctx: Ctx, player: PlayerRow, input: { securityId: unk
   return { side: 'sell', securityId: security.id, sharesH: r.trade.sharesH, price: r.trade.price, cashH: r.trade.cashH, feeH: r.trade.feeH, realizedH: r.trade.realizedH };
 }
 
+/** Open a short (inverse share): stake gold that the stock will fall. Same fee, cap and lockout as a buy. */
+export function playerShort(ctx: Ctx, player: PlayerRow, input: { securityId: unknown; gold: unknown }) {
+  const { n, st, security, gate, id } = context(ctx, player, input.securityId);
+  const gold = Number(input.gold);
+  if (!Number.isFinite(gold) || gold <= 0) throw bad('bad_amount');
+  const lots = st.lots.filter((l) => l.playerId === id);
+  const r = openShort({ playerId: id, security, goldH: toH(gold), cashH: st.ledger.get(id)?.cashH ?? 0, lots, gate, lotId: 'new' }, st.settings);
+  if (!r.ok) throw tradeError(r.error);
+  const now = ctx.now();
+  ctx.db.transaction(() => {
+    ctx.db
+      .prepare('INSERT INTO trade (night_id, player_id, security_id, side, shares_h, price, cash_h, fee_h, tick, created_at, short) VALUES (?,?,?,?,?,?,?,?,?,?,1)')
+      .run(n.id, player.id, security.id, 'sell', r.trade.sharesH, r.trade.price, r.trade.cashH, r.trade.feeH, gate.tick, now);
+    ctx.db
+      .prepare('INSERT INTO lot (night_id, player_id, security_id, shares_h, cost_basis_h, created_nms, unlock_nms, short, entry) VALUES (?,?,?,?,?,?,?,1,?)')
+      .run(n.id, player.id, security.id, r.lot.sharesH, r.lot.costBasisH, r.lot.createdAt, r.lot.unlockAt, r.lot.entry);
+    if (r.impulse) queueImpulse(ctx, n.id, r.impulse);
+  })();
+  ctx.bus.refresh(n.id);
+  return { side: 'short', securityId: security.id, sharesH: r.trade.sharesH, price: r.trade.price, cashH: r.trade.cashH, feeH: r.trade.feeH, unlockNms: r.lot.unlockAt };
+}
+
+/** Close a short (buy to cover), FIFO across unlocked short lots. */
+export function playerCover(ctx: Ctx, player: PlayerRow, input: { securityId: unknown; shares: unknown }) {
+  const { n, st, security, gate, id } = context(ctx, player, input.securityId);
+  let sharesH: number | 'all';
+  if (input.shares === 'all') sharesH = 'all';
+  else {
+    const s = Number(input.shares);
+    if (!Number.isFinite(s) || s <= 0) throw bad('bad_amount');
+    sharesH = Math.round(s * 100);
+  }
+  const lots = st.lots.filter((l) => l.playerId === id && l.securityId === security.id);
+  const r = coverShort({ playerId: id, security, sharesH, lots, gate }, st.settings);
+  if (!r.ok) throw tradeError(r.error);
+  const now = ctx.now();
+  ctx.db.transaction(() => {
+    ctx.db
+      .prepare('INSERT INTO trade (night_id, player_id, security_id, side, shares_h, price, cash_h, fee_h, basis_h, tick, created_at, short) VALUES (?,?,?,?,?,?,?,?,?,?,?,1)')
+      .run(n.id, player.id, security.id, 'buy', r.trade.sharesH, r.trade.price, r.trade.cashH, r.trade.feeH, r.trade.basisH ?? null, gate.tick, now);
+    ctx.db.prepare('DELETE FROM lot WHERE night_id = ? AND player_id = ? AND security_id = ? AND short = 1').run(n.id, player.id, security.id);
+    const ins = ctx.db.prepare('INSERT INTO lot (night_id, player_id, security_id, shares_h, cost_basis_h, created_nms, unlock_nms, short, entry) VALUES (?,?,?,?,?,?,?,1,?)');
+    for (const l of r.lots) ins.run(n.id, player.id, security.id, l.sharesH, l.costBasisH, l.createdAt, l.unlockAt, l.entry ?? null);
+    if (r.impulse) queueImpulse(ctx, n.id, r.impulse);
+  })();
+  ctx.bus.refresh(n.id);
+  return { side: 'cover', securityId: security.id, sharesH: r.trade.sharesH, price: r.trade.price, cashH: r.trade.cashH, feeH: r.trade.feeH, realizedH: r.trade.realizedH };
+}
+
 /** Own trade history (private). */
 export function myTrades(ctx: Ctx, player: PlayerRow) {
   return ctx.db
-    .prepare('SELECT security_id AS securityId, side, shares_h AS sharesH, price, cash_h AS cashH, fee_h AS feeH, forced, created_at AS createdAt FROM trade WHERE player_id = ? ORDER BY id DESC LIMIT 200')
+    .prepare('SELECT security_id AS securityId, side, short, shares_h AS sharesH, price, cash_h AS cashH, fee_h AS feeH, forced, created_at AS createdAt FROM trade WHERE player_id = ? ORDER BY id DESC LIMIT 200')
     .all(player.id);
 }

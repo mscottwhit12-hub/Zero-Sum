@@ -121,7 +121,7 @@ export interface Finale {
 }
 export interface StatementTrade {
   at: number;
-  side: 'buy' | 'sell';
+  side: 'buy' | 'sell' | 'short' | 'cover';
   ticker: string;
   sharesH: number;
   price: number;
@@ -290,10 +290,12 @@ export interface GmState extends PublicState {
 
 export interface Holding {
   securityId: string;
+  /** Short position (inverse share): gains when the price falls; loss capped at the stake. */
+  short?: boolean;
   sharesH: number;
   costBasisH: number;
   valueH: number;
-  lots: { sharesH: number; unlockNms: number }[];
+  lots: { sharesH: number; unlockNms: number; entry?: number }[];
 }
 export interface Me {
   id: number;
@@ -309,7 +311,7 @@ export interface Me {
   messages: { id: number; message: string; createdAt: number; read: boolean }[];
   /** Unread player-chat messages. */
   chatUnread: number;
-  trades: { securityId: string; side: 'buy' | 'sell'; sharesH: number; price: number; cashH: number; feeH: number; forced: number; createdAt: number }[];
+  trades: { securityId: string; side: 'buy' | 'sell'; short?: number; sharesH: number; price: number; cashH: number; feeH: number; forced: number; createdAt: number }[];
   vote: VoteInfo | null;
   challenges: MyChallenge[];
   tips: { id: number; hintId: string; vars: Record<string, string | number>; createdAt: number; read: boolean }[];

@@ -261,9 +261,9 @@ function finishNight(ctx: Ctx, n: NightRow, now: number) {
   // A next-quarter vote opened early never gets its quarter: void it.
   ctx.db.prepare("UPDATE vote_round SET status = 'void', closed_at = COALESCE(closed_at, ?) WHERE night_id = ? AND status IN ('open','closed')").run(now, n.id);
   const ins = ctx.db.prepare(
-    'INSERT INTO trade (night_id, player_id, security_id, side, shares_h, price, cash_h, fee_h, basis_h, forced, tick, created_at) VALUES (?,?,?,?,?,?,?,?,?,1,?,?)',
+    'INSERT INTO trade (night_id, player_id, security_id, side, shares_h, price, cash_h, fee_h, basis_h, forced, tick, created_at, short) VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?)',
   );
-  for (const t of res.liquidations) ins.run(n.id, Number(t.playerId), t.securityId, 'sell', t.sharesH, t.price, t.cashH, t.feeH, t.basisH ?? null, n.tick_count, now);
+  for (const t of res.liquidations) ins.run(n.id, Number(t.playerId), t.securityId, t.side, t.sharesH, t.price, t.cashH, t.feeH, t.basisH ?? null, n.tick_count, now, t.short ? 1 : 0);
   ctx.db.prepare('DELETE FROM lot WHERE night_id = ?').run(n.id);
   ctx.db.prepare('UPDATE night SET ended_at = ?, paused_at = NULL WHERE id = ?').run(now, n.id);
   ctx.db

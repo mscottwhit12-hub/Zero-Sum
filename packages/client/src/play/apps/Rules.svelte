@@ -29,6 +29,7 @@
   <details>
     <summary>Tonight's numbers</summary>
     <p>Trade fee {Math.round(r.feeFrac * 100)}% · invest cap {gold(r.investCapH)} gold · lockout {r.lockoutMinutes} min · minimum trade {gold(r.minTradeH)} gold · end-of-night fee {Math.round(r.endSellProfitFeeFrac * 100)}% of profits.</p>
+    <p>Shorts: stake gold that a stock (not your own) will fall. You gain its % drop and lose its % rise, never more than your stake. Same fee, limit and lock as buying; closed automatically at the end of the night.</p>
   </details>
 {/if}
 

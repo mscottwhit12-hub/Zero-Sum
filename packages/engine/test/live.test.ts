@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS } from '../settings';
-import { liveLevels } from './live';
+import { DEFAULT_SETTINGS } from '../src/settings';
+import { liveLevels } from '../src/market/live';
 
 const S = DEFAULT_SETTINGS;
 const sum = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
