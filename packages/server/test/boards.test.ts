@@ -104,7 +104,7 @@ describe('player battle entries (Risk)', () => {
     expect((await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json().claims).toHaveLength(0);
     const { playerView } = await import('../src/services/views');
     const st = computeNightState(t.ctx, currentNight(t.ctx)!.id)!;
-    const me = playerView(t.ctx, st, ids[0]!).me!;
+    const me = playerView(t.ctx, st, ids[0]!)!.me!;
     expect(me.boardGames).toHaveLength(1);
     expect(me.boardGames[0]!.myClaims[0]!.status).toBe('approved');
   });
