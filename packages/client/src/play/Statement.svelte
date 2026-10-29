@@ -34,6 +34,40 @@
       busy = false;
     }
   }
+  // Image cards: the server draws SVGs; the phone turns each into a PNG to save or share.
+  let cards = $state<string[]>([]);
+  async function loadCards() {
+    const out: string[] = [];
+    for (const n of [1, 2, 3]) {
+      const res = await fetch(`/api/me/cards/${n}.svg`, { headers: { 'x-device-token': deviceToken() ?? '' } });
+      if (res.ok) out.push(URL.createObjectURL(new Blob([await res.text()], { type: 'image/svg+xml' })));
+    }
+    cards = out;
+  }
+  $effect(() => {
+    if (s && !cards.length) void loadCards();
+  });
+  async function saveCard(src: string, i: number) {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth || 1080;
+    c.height = img.naturalHeight || 1350;
+    c.getContext('2d')!.drawImage(img, 0, 0);
+    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
+    if (!blob) return;
+    const file = new File([blob], `card-${i + 1}.png`, { type: 'image/png' });
+    const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
+    if (nav.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file] }).catch(() => {});
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = file.name;
+    a.click();
+  }
   const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 </script>
 
@@ -59,6 +93,30 @@
       <div class="kv"><span>{t('phone.statement.nfts')}</span><b>{s.nftsMinted.toLocaleString()}</b></div>
       <div class="kv"><span>{t('phone.statement.achievements')}</span><b style="font:400 1rem var(--font)">{s.achievements.length ? s.achievements.map((a) => t(`achievements.${a}.name`)).join(', ') : t('phone.statement.none')}</b></div>
     </div>
+    {@const x = s.stats}
+    <div class="cd">
+      <div class="kv"><span>Title</span><b>{x.title}</b></div>
+      <div class="kv"><span>Gold from games</span><b>{gold(x.gameGoldH)}</b></div>
+      {#each x.games as gm, i (i)}<div class="kv small"><span>{gm.name}</span><b>{gm.dnf ? 'DNF' : gm.placement != null ? `${gm.placement}/${gm.players}` : '—'} · +{gold(gm.goldH)}</b></div>{/each}
+      <div class="kv"><span>Trades · fees</span><b>{x.tradeCount} · {gold(x.feesH)}</b></div>
+      <div class="kv"><span>Biggest short win</span><b>{x.bestShortH == null ? '—' : signedGold(x.bestShortH)}</b></div>
+      {#if x.ownStock}<div class="kv"><span>{x.ownStock.ticker} high · low · close</span><b>{x.ownStock.high.toFixed(2)} · {x.ownStock.low.toFixed(2)} · {x.ownStock.close.toFixed(2)}</b></div>{/if}
+      <div class="kv"><span>Biggest backer</span><b>{x.biggestBacker?.name ?? '—'}</b></div>
+      <div class="kv"><span>Bounties</span><b>{gold(x.bountiesH)}</b></div>
+      <div class="kv"><span>Re-rolls used</span><b>{x.rerollsUsed}</b></div>
+      <div class="kv"><span>Minter rank</span><b>{x.minterRank == null ? '—' : `#${x.minterRank}`}</b></div>
+      <div class="kv"><span>Playing · idle</span><b>{x.playHours.toFixed(1)} h · {x.idleHours.toFixed(1)} h</b></div>
+      <div class="kv"><span>Chat messages</span><b>{x.chatMessages}</b></div>
+    </div>
+    {#if cards.length}
+      <div class="muted small">Cards to share</div>
+      <div class="cards">
+        {#each cards as src, i (src)}
+          <button class="card" onclick={() => saveCard(src, i)} aria-label={`Save card ${i + 1}`}><img {src} alt={`Card ${i + 1}`} /></button>
+        {/each}
+      </div>
+      <div class="muted small">Tap a card to save or share it.</div>
+    {/if}
     <button class="primary wide" disabled={busy} onclick={download}>{t('phone.statement.download')}</button>
     <div class="muted small">{t('phone.statement.trades')} ({s.trades.length})</div>
     {#each s.trades as tr, i (i)}
@@ -69,3 +127,9 @@
     {/each}
   {/if}
 </div>
+
+<style>
+  .cards { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.25rem 0; }
+  .card { flex: 0 0 auto; padding: 0; border: 0; background: none; }
+  .card img { width: 140px; height: auto; display: block; border-radius: 4px; }
+</style>

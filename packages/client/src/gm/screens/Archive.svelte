@@ -36,6 +36,7 @@
             <td class="small">{n.winners.join(' & ') || '—'}{n.winnerGoldH != null && n.winners.length ? ` · ${gold(n.winnerGoldH)}` : ''}</td>
             <td class="actions">
               {#if master}
+                <a class="btn" href="/api/export/package.zip?night={n.id}">Package</a>
                 <a class="btn" href="/api/export/night.json?night={n.id}">JSON</a>
                 <a class="btn" href="/api/export/standings.csv?night={n.id}">Standings</a>
                 <a class="btn" href="/api/export/results.csv?night={n.id}">Results</a>

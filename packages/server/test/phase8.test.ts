@@ -88,6 +88,29 @@ describe('finale', () => {
     await call(t, gm, 'POST', '/api/night/finale/skip');
     expect((await dev(t, a.token, '/api/me/statement')).statusCode).toBe(200);
   });
+
+  it('end-of-night package: stats + title on the statement, 3 image cards, GM zip with PDFs, cards and data', async () => {
+    const { t, gm, a, b, c, g } = await playedNight();
+    await call(t, gm, 'POST', `/api/games/${g.id}/result`, { actualHours: 1, participants: [{ playerId: a.id, placement: 1 }, { playerId: b.id, placement: 2 }, { playerId: c.id, placement: 3 }] });
+    await call(t, gm, 'POST', '/api/night/end');
+    await call(t, gm, 'POST', '/api/night/finale/skip');
+    const s = (await dev(t, a.token, '/api/me/statement')).json();
+    expect(s.stats.title).toBeTruthy();
+    expect(s.stats.games[0]).toMatchObject({ name: 'Cards', placement: 1, players: 3 });
+    expect(s.stats.biggestBacker?.name).toBe('Bob');
+    for (const k of FORBIDDEN_KEYS) expect(JSON.stringify(s)).not.toContain(k);
+    for (const n of [1, 2, 3]) {
+      const card = await dev(t, a.token, `/api/me/cards/${n}.svg`);
+      expect(card.headers['content-type']).toContain('image/svg+xml');
+      expect(card.body.startsWith('<svg')).toBe(true);
+    }
+    expect((await dev(t, a.token, '/api/me/cards/4.svg')).statusCode).toBe(404);
+    const z = await call(t, gm, 'GET', '/api/export/package.zip');
+    expect(z.statusCode).toBe(200);
+    expect(z.rawPayload.subarray(0, 2).toString()).toBe('PK');
+    const names = z.rawPayload.toString('latin1');
+    for (const f of ['night-summary.pdf', 'statement.pdf', 'card-3.svg', 'data/night.json']) expect(names).toContain(f);
+  });
 });
 
 describe('exports and archive', () => {

@@ -17,7 +17,10 @@ import { deleteSound, listSounds, playSound, soundFileMime, uploadSound } from '
 import { minterGet, minterSync } from '../services/minter';
 import { answerOverrun, dismissPrompt } from '../services/prompts';
 import { statement } from '../services/recap';
-import { statementPdf } from '../services/pdf';
+import { nightSummaryPdf, statementPdf } from '../services/pdf';
+import { nightSummary, playerCards } from '../services/nightReport';
+import { zip } from '../services/zip';
+import { getNight, type PlayerRow } from '../services/state';
 import { CSV_KINDS, exportNightCsv, exportNightJson, listNights } from '../services/exports';
 import { replayFinale, skipFinale } from '../services/night';
 import { createChallenge, readChallenge, reassignChallenge, resolveChallenge, respondChallenge, usePeek } from '../services/espionage';
@@ -401,6 +404,38 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
     const pdf = await statementPdf(s, { firm: COPY.brand.company, title: 'Final Account Statement', footer: COPY.brand.tagline }, (type) => COPY.achievements[type]?.name ?? type);
     const file = `statement-${s.night.date}-${s.player.ticker}.pdf`;
     return reply.header('content-type', 'application/pdf').header('content-disposition', `attachment; filename="${file}"`).send(pdf);
+  });
+  // Shareable image cards (SVG; the phone turns them into PNGs to save).
+  app.get<{ Params: { n: string } }>('/api/me/cards/:n', async (req, reply) => {
+    const s = statement(ctx, device(req));
+    const i = Number(req.params.n.replace(/\.svg$/, '')) - 1;
+    const svg = playerCards(s, s.stats, COPY.brand.company)[i];
+    if (!svg) return reply.code(404).send({ error: 'not_found' });
+    return reply.header('content-type', 'image/svg+xml').header('cache-control', 'no-store').send(svg);
+  });
+  // GM end-of-night package: every player's statement PDF and cards, the night summary, and the data exports.
+  app.get<{ Querystring: { night?: string } }>('/api/export/package.zip', async (req, reply) => {
+    const gm = requireGm(ctx, req, { master: true });
+    const data = exportNightJson(ctx, gm, req.query.night);
+    const n = getNight(ctx, data.night.id)!;
+    if (!['ended', 'archived'].includes(n.status)) return reply.code(409).send({ error: 'night_not_over', message: 'The package is ready after the night ends.' });
+    const base = `${data.night.date}-${data.night.name.replace(/[^\w-]+/g, '_')}`;
+    const files: { name: string; data: Buffer | string }[] = [];
+    const titles: { name: string; title: string }[] = [];
+    for (const p of ctx.db.prepare('SELECT * FROM player WHERE night_id = ? ORDER BY id').all(n.id) as PlayerRow[]) {
+      const s = statement(ctx, p);
+      titles.push({ name: p.display_name, title: s.stats.title });
+      const who = `${p.ticker}-${p.display_name.replace(/[^\w-]+/g, '_')}`;
+      files.push({ name: `players/${who}/statement.pdf`, data: await statementPdf(s, { firm: COPY.brand.company, title: 'Final Account Statement', footer: COPY.brand.tagline }, (type) => COPY.achievements[type]?.name ?? type) });
+      playerCards(s, s.stats, COPY.brand.company).forEach((svg, i) => files.push({ name: `players/${who}/card-${i + 1}.svg`, data: svg }));
+    }
+    files.unshift({ name: 'night-summary.pdf', data: await nightSummaryPdf(nightSummary(ctx, n), titles, { firm: COPY.brand.company }) });
+    files.push({ name: 'data/night.json', data: JSON.stringify(data, null, 2) });
+    for (const k of CSV_KINDS) {
+      const r = exportNightCsv(ctx, gm, k, n.id);
+      files.push({ name: `data/${r.name}`, data: '\uFEFF' + r.csv });
+    }
+    return reply.header('content-type', 'application/zip').header('content-disposition', `attachment; filename="${base}-package.zip"`).send(zip(files));
   });
   app.get('/api/nights', async (req) => ({ nights: listNights(ctx, requireGm(ctx, req)) }));
   app.get<{ Querystring: { night?: string } }>('/api/export/night.json', async (req, reply) => {

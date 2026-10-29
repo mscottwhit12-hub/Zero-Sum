@@ -161,6 +161,7 @@
         <div class="actions">
           {#if !night.recapDone}<button onclick={() => run(() => post('/api/night/finale/skip'), 'Phones unlocked')}>Skip finale</button>{/if}
           <button onclick={() => run(() => post('/api/night/finale/replay'), 'Replaying on TV')}>Replay on TV</button>
+          <a class="btn primary" href="/api/export/package.zip">Download package (zip)</a>
           <a class="btn" href="/api/export/night.json">Export JSON</a>
           <a class="btn" href="/api/export/standings.csv">Standings CSV</a>
           <a class="btn" href="/api/export/results.csv">Results CSV</a>

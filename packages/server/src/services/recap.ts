@@ -6,6 +6,7 @@
 import { hoursPlayed } from '@gn/engine';
 import { conflict, notFound, type Ctx } from '../context';
 import { minterLeaderboard } from './minter';
+import { playerStats } from './nightReport';
 import { playCue } from './sounds';
 import { computeNightState, getNight, loadResults, nightSettings, pid, type NightRow, type PlayerRow } from './state';
 
@@ -182,9 +183,12 @@ export function statement(ctx: Ctx, player: PlayerRow) {
   const votesCast = (ctx.db.prepare('SELECT COUNT(*) c FROM ballot b JOIN vote_round v ON v.id = b.vote_round_id WHERE v.night_id = ? AND b.player_id = ?').get(n.id, player.id) as { c: number }).c;
   const minted = (ctx.db.prepare('SELECT minted FROM minter_state WHERE night_id = ? AND player_id = ?').get(n.id, player.id) as { minted: number } | undefined)?.minted ?? 0;
   const achievements = (ctx.db.prepare('SELECT type FROM achievement WHERE night_id = ? AND player_id = ? ORDER BY id').all(n.id, player.id) as { type: string }[]).map((a) => a.type);
+  const tradingResultH = closed.reduce((a, t) => a + t.profitH!, 0);
+  const stats = playerStats(ctx, n, st, player, { tradingResultH, correctVotes, votesCast, nftsMinted: Math.floor(minted), achievements, rank: me?.rank ?? null });
   return {
     night: { name: n.name, date: n.date },
     player: { id: player.id, displayName: player.display_name, ticker: player.ticker },
+    stats,
     goldH: me?.netWorthH ?? 0,
     rank: me?.rank ?? null,
     players: st.players.length,
@@ -192,7 +196,7 @@ export function statement(ctx: Ctx, player: PlayerRow) {
     rankBest: ranks.length ? Math.min(...ranks) : null,
     bestTrade: best,
     worstTrade: worst && worst !== best ? worst : null,
-    tradingResultH: closed.reduce((a, t) => a + t.profitH!, 0),
+    tradingResultH,
     correctVotes,
     votesCast,
     achievements,

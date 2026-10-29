@@ -146,6 +146,24 @@ export interface Statement {
   achievements: string[];
   nftsMinted: number;
   trades: StatementTrade[];
+  stats: StatementStats;
+}
+export interface StatementStats {
+  netWorthLine: { t: number; v: number }[];
+  games: { name: string; placement: number | null; dnf: boolean; players: number; goldH: number }[];
+  gameGoldH: number;
+  tradeCount: number;
+  feesH: number;
+  bestShortH: number | null;
+  ownStock: { ticker: string; line: { t: number; p: number }[]; high: number; low: number; close: number } | null;
+  biggestBacker: { name: string; sharesH: number } | null;
+  bountiesH: number;
+  rerollsUsed: number;
+  minterRank: number | null;
+  playHours: number;
+  idleHours: number;
+  chatMessages: number;
+  title: string;
 }
 export interface SeatingTable {
   id: number;
