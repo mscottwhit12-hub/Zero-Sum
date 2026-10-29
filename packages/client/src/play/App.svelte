@@ -299,7 +299,7 @@
             <strong>{t(`phone.apps.${app}`)}</strong>
           </div>
           <div class="list appbody">
-            {#if app === 'vote'}<Vote {s} {now} />
+            {#if app === 'vote'}<Vote {s} {now} ondone={() => { if (app === 'vote') app = null; }} />
             {:else if app === 'wallet'}<Wallet {s} />
             {:else if app === 'market'}<Market {s} />
             {:else if app === 'standings'}<Standings {s} />

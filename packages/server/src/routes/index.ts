@@ -3,11 +3,11 @@ import { buyHint, gmSendHint, readHint, tradeRerollForHint } from '../services/h
 import { readGift, setHandicapOffset } from '../services/handicap';
 import { readFileSync } from 'node:fs';
 import { join as joinPath } from 'node:path';
-import { HttpError, type Ctx } from '../context';
+import { HttpError, notFound, type Ctx } from '../context';
 import { decideRequest, join, joinInfo, requestRejoin, requestStatus } from '../services/join';
 import { markLeft, overrideTicker, playerFromDevice } from '../services/players';
 import { playerBuy, playerSell } from '../services/trading';
-import { castBallot } from '../services/votes';
+import { castBallot, openVoteEarly } from '../services/votes';
 import { logReroll, recordMood, sendNotification, setOffset } from '../services/field';
 import { createRule, deleteRule, listRules, updateRule } from '../services/rules';
 import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '../services/seating';
@@ -21,7 +21,7 @@ import { statementPdf } from '../services/pdf';
 import { CSV_KINDS, exportNightCsv, exportNightJson, listNights } from '../services/exports';
 import { replayFinale, skipFinale } from '../services/night';
 import { createChallenge, readChallenge, reassignChallenge, resolveChallenge, respondChallenge, usePeek } from '../services/espionage';
-import { auditTail } from '../services/audit';
+import { audit, auditTail } from '../services/audit';
 import {
   createSubGm,
   deactivateSubGm,
@@ -358,7 +358,7 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // Phase 7 — sounds (upload: Master; soundboard: any GM). Files are local (MEDIA_DIR/sounds).
   app.get('/api/sounds', async (req) => (requireGm(ctx, req), { sounds: listSounds(ctx) }));
-  app.post('/api/sounds', { bodyLimit: 12 * 1024 * 1024 }, async (req) => uploadSound(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
+  app.post('/api/sounds', { bodyLimit: 42 * 1024 * 1024 }, async (req) => uploadSound(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
   app.delete<Id>('/api/sounds/:id', async (req) => deleteSound(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id)));
   app.post('/api/sounds/play', async (req) => playSound(ctx, requireGm(ctx, req), b(req.body)));
   app.get<{ Params: { file: string } }>('/media/sounds/:file', async (req, reply) => {
@@ -380,6 +380,14 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // Phase 8 — prompts, finale, statements, exports, archive
   app.post('/api/night/prompts/dismiss', async (req) => dismissPrompt(ctx, requireGm(ctx, req), b(req.body).prompt));
+  app.post('/api/night/vote-early', async (req) => {
+    const gm = requireGm(ctx, req);
+    const n = currentNight(ctx);
+    if (!n) throw notFound('no_night');
+    const r = openVoteEarly(ctx, n);
+    audit(ctx, { nightId: n.id, gmId: gm.gmId, action: 'vote.open_early', entity: 'vote', entityId: r.quarter, after: r });
+    return r;
+  });
   app.post('/api/night/overrun', async (req) => answerOverrun(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
   app.post('/api/night/finale/skip', async (req) => skipFinale(ctx, requireGm(ctx, req, { master: true })));
   app.post('/api/night/finale/replay', async (req) => replayFinale(ctx, requireGm(ctx, req, { master: true })));

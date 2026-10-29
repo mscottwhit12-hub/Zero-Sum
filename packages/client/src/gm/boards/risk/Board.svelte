@@ -167,6 +167,7 @@
         <button class="big" onclick={() => apply(restore(game, ctx, p.id, now()))}>Undo elimination</button>
       {:else}
         {@render stepper('Territories', d.territories, [1, 5], (v) => apply(setTerritories(game, ctx, p.id, v, now())))}
+        {#if assigned > total}<p class="error small">Players hold {assigned} territories but the map has {total}. Check the numbers.</p>{/if}
         {@render stepper(`Armies (up to ${armiesMax})`, d.armies, [1, 5], (v) => apply(setArmies(game, ctx, p.id, v, now())))}
 
         <div class="field">
@@ -223,6 +224,7 @@
         {/if}
       </div>
     </div>
+    {#if assigned > total}<p class="error">Warning: players hold {assigned} territories, {assigned - total} more than the map's {total}. Someone's number is off.</p>{/if}
     {#if stat.over && stat.winnerId !== null}
       <p class="win"><strong>{nameOf(stat.winnerId)} has conquered the world.</strong> Finish the game from the result screen; the places are filled in for you.</p>
     {/if}

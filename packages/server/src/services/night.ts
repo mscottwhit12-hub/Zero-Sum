@@ -235,7 +235,8 @@ function finishNight(ctx: Ctx, n: NightRow, now: number) {
   const lots = loadLots(ctx, n.id);
   const ps = players(ctx, n.id);
   const open = ctx.db
-    .prepare("SELECT id FROM vote_round WHERE night_id = ? AND status IN ('open','closed') ORDER BY quarter DESC LIMIT 1")
+    // The earliest unresolved round is the running quarter's (a later one may have been opened early).
+    .prepare("SELECT id FROM vote_round WHERE night_id = ? AND status IN ('open','closed') ORDER BY quarter LIMIT 1")
     .get(n.id) as { id: number } | undefined;
   const ballots = open
     ? (ctx.db.prepare('SELECT player_id, target_player_id, weight FROM ballot WHERE vote_round_id = ?').all(open.id) as { player_id: number; target_player_id: number; weight: number }[]).map(
@@ -257,6 +258,8 @@ function finishNight(ctx: Ctx, n: NightRow, now: number) {
     for (const p of res.quarter.payouts) pay.run(open.id, Number(p.playerId), p.goldH, now);
     ctx.db.prepare("UPDATE vote_round SET status = 'resolved', closed_at = COALESCE(closed_at, ?) WHERE id = ?").run(now, open.id);
   }
+  // A next-quarter vote opened early never gets its quarter: void it.
+  ctx.db.prepare("UPDATE vote_round SET status = 'void', closed_at = COALESCE(closed_at, ?) WHERE night_id = ? AND status IN ('open','closed')").run(now, n.id);
   const ins = ctx.db.prepare(
     'INSERT INTO trade (night_id, player_id, security_id, side, shares_h, price, cash_h, fee_h, basis_h, forced, tick, created_at) VALUES (?,?,?,?,?,?,?,?,?,1,?,?)',
   );

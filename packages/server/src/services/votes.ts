@@ -20,10 +20,13 @@ interface RoundRow {
   opened_at: number;
   closed_at: number | null;
   drift: string | null;
+  /** Set when the GM opened this round early: its window closes here (night-clock ms) instead of at the quarter's. */
+  window_end_nms: number | null;
 }
 
 export function currentRound(ctx: Ctx, nightId: number): RoundRow | null {
-  return (ctx.db.prepare("SELECT * FROM vote_round WHERE night_id = ? AND status IN ('open','closed') ORDER BY quarter DESC LIMIT 1").get(nightId) as RoundRow | undefined) ?? null;
+  // An open round wins (an early-opened next quarter can be open while this quarter's round waits to resolve).
+  return (ctx.db.prepare("SELECT * FROM vote_round WHERE night_id = ? AND status IN ('open','closed') ORDER BY status = 'open' DESC, quarter DESC LIMIT 1").get(nightId) as RoundRow | undefined) ?? null;
 }
 
 function ballots(ctx: Ctx, roundId: number): Ballot[] {
@@ -58,26 +61,46 @@ export function voteStep(ctx: Ctx, n: NightRow): void {
   const st = computeNightState(ctx, n.id)!;
   const min = st.nightMs / 60_000;
   const pos = quarterAt(st.quarters, min);
-  let round = currentRound(ctx, n.id);
-
-  // Leaving a round's quarter (or its quarter no longer exists after a length change) → resolve it.
-  if (round && (!pos.quarter || pos.quarter.n !== round.quarter)) {
-    if (round.status === 'open') closeWindow(ctx, round, st);
-    resolve(ctx, n, round, st);
-    round = null;
+  const rounds = ctx.db.prepare("SELECT * FROM vote_round WHERE night_id = ? AND status IN ('open','closed') ORDER BY quarter").all(n.id) as RoundRow[];
+  for (const round of rounds) {
+    const q = st.quarters.find((x) => x.n === round.quarter);
+    // Its quarter is over (or no longer exists after a length change) → resolve it.
+    if (!q || min >= q.endMin) {
+      if (round.status === 'open') closeWindow(ctx, round, st);
+      resolve(ctx, n, round, st);
+      continue;
+    }
+    const windowEnd = round.window_end_nms ?? q.windowEndMin * 60_000;
+    if (round.status === 'open' && st.nightMs >= windowEnd) closeWindow(ctx, round, st);
   }
-  if (!pos.quarter) return;
+  if (!pos.quarter || pos.phase !== 'window') return;
   const q = pos.quarter;
-  if (!round) {
-    const exists = ctx.db.prepare('SELECT 1 FROM vote_round WHERE night_id = ? AND quarter = ?').get(n.id, q.n);
-    if (exists || pos.phase !== 'window') return; // one round per quarter; don't open late mid-quarter
-    ctx.db.prepare("INSERT INTO vote_round (night_id, quarter, status, opened_at) VALUES (?, ?, 'open', ?)").run(n.id, q.n, ctx.now());
-    pushFeed(ctx, n.id, 'vote', 'feed.vote_open', { quarter: q.n });
-    ctx.bus.all('vote:call', { quarter: q.n });
-    ctx.bus.refresh(n.id);
-    return;
-  }
-  if (round.status === 'open' && pos.phase === 'drift') closeWindow(ctx, round, st);
+  const exists = ctx.db.prepare('SELECT 1 FROM vote_round WHERE night_id = ? AND quarter = ?').get(n.id, q.n);
+  if (exists) return; // one round per quarter (an early-opened one counts); don't open late mid-quarter
+  ctx.db.prepare("INSERT INTO vote_round (night_id, quarter, status, opened_at) VALUES (?, ?, 'open', ?)").run(n.id, q.n, ctx.now());
+  pushFeed(ctx, n.id, 'vote', 'feed.vote_open', { quarter: q.n });
+  ctx.bus.all('vote:call', { quarter: q.n });
+  ctx.bus.refresh(n.id);
+}
+
+/**
+ * GM: open the next quarter's vote now. Its window lasts the usual length (votes.windowMinutes); the quarter itself
+ * still starts and ends on schedule, its hidden drift applies from its start, and its bounty pays at its end.
+ */
+export function openVoteEarly(ctx: Ctx, n: NightRow) {
+  const st = computeNightState(ctx, n.id)!;
+  if (st.night.status !== 'live') throw conflict('not_live', 'The night must be running.');
+  if (ctx.db.prepare("SELECT 1 FROM vote_round WHERE night_id = ? AND status = 'open'").get(n.id)) throw conflict('vote_already_open', 'A vote is already open.');
+  const min = st.nightMs / 60_000;
+  const taken = new Set((ctx.db.prepare('SELECT quarter FROM vote_round WHERE night_id = ?').all(n.id) as { quarter: number }[]).map((r) => r.quarter));
+  const q = st.quarters.find((x) => !taken.has(x.n) && x.endMin > min);
+  if (!q) throw conflict('no_quarter_left', 'There is no later quarter to vote on.');
+  const windowEnd = Math.min(st.nightMs + st.settings.votes.windowMinutes * 60_000, q.endMin * 60_000);
+  ctx.db.prepare("INSERT INTO vote_round (night_id, quarter, status, opened_at, window_end_nms) VALUES (?, ?, 'open', ?, ?)").run(n.id, q.n, ctx.now(), Math.round(windowEnd));
+  pushFeed(ctx, n.id, 'vote', 'feed.vote_open', { quarter: q.n });
+  ctx.bus.all('vote:call', { quarter: q.n });
+  ctx.bus.refresh(n.id);
+  return { quarter: q.n };
 }
 
 function closeWindow(ctx: Ctx, round: RoundRow, st: NightState) {
@@ -113,7 +136,7 @@ export function voteView(ctx: Ctx, st: NightState, playerId: number | null) {
   return {
     quarter: round.quarter,
     open: round.status === 'open',
-    windowEndsNms: q ? q.windowEndMin * 60_000 : null,
+    windowEndsNms: round.window_end_nms ?? (q ? q.windowEndMin * 60_000 : null),
     quarterEndsNms: q ? q.endMin * 60_000 : null,
     myTarget: mine?.target_player_id ?? null,
   };

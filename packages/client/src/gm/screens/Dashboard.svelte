@@ -106,6 +106,11 @@
             {#if v.open && v.windowEndsNms != null}<span class="muted mono">closes in {clock(v.windowEndsNms - nightNow(night, now))}</span>{/if}
           </div>
         {/if}
+        {#if night.status === 'live' && !gs?.gm?.vote?.open}
+          <div class="row small" style="margin-top:.3rem">
+            <button class="small" title="Opens the next quarter's vote now. The quarter itself still starts and ends on schedule." onclick={() => run(() => post('/api/night/vote-early'), 'Vote opened early')}>Open next vote now</button>
+          </div>
+        {/if}
       </div>
       {#if master}
         <div class="row">

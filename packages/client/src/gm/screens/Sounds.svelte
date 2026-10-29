@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ApiError, del, post } from '@shared/api';
-  import { run } from '@shared/ui';
+  import { run, toast } from '@shared/ui';
   import type { GmState, WhoAmI } from '@shared/types';
 
   let { gs, whoami }: { gs: GmState | null; whoami: WhoAmI } = $props();
@@ -44,16 +44,30 @@
       x.send(body);
     });
   }
+  const MAX_MB = 30;
+  const MIME: Record<string, string> = { mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', mp4: 'audio/mp4', flac: 'audio/flac' };
   async function upload(e: Event) {
     e.preventDefault();
-    if (!file) return;
-    const data = await new Promise<string>((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(String(r.result));
-      r.onerror = rej;
-      r.readAsDataURL(file!);
-    });
+    if (!file) return toast('Choose a sound file first.', 'error');
+    const ext = (file.name.split('.').pop() ?? '').toLowerCase();
+    const mime = MIME[ext];
+    if (!mime) return toast('Upload an MP3, OGG, WAV, M4A or FLAC file.', 'error');
+    if (file.size > MAX_MB * 1024 * 1024) return toast(`That file is ${(file.size / 1048576).toFixed(1)} MB. Sound files must be under ${MAX_MB} MB.`, 'error');
     progress = 0;
+    let data: string;
+    try {
+      data = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result));
+        r.onerror = () => rej(r.error);
+        r.readAsDataURL(file!);
+      });
+    } catch {
+      progress = null;
+      return toast('Could not read that file. Try again or pick another.', 'error');
+    }
+    // Browsers report odd or empty types for some audio (FLAC especially): label it by its extension.
+    data = `data:${mime};base64,${data.slice(data.indexOf(',') + 1)}`;
     const body = JSON.stringify({ name: name || file!.name.replace(/\.\w+$/, ''), kind, theme, data });
     const ok = await run(() => sendWithProgress('/api/sounds', body, (f) => (progress = f)), 'Uploaded');
     progress = null;
@@ -88,7 +102,7 @@
 {#if master}
   <form class="panel" onsubmit={upload}>
     <h2>Upload a sound</h2>
-    <p class="small muted">Local files only (MP3, OGG, WAV, M4A; up to 8 MB). Stored on this server.</p>
+    <p class="small muted">Local files only (MP3, OGG, WAV, M4A, FLAC; up to 30 MB). Stored on this server.</p>
     <div class="grid2">
       <label class="field"><span>File</span><input type="file" accept="audio/*" onchange={(e) => (file = (e.currentTarget as HTMLInputElement).files?.[0] ?? null)} required /></label>
       <label class="field"><span>Name</span><input bind:value={name} maxlength="60" /></label>

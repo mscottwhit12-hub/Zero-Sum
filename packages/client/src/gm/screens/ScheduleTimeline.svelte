@@ -12,7 +12,7 @@
   import { nightNow } from '@shared/socket';
   import { run } from '@shared/ui';
   import type { GameInfo, GmState } from '@shared/types';
-  import { playerName } from '../lib';
+  import { pastNightEnd, playerName } from '../lib';
 
   let { gs, editable }: { gs: GmState | null; editable: boolean } = $props();
 
@@ -161,6 +161,11 @@
     op = null;
     const l = live;
     if (!o.moved || !l) {
+      live = null;
+      return;
+    }
+    const late = pastNightEnd(gs, l.start, l.hours);
+    if (late && !confirm(`${late}\n\nKeep it there?`)) {
       live = null;
       return;
     }

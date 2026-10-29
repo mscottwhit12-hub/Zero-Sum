@@ -4,7 +4,7 @@
   import { hours, timeOfDay } from '@shared/format';
   import { run } from '@shared/ui';
   import type { GameInfo, GmState, WhoAmI } from '@shared/types';
-  import { activePlayers, confirmStart, doubleBooked, epochToTime, playerName, timeToEpoch } from '../lib';
+  import { activePlayers, confirmStart, doubleBooked, epochToTime, pastNightEnd, playerName, timeToEpoch } from '../lib';
   import { gameClock, gameTag } from '@shared/gameTime';
   import { onDestroy } from 'svelte';
   import ScheduleTimeline from './ScheduleTimeline.svelte';
@@ -83,7 +83,8 @@
       participants: picked,
       ...(leadFixed ? {} : { leadMode, leadLabel }),
     };
-    const clash = doubleBooked(gs, body.plannedStart, body.plannedDurationHours, picked, editing ?? undefined);
+    const late = pastNightEnd(gs, body.plannedStart, body.plannedDurationHours);
+    const clash = [...doubleBooked(gs, body.plannedStart, body.plannedDurationHours, picked, editing ?? undefined), ...(late ? [late] : [])];
     if (clash.length && !confirm(`${clash.join('\n')}\n\nSchedule anyway?`)) return;
     const r = editing ? await run(() => patch(`/api/games/${editing}`, body), 'Game updated') : await run(() => post('/api/games', body), 'Game scheduled');
     if (r) reset();

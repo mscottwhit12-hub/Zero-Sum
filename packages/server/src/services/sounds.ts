@@ -16,14 +16,17 @@ export const CUES = ['final_round', 'intermission', 'achievement', 'night_end', 
 export type Cue = (typeof CUES)[number];
 export type SoundKind = 'ambient' | 'cue' | 'soundboard';
 
-const MAX_BYTES = 8 * 1024 * 1024;
+/** Upload cap (uncompressed WAV and FLAC are big). The route's body limit allows for base64 (+37%). */
+export const SOUND_MAX_MB = 30;
+const MAX_BYTES = SOUND_MAX_MB * 1024 * 1024;
 const TYPES: Record<string, { ext: string; sig: (b: Buffer) => boolean }> = {
   'audio/mpeg': { ext: 'mp3', sig: (b) => b.subarray(0, 3).toString('latin1') === 'ID3' || (b[0] === 0xff && (b[1]! & 0xe0) === 0xe0) },
   'audio/ogg': { ext: 'ogg', sig: (b) => b.subarray(0, 4).toString('latin1') === 'OggS' },
   'audio/wav': { ext: 'wav', sig: (b) => b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WAVE' },
   'audio/mp4': { ext: 'm4a', sig: (b) => b.subarray(4, 8).toString('latin1') === 'ftyp' },
+  'audio/flac': { ext: 'flac', sig: (b) => b.subarray(0, 4).toString('latin1') === 'fLaC' || (b.subarray(0, 3).toString('latin1') === 'ID3' && b.includes('fLaC')) },
 };
-const ALIASES: Record<string, string> = { 'audio/mp3': 'audio/mpeg', 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/x-m4a': 'audio/mp4', 'audio/m4a': 'audio/mp4' };
+const ALIASES: Record<string, string> = { 'audio/mp3': 'audio/mpeg', 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/x-m4a': 'audio/mp4', 'audio/m4a': 'audio/mp4', 'audio/x-flac': 'audio/flac' };
 
 export interface SoundInfo {
   id: number;
@@ -64,12 +67,12 @@ export function uploadSound(ctx: Ctx, actor: GmAuth, input: { name?: unknown; ki
   if (kind === 'ambient' && !theme) throw bad('bad_theme', 'Ambient sounds need a theme name (matches a library game’s sound theme).');
   if (kind === 'soundboard') theme = null;
   const m = typeof input.data === 'string' ? /^data:(audio\/[\w.+-]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=]+)$/.exec(input.data) : null;
-  if (!m) throw bad('bad_audio', 'Upload an MP3, OGG, WAV or M4A file.');
+  if (!m) throw bad('bad_audio', 'Upload an MP3, OGG, WAV, M4A or FLAC file.');
   const mime = ALIASES[m[1]!] ?? m[1]!;
   const type = TYPES[mime];
-  if (!type) throw bad('bad_audio', 'Upload an MP3, OGG, WAV or M4A file.');
+  if (!type) throw bad('bad_audio', 'Upload an MP3, OGG, WAV, M4A or FLAC file.');
   const bytes = Buffer.from(m[2]!, 'base64');
-  if (bytes.length > MAX_BYTES) throw bad('audio_too_large', 'Sound files must be under 8 MB.');
+  if (bytes.length > MAX_BYTES) throw bad('audio_too_large', `Sound files must be under ${SOUND_MAX_MB} MB.`);
   if (!type.sig(bytes)) throw bad('bad_audio', 'That file is not valid audio.');
   const dir = join(ctx.config.mediaDir, 'sounds');
   mkdirSync(dir, { recursive: true });

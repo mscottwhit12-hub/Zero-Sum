@@ -175,7 +175,7 @@ export function updateScheduledGame(ctx: Ctx, actor: GmAuth, id: number, input: 
     if (input.leadMode !== undefined) leadMode = leadModeOf(input.leadMode) ?? 'high';
     if (input.leadLabel !== undefined) leadLabel = leadLabelOf(input.leadLabel);
   }
-  return ctx.db.transaction(() => {
+  const res = ctx.db.transaction(() => {
     ctx.db
       .prepare('UPDATE game SET name=?, mode=?, planned_duration_hours=?, planned_start=?, rerolls_allowed=?, table_id=?, lead_mode=?, lead_label=? WHERE id=?')
       .run(name, mode, duration, plannedStart, rerolls, tableId, leadMode, leadLabel, id);
@@ -184,6 +184,11 @@ export function updateScheduledGame(ctx: Ctx, actor: GmAuth, id: number, input: 
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.update', entity: 'game', entityId: id, before, after });
     return after;
   })();
+  // Every open GM screen (and the TV schedule) must see the new time/table at once: a stale start made the next
+  // timeline drag start from the old position.
+  ctx.bus.all('game:update', { id, status: res.status });
+  ctx.bus.refresh(n.id);
+  return res;
 }
 
 export function cancelGame(ctx: Ctx, actor: GmAuth, id: number): void {

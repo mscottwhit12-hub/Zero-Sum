@@ -1,4 +1,6 @@
 import type { GameInfo, GmState, PlayerInfo } from '@shared/types';
+import { timeOfDay } from '@shared/format';
+import { nightNow } from '@shared/socket';
 
 export const playerName = (s: GmState | null, id: number | null | undefined) =>
   id == null ? '—' : (s?.players.find((p) => p.id === id)?.displayName ?? `#${id}`);
@@ -53,6 +55,18 @@ export function doubleBooked(s: GmState | null, start: number | null, hours: num
     if (both.length) out.push(`${both.join(', ')} ${both.length > 1 ? 'are' : 'is'} also in ${g.name} at that time.`);
   }
   return out;
+}
+
+/** Warning when a game planned at `start` for `hours` would end after the night's planned end (night started only). */
+export function pastNightEnd(s: GmState | null, start: number | null, hours: number | null): string | null {
+  const n = s?.night;
+  if (!n || start == null || !hours || (n.status !== 'live' && n.status !== 'paused')) return null;
+  const now = Date.now();
+  const nightEnd = now - nightNow(n, now) + n.lengthMinutes * 60_000;
+  const end = start + hours * 3_600_000;
+  if (end <= nightEnd) return null;
+  const over = Math.round((end - nightEnd) / 60_000);
+  return `This game is planned to end ${over} min after the night's planned end (${timeOfDay(nightEnd)}).`;
 }
 
 /** Start a game, asking first if any time guard applies. */

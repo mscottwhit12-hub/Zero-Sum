@@ -501,4 +501,7 @@ export const MIGRATIONS: string[] = [
   /* 14 — NFT Minter idle features: upgrades, managers, investors (JSON) */ `
   ALTER TABLE minter_state ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
   `,
+  /* 15 — GM opens a quarter's vote early (own window end, night-clock ms) */ `
+  ALTER TABLE vote_round ADD COLUMN window_end_nms INTEGER;
+  `,
 ];

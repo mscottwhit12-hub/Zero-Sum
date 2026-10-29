@@ -6,7 +6,7 @@
   import type { PlayerState } from '@shared/types';
   import { dapi } from '../device';
 
-  let { s, now }: { s: PlayerState; now: number } = $props();
+  let { s, now, ondone }: { s: PlayerState; now: number; ondone?: () => void } = $props();
   const vote = $derived(s.me?.vote ?? null);
   const active = $derived(s.players.filter((p) => !p.left));
   const left = $derived.by(() => {
@@ -17,8 +17,10 @@
   let busy = $state(false);
   async function pick(id: number) {
     busy = true;
-    await run(() => dapi('POST', '/api/vote', { targetId: id }), t('phone.vote_saved'));
+    const ok = await run(async () => (await dapi('POST', '/api/vote', { targetId: id }), true), t('phone.vote_saved'));
     busy = false;
+    // The call is answered: hang up and go back to the home screen (the Vote icon stays to change the pick).
+    if (ok) setTimeout(() => ondone?.(), 700);
   }
 </script>
 
