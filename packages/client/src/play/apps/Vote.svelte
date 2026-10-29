@@ -32,9 +32,9 @@
   {:else}
     <p class="small muted">{t('phone.vote_closed')}</p>
   {/if}
-  <div class="list">
+  <div class="picks">
     {#each active as p (p.id)}
-      <button class="row panel" class:picked={vote.myTarget === p.id} disabled={!vote.open || busy} onclick={() => pick(p.id)}>
+      <button class="pick" class:picked={vote.myTarget === p.id} disabled={!vote.open || busy} onclick={() => pick(p.id)}>
         <Avatar name={p.displayName} color={p.color} src={p.avatarPath} size={32} />
         <span class="grow">{p.displayName}</span>
         <span class="mono small muted">{p.ticker}</span>
@@ -43,26 +43,3 @@
     {/each}
   </div>
 {/if}
-
-<style>
-  .list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    margin-top: 0.6rem;
-  }
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    width: 100%;
-    text-align: left;
-  }
-  .grow {
-    flex: 1;
-  }
-  .picked {
-    border-color: var(--accent);
-    outline: 2px solid var(--accent);
-  }
-</style>

@@ -36,7 +36,7 @@ try {
   await dup.page.getByRole('button', { name: /^(Join|Request to join)$/ }).click();
   const t1 = await toasts(dup.page);
   const err1 = await dup.page.locator('.error, .toast.error').allTextContents();
-  R.check(!(await dup.page.locator('button.icon').first().isVisible().catch(() => false)), 'join', 'duplicate name/ticker refused', 'second Alice got in');
+  R.check(!(await dup.page.locator('button.app').first().isVisible().catch(() => false)), 'join', 'duplicate name/ticker refused', 'second Alice got in');
   R.check(/taken|in use|already/i.test(t1 + err1.join(' ')), 'join', 'duplicate shows a clear message', `message: "${t1} ${err1.join(' ')}"`);
 
   // 3. Reserved ticker, junk tickers, emoji / long / blank / html names.
@@ -61,7 +61,7 @@ try {
     }
     await submit.click();
     const msg = (await toasts(q.page)) + ' ' + (await q.page.locator('.error').allTextContents()).join(' ');
-    const joined = await q.page.locator('button.icon').first().isVisible().catch(() => false);
+    const joined = await q.page.locator('button.app').first().isVisible().catch(() => false);
     if (expectErr) {
       R.check(!joined, 'join', `refused ${JSON.stringify(name)} / ${tk}`, `got in with ${tk}`);
       R.check(expectErr.test(msg), 'join', `clear message for ${tk}`, `message: "${msg.trim()}"`);
@@ -85,17 +85,17 @@ try {
   await r.page.getByLabel('Display name').fill('Rae');
   await r.page.getByLabel(/Ticker/).fill('RAE');
   await r.page.getByRole('button', { name: /^(Join|Request to join)$/ }).click();
-  await r.page.locator('button.icon').first().waitFor({ timeout: 8000 }).catch(() => {});
+  await r.page.locator('button.app').first().waitFor({ timeout: 8000 }).catch(() => {});
   await r.page.reload();
   await r.page.waitForTimeout(1500);
-  R.check(await r.page.locator('button.icon').first().isVisible().catch(() => false), 'join', 'refresh after joining keeps you in');
+  R.check(await r.page.locator('button.app').first().isVisible().catch(() => false), 'join', 'refresh after joining keeps you in');
 
   // 5. Same phone opens a second tab.
   const tab2 = await r.ctx.newPage();
   R.watch(tab2, 'Rae-tab2');
   await tab2.goto(s.base + '/play');
   await tab2.waitForTimeout(4500);
-  R.check(await tab2.locator('button.icon').first().isVisible().catch(() => false), 'join', 'second tab on the same phone is the same player');
+  R.check(await tab2.locator('button.app').first().isVisible().catch(() => false), 'join', 'second tab on the same phone is the same player');
 
   // 6. Night starts; a late arrival joins (needs approval), then the GM double-taps Approve.
   await api(gm.req, s.base, 'POST', '/api/night/start');
@@ -112,7 +112,7 @@ try {
   const gmToasts = await toasts(gm.page);
   R.check(!/error|went wrong|not found/i.test(gmToasts), 'gm', 'double-tapping Approve shows no error', `toasts: ${gmToasts}`);
   await late.page.waitForTimeout(2500);
-  R.check(await late.page.locator('button.icon').first().isVisible().catch(() => false), 'join', 'approved late joiner gets in without refreshing', 'late joiner still waiting');
+  R.check(await late.page.locator('button.app').first().isVisible().catch(() => false), 'join', 'approved late joiner gets in without refreshing', 'late joiner still waiting');
   const pl = (await api(gm.req, s.base, 'GET', '/api/night')).body.players;
   R.check(pl.filter((p) => p.displayName === 'Late').length === 1, 'join', 'one Late player after double approve');
 
@@ -129,7 +129,7 @@ try {
     const ap = gm.page.getByRole('button', { name: 'Approve' }).first();
     if (await ap.isVisible().catch(() => false)) await ap.click();
     await lost.page.waitForTimeout(2500);
-    R.check(await lost.page.locator('button.icon').first().isVisible().catch(() => false), 'join', 'rejoined phone gets in after approval without refreshing');
+    R.check(await lost.page.locator('button.app').first().isVisible().catch(() => false), 'join', 'rejoined phone gets in after approval without refreshing');
   }
   // 8. Spam the join endpoint (someone mashing on a bad connection).
   const spam = await Promise.all(Array.from({ length: 15 }, (_, i) => api(late.ctx.request, s.base, 'POST', '/api/join', { displayName: 'Spam', ticker: 'SPM' })));

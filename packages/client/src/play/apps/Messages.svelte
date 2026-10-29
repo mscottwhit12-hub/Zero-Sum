@@ -76,8 +76,8 @@
 </script>
 
 {#if s.me?.tipShop?.buy || (s.me?.tipShop?.tradeIn && s.me.tipShop.tradeIn.tokens > 0)}
-  <div class="msg panel shop">
-    <span class="small muted">{t('phone.tip_shop')}</span>
+  <div class="cd shop">
+    <p>{t('phone.tip_shop')}</p>
     {#if s.me.tipShop.buy}
       <div class="actions">
         {#each ['common', 'rarer', 'rarest'] as tier (tier)}
@@ -90,34 +90,34 @@
     {/if}
     {#if s.me.tipShop.tradeIn && s.me.tipShop.tradeIn.tokens > 0}
       {@const wait = s.me.tipShop.tradeIn.nextAtNms != null && nowNms < s.me.tipShop.tradeIn.nextAtNms}
-      <button disabled={busy || wait || s.night?.status !== 'live'} onclick={trade}>{t('phone.tip_trade')}</button>
-      {#if wait}<span class="small muted">{t('phone.tip_trade_wait', { time: clock((s.me.tipShop.tradeIn.nextAtNms ?? 0) - nowNms) })}</span>{/if}
+      <button class="wide" style="margin:0.4rem 0 0;min-height:44px" disabled={busy || wait || s.night?.status !== 'live'} onclick={trade}>{t('phone.tip_trade')}</button>
+      {#if wait}<p>{t('phone.tip_trade_wait', { time: clock((s.me.tipShop.tradeIn.nextAtNms ?? 0) - nowNms) })}</p>{/if}
     {/if}
   </div>
 {/if}
 
 {#each inbox as item (item.key)}
   {#if item.kind === 'tip'}
-    <button class="msg panel tip" class:unread={!item.read} onclick={() => !item.read && readTip(item.id)}>
-      <span class="small muted mono">{time(item.createdAt)} · {t('phone.tip_from')}</span>
+    <button class="tipc" class:rd={item.read} onclick={() => !item.read && readTip(item.id)}>
+      <span class="h">{time(item.createdAt)} · {t('phone.tip_from')}</span>
       <span>{item.text}</span>
     </button>
   {:else}
-    <button class="msg panel" class:unread={!item.read} onclick={() => !item.read && readGift(item.id)}>
-      <span class="small muted mono">{time(item.createdAt)} · {t('phone.gift_from')}</span>
+    <button class="tipc" class:rd={item.read} onclick={() => !item.read && readGift(item.id)}>
+      <span class="h">{time(item.createdAt)} · {t('phone.gift_from')}</span>
       <span>{item.text}</span>
     </button>
   {/if}
 {/each}
 
 {#each s.me?.challenges ?? [] as c (c.id)}
-  <div class="msg panel memo" class:unread={c.status === 'sent'}>
-    <span class="small muted mono">{time(c.createdAt)} · {t('phone.memo_title')}</span>
+  <div class="tipc memo" class:rd={c.status !== 'sent'}>
+    <span class="h">{time(c.createdAt)} · {t('phone.memo_title')}</span>
     {#if !isOpen(c)}
       <button class="mono" onclick={() => decrypt(c)} disabled={decrypting === c.id}>
         {decrypting === c.id ? t('phone.memo_decrypting') : t('phone.memo_tap')}
       </button>
-      <span class="mono muted small">{scramble(32)}</span>
+      <span class="scr2">{scramble(32)}</span>
     {:else}
       <span>{c.text}</span>
       <span class="small"><strong>{t('phone.memo_reward')}:</strong> {rewardText(c.reward)}</span>
@@ -181,34 +181,9 @@
 {/each}
 
 {#each s.me?.messages ?? [] as m (m.id)}
-  <button class="msg panel" class:unread={!m.read} onclick={() => !m.read && read(m.id)}>
-    <span class="small muted">{time(m.createdAt)} · Compliance Office</span>
+  <button class="tipc" class:rd={m.read} onclick={() => !m.read && read(m.id)}>
+    <span class="h">{time(m.createdAt)} · Compliance Office</span>
     <span>{m.message}</span>
   </button>
 {/each}
 {#if !s.me?.messages.length && !s.me?.challenges.length && !inbox.length}<p class="muted">No messages.</p>{/if}
-
-<style>
-  .msg {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    width: 100%;
-    text-align: left;
-    gap: 0.3rem;
-  }
-  .memo {
-    border-style: dashed;
-  }
-  .tip {
-    border-style: dotted;
-  }
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-  .unread {
-    border-left: 4px solid var(--accent);
-  }
-</style>

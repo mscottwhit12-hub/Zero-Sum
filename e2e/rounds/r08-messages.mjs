@@ -24,7 +24,7 @@ try {
   R.check(/Anonymous tip/.test(txt), 'tips', 'tip shows in Messages');
   R.check(/Next trade-in at/.test(txt), 'tips', 'trade-in cooldown is explained on the phone', txt.slice(0, 200));
   // Tap the tip 5× quickly.
-  const tipBtn = a.page.locator('button.tip').first();
+  const tipBtn = a.page.locator('button.tipc').first();
   for (let i = 0; i < 5; i++) await tipBtn.click({ force: true }).catch(() => {});
   await sleep(800);
   const errs = await a.page.locator('.toast.error').count();

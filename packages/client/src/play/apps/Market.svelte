@@ -54,54 +54,54 @@
 
 {#if !sec}
   {#if !open}<p class="notice small">{s.night?.tradingClosed ? t('trade_errors.market_closed') : 'Trading opens when the market is live.'}</p>{/if}
-  {#each list as m (m.id)}
-    {@const h = me.holdings.find((x) => x.securityId === m.id)}
-    <button class="row-btn" onclick={() => (selected = m.id)}>
-      <span class="left">
-        <strong>{securityName(s, m)}</strong>
-        <span class="muted small mono">{m.ticker}{m.playerId === me.id ? ' · you' : ''}{h ? ` · ${(h.sharesH / 100).toFixed(2)} sh` : ''}</span>
-      </span>
-      <Sparkline values={m.history} />
-      <span class="right mono">
-        {price(m.price)}
-        <span class="small" class:good={Number(change(m)) >= 0} class:bad={Number(change(m)) < 0}>{change(m)}%</span>
-      </span>
-    </button>
-  {/each}
+  <div class="sub">All prices final. Until they aren’t.</div>
+  <div class="grp">
+    {#each list as m (m.id)}
+      {@const h = me.holdings.find((x) => x.securityId === m.id)}
+      {@const c = Number(change(m))}
+      <button class="r k-{m.kind}" class:dead={m.kind === 'dead'} class:me={m.playerId === me.id} onclick={() => (selected = m.id)}>
+        <span class="mono-t">{m.ticker.slice(0, 2)}</span>
+        <b>{securityName(s, m)}</b>
+        <span class="pr">{price(m.price)}</span>
+        <span class="t">{m.ticker}{m.playerId === me.id ? ' · you' : ''}{h ? ` · ${(h.sharesH / 100).toFixed(2)} sh` : ''}</span>
+        <span class="ch" class:up={c > 0} class:dn={c < 0} class:flat={c === 0}>{c > 0 ? `▲ +${change(m)}` : c < 0 ? `▼ −${change(m).replace('-', '')}` : '■ 0.0'}%</span>
+      </button>
+    {/each}
+  </div>
 {:else}
-  <button onclick={() => (selected = null)}>‹ All stocks</button>
-  <div class="panel" style="margin-top:.5rem">
-    <div class="spread">
+  <button class="back" onclick={() => (selected = null)}>‹ All stocks</button>
+  <div class="cd">
+    <div class="kv top">
       <div><h2>{securityName(s, sec)}</h2><span class="muted mono small">{sec.ticker}</span></div>
-      <strong class="mono" style="font-size:1.4rem">{price(sec.price)}</strong>
+      <b class="px">{price(sec.price)}</b>
     </div>
     <Sparkline values={sec.history} width={300} height={70} />
-    {#if securityBlurb(sec)}<p class="small muted">{securityBlurb(sec)}</p>{/if}
+    {#if securityBlurb(sec)}<p>{securityBlurb(sec)}</p>{/if}
   </div>
 
   {#if holding}
-    <div class="panel small">
-      <div class="spread"><span class="muted">You hold</span><span class="mono">{(holding.sharesH / 100).toFixed(2)} sh · {gold(holding.valueH)}</span></div>
-      <div class="spread"><span class="muted">Paid</span><span class="mono">{gold(holding.costBasisH)} ({signedGold(holding.valueH - holding.costBasisH)})</span></div>
+    <div class="cd">
+      <div class="kv"><span>You hold</span><b>{(holding.sharesH / 100).toFixed(2)} sh · {gold(holding.valueH)}</b></div>
+      <div class="kv"><span>Paid</span><b>{gold(holding.costBasisH)} ({signedGold(holding.valueH - holding.costBasisH)})</b></div>
       {#each holding.lots as l, i (i)}
-        <div class="spread muted"><span>Lot {i + 1}: {(l.sharesH / 100).toFixed(2)} sh</span><span class="mono">{l.unlockNms > nms ? `locked ${mmss(l.unlockNms - nms)}` : 'unlocked'}</span></div>
+        <div class="kv"><span>Lot {i + 1}: {(l.sharesH / 100).toFixed(2)} sh</span><b>{l.unlockNms > nms ? `locked ${mmss(l.unlockNms - nms)}` : 'unlocked'}</b></div>
       {/each}
     </div>
   {/if}
 
-  <div class="panel">
+  <div class="cd">
     <h3>Buy</h3>
     <div class="row">
       <input type="number" step="any" min="1" placeholder="Gold" bind:value={amount} style="width:110px" />
       {#each [1, 5, 10] as q}<button class="chip" onclick={() => (amount = q)}>{q}</button>{/each}
       <button class="chip" onclick={() => (amount = maxBuy)}>Max</button>
     </div>
-    <p class="small muted">Fee {Math.round(rules.feeFrac * 100)}% · shares lock for {rules.lockoutMinutes} min · you can invest {gold(me.capRemainingH)} more</p>
+    <p>Fee {Math.round(rules.feeFrac * 100)}% · shares lock for {rules.lockoutMinutes} min · you can invest {gold(me.capRemainingH)} more</p>
     <button class="primary big" disabled={!open || busy || !amount} onclick={doBuy}>Buy</button>
   </div>
 
   {#if holding}
-    <div class="panel">
+    <div class="cd">
       <h3>Sell</h3>
       <div class="row">
         <input type="number" step="any" min="0.01" placeholder="Shares" bind:value={sellShares} style="width:110px" />
@@ -111,32 +111,3 @@
     </div>
   {/if}
 {/if}
-
-<style>
-  .row-btn {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 0.6rem;
-    align-items: center;
-    width: 100%;
-    text-align: left;
-    margin-bottom: 0.4rem;
-    padding: 0.55rem 0.7rem;
-    background: var(--panel);
-  }
-  .left {
-    display: flex;
-    flex-direction: column;
-  }
-  .right {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-  }
-  .notice {
-    padding: 0.5rem 0.7rem;
-    border: 1px solid var(--warn);
-    border-radius: var(--radius);
-    color: var(--warn);
-  }
-</style>

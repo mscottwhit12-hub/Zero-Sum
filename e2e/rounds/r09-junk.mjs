@@ -23,7 +23,7 @@ try {
   R.ok(`huge avatar: "${ht}"`);
   await p.page.getByRole('button', { name: /^(Join|Request to join)$/ }).click();
   await sleep(2000);
-  R.check(await p.page.locator('button.icon').first().isVisible().catch(() => false), 'join', 'a big photo is resized and the join still works', await p.page.locator('body').innerText().then((x) => x.slice(0, 100)));
+  R.check(await p.page.locator('button.app').first().isVisible().catch(() => false), 'join', 'a big photo is resized and the join still works', await p.page.locator('body').innerText().then((x) => x.slice(0, 100)));
   p.token = await p.page.evaluate(() => localStorage.getItem('gn_device'));
   const q = await phone(b, s, R, 'Quinn', 'QUI');
   await api(gm.req, s.base, 'POST', '/api/night/start');

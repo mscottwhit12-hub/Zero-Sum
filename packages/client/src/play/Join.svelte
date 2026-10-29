@@ -106,30 +106,3 @@
     {/if}
   {/if}
 </div>
-
-<style>
-  .screen {
-    padding: 1.2rem;
-  }
-  input {
-    width: 100%;
-  }
-  .swatch {
-    width: 34px;
-    height: 34px;
-    min-height: 34px;
-    border-radius: 50%;
-    padding: 0;
-    border: 2px solid transparent;
-  }
-  .swatch.on {
-    border-color: var(--text);
-  }
-  form button[type='submit'] {
-    width: 100%;
-    margin-top: 0.5rem;
-  }
-  .stack button {
-    width: 100%;
-  }
-</style>

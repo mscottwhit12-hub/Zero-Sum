@@ -107,42 +107,42 @@
 {#if !v}
   <p class="muted">{t('minter.loading')}</p>
 {:else}
-  <div class="center">
-    <div class="small muted">{t('minter.credits_label')}</div>
-    <div class="mono big">{short(credits)}</div>
-    <div class="small mono muted">{t('minter.minted_small', { n: fmt(minted) })}</div>
-    <div class="small mono">{t('minter.per_sec', { rate: rate(v.ratePerSec) })} · {t('minter.per_tap', { n: rate(v.tapValue) })}</div>
-    {#if v.investors.have}<div class="small bonus">{t('minter.investors', { n: v.investors.have, pct: v.investors.bonusPct })}</div>{/if}
-    {#if v.paused}<div class="small bonus">{t('minter.bonus', { mult: v.mult })}</div>{/if}
-    <button class="mint primary" disabled={!v.active} onclick={mint}>{v.active ? t('minter.mint') : t('minter.closed')}</button>
+  <div class="ctr">
+    <p class="muted">{t('minter.credits_label')}</p>
+    <div class="z">{short(credits)}</div>
+    <p class="mono small muted">{t('minter.minted_small', { n: fmt(minted) })}</p>
+    <p class="mono small">{t('minter.per_sec', { rate: rate(v.ratePerSec) })} · {t('minter.per_tap', { n: rate(v.tapValue) })}</p>
+    {#if v.investors.have}<p class="small bonus">{t('minter.investors', { n: v.investors.have, pct: v.investors.bonusPct })}</p>{/if}
+    {#if v.paused}<p class="small bonus">{t('minter.bonus', { mult: v.mult })}</p>{/if}
+    <button class="mint" disabled={!v.active} onclick={mint}>{v.active ? t('minter.mint') : t('minter.closed')}</button>
   </div>
 
-  <h3 class="small muted">{t('minter.shop')}</h3>
+  <div class="lab">{t('minter.shop')}</div>
   <p class="small muted">{t('minter.managers_hint')}</p>
   {#each v.shop.filter((x) => x.available || x.owned) as x (x.id)}
     <div class="gen">
-      <div class="row">
-        <span class="grow">
-          <strong>{x.name}</strong> <span class="muted small">×{x.owned}</span>
+      <div class="hw">
+        <span>
+          {x.name} <span class="mono muted">×{x.owned}</span>
           {#if x.intermissionOnly}<span class="small bonus"> · {t('minter.exclusive')}</span>{/if}
         </span>
-        <button class="primary" disabled={!v.active || !x.available || credits < x.cost} onclick={() => buy(x.id)}>{short(x.cost)}</button>
+        <span class="c">{x.owned ? t('minter.per_sec', { rate: rate(x.output) }) : `+${x.rate}/s each`}</span>
+        <button disabled={!v.active || !x.available || credits < x.cost} onclick={() => buy(x.id)}>{short(x.cost)}</button>
       </div>
-      <div class="row small muted">
-        <span class="grow mono">{x.owned ? t('minter.per_sec', { rate: rate(x.output) }) : `+${x.rate}/s each`}</span>
-        {#if x.nextMilestone}
-          <span class="ms" title="Milestone">
-            <i style="width:{Math.min(100, (x.owned / x.nextMilestone) * 100)}%"></i>
-            <b>{t('minter.milestone', { owned: x.owned, next: x.nextMilestone })}</b>
-          </span>
-        {/if}
-      </div>
-      {#if x.owned}
-        <div class="row small">
-          {#if x.managed}
-            <span class="badge live">{t('minter.managed')}</span>
-          {:else}
-            <button class="small" disabled={!v.active || credits < x.managerCost} onclick={() => buy(`mgr:${x.id}`)}>{t('minter.hire')} · {short(x.managerCost)}</button>
+      {#if x.owned || x.nextMilestone}
+        <div class="more">
+          {#if x.owned}
+            {#if x.managed}
+              <span class="badge live">{t('minter.managed')}</span>
+            {:else}
+              <button disabled={!v.active || credits < x.managerCost} onclick={() => buy(`mgr:${x.id}`)}>{t('minter.hire')} · {short(x.managerCost)}</button>
+            {/if}
+          {/if}
+          {#if x.nextMilestone}
+            <span class="ms" title="Milestone">
+              <i style="width:{Math.min(100, (x.owned / x.nextMilestone) * 100)}%"></i>
+              <b>{t('minter.milestone', { owned: x.owned, next: x.nextMilestone })}</b>
+            </span>
           {/if}
         </div>
       {/if}
@@ -150,16 +150,16 @@
   {/each}
 
   {#if v.upgrades.some((u) => u.available && !u.bought)}
-    <h3 class="small muted">{t('minter.upgrades')}</h3>
+    <div class="lab">{t('minter.upgrades')}</div>
     {#each v.upgrades.filter((u) => u.available && !u.bought) as u (u.id)}
-      <div class="row line">
+      <div class="upg">
         <span class="grow">{u.name} <span class="muted small">×{u.mult} {u.target === 'tap' ? 'taps' : 'output'}</span></span>
         <button disabled={!v.active || credits < u.cost} onclick={() => buy(`up:${u.id}`)}>{short(u.cost)}</button>
       </div>
     {/each}
   {/if}
 
-  <h3 class="small muted">{t('minter.rebrand')}</h3>
+  <div class="lab">{t('minter.rebrand')}</div>
   <p class="small muted">{t('minter.rebrand_body', { pct: v.investors.perInvestorPct })}</p>
   {#if v.investors.claimable > 0}
     <button class="wide" disabled={!v.active} onclick={rebrand}>{t('minter.rebrand_button', { n: v.investors.claimable })}</button>
@@ -167,73 +167,10 @@
     <p class="small muted">{t('minter.rebrand_none')}</p>
   {/if}
 
-  <h3 class="small muted">{t('minter.leaderboard')}</h3>
+  <div class="lab">{t('minter.leaderboard')}</div>
   {#each (s.minter?.leaderboard ?? []).slice(0, 5) as r, i (r.playerId)}
-    <div class="row line small"><span class="grow">{i + 1}. {name(r.playerId)}</span><span class="mono">{fmt(r.minted)}</span></div>
+    <div class="upg small"><span class="grow">{i + 1}. {name(r.playerId)}</span><span class="mono">{fmt(r.minted)}</span></div>
   {:else}
     <p class="muted small">{t('minter.nobody')}</p>
   {/each}
 {/if}
-
-<style>
-  .center {
-    text-align: center;
-    margin-bottom: 1rem;
-  }
-  .big {
-    font-size: 2.4rem;
-  }
-  .mint {
-    margin-top: 0.8rem;
-    width: 100%;
-    min-height: 88px;
-    font-size: 1.3rem;
-    touch-action: manipulation;
-    user-select: none;
-  }
-  .grow {
-    flex: 1;
-  }
-  .line {
-    padding: 0.3rem 0;
-    border-bottom: 1px solid var(--line);
-    align-items: center;
-  }
-  .bonus {
-    color: var(--accent);
-  }
-  .gen {
-    padding: 0.45rem 0;
-    border-bottom: 1px solid var(--line);
-    display: grid;
-    gap: 0.2rem;
-  }
-  .gen .row {
-    align-items: center;
-  }
-  .ms {
-    position: relative;
-    width: 7.5rem;
-    height: 1.1rem;
-    border-radius: 999px;
-    background: var(--line);
-    overflow: hidden;
-  }
-  .ms i {
-    position: absolute;
-    inset: 0 auto 0 0;
-    background: color-mix(in srgb, var(--accent) 45%, transparent);
-  }
-  .ms b {
-    position: relative;
-    display: block;
-    text-align: center;
-    font-weight: 500;
-    font-size: 0.7rem;
-    line-height: 1.1rem;
-    color: var(--text);
-  }
-  .wide {
-    width: 100%;
-  }
-</style>

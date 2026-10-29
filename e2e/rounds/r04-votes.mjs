@@ -30,9 +30,9 @@ try {
 
   // Ann answers and votes for Ben, then changes her mind to herself.
   await ps[0].page.getByRole('button', { name: 'Answer' }).click();
-  await ps[0].page.locator('button.row.panel', { hasText: 'Ben' }).click();
+  await ps[0].page.locator('button.pick', { hasText: 'Ben' }).click();
   await sleep(600);
-  await ps[0].page.locator('button.row.panel', { hasText: 'Ann' }).click();
+  await ps[0].page.locator('button.pick', { hasText: 'Ann' }).click();
   await sleep(800);
   const t0 = await toasts(ps[0].page);
   R.ok(`change-vote toast: ${t0}`);
@@ -45,18 +45,18 @@ try {
   await ps[1].page.reload();
   await sleep(4500);
   R.check(!(await ps[1].page.locator('.call').isVisible().catch(() => false)), 'vote', 'decline + refresh does not ring again');
-  const vb = await ps[1].page.locator('button.icon', { hasText: 'Vote' }).isVisible().catch(() => false);
+  const vb = await ps[1].page.locator('button.app', { hasText: 'Vote' }).isVisible().catch(() => false);
   R.check(vb, 'vote', 'Vote app is still on the home screen after declining');
   // Ben double-taps a vote.
   await openApp(ps[1].page, 'Vote');
-  const btn = ps[1].page.locator('button.row.panel', { hasText: 'Cat' });
+  const btn = ps[1].page.locator('button.pick', { hasText: 'Cat' });
   await Promise.all([btn.click().catch(() => {}), btn.click({ force: true }).catch(() => {})]);
   await sleep(800);
   // Cat answers from inside the Market app.
   if (await ps[2].page.locator('.call').isVisible().catch(() => false)) {
     await ps[2].page.getByRole('button', { name: 'Answer' }).click();
-    R.check(await ps[2].page.locator('button.row.panel').first().isVisible().catch(() => false), 'vote', 'answering from inside another app opens the Vote app');
-    await ps[2].page.locator('button.row.panel', { hasText: 'Dev' }).click();
+    R.check(await ps[2].page.locator('button.pick').first().isVisible().catch(() => false), 'vote', 'answering from inside another app opens the Vote app');
+    await ps[2].page.locator('button.pick', { hasText: 'Dev' }).click();
   }
   // Dev ignores the call completely. Wait for the window to close.
   const round = async () => (await api(gm.req, s.base, 'GET', '/api/night')).body.gm.vote;

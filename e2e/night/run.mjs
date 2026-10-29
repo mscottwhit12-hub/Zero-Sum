@@ -228,7 +228,7 @@ async function home(page) {
 }
 async function openApp(page, label) {
   await home(page);
-  await page.locator('button.icon', { hasText: label }).click({ timeout: 4000 });
+  await page.locator('button.app', { hasText: label }).click({ timeout: 4000 });
   await page.waitForTimeout(150);
 }
 async function toastText(page) {
@@ -240,7 +240,7 @@ async function uiBuy(p, ticker, goldAmt) {
     if (clk.tradingClosed || clk.status !== 'live') return;
     const page = p.page;
     await openApp(page, 'Market');
-    await page.locator('.row-btn').filter({ has: page.locator('span.mono', { hasText: new RegExp(`^${ticker}(\\b|$)`) }) }).first().click({ timeout: 4000 });
+    await page.locator('button.r').filter({ has: page.locator('span.t', { hasText: new RegExp(`^${ticker}(\\b|$)`) }) }).first().click({ timeout: 4000 });
     await page.getByPlaceholder('Gold').fill(String(Math.round(goldAmt * 100) / 100));
     const buy = page.getByRole('button', { name: 'Buy', exact: true });
     if (await buy.isDisabled()) {
@@ -261,7 +261,7 @@ async function uiSellAll(p, ticker) {
     if (clk.tradingClosed || clk.status !== 'live') return;
     const page = p.page;
     await openApp(page, 'Market');
-    await page.locator('.row-btn').filter({ has: page.locator('span.mono', { hasText: new RegExp(`^${ticker}(\\b|$)`) }) }).first().click({ timeout: 4000 });
+    await page.locator('button.r').filter({ has: page.locator('span.t', { hasText: new RegExp(`^${ticker}(\\b|$)`) }) }).first().click({ timeout: 4000 });
     const b = page.getByRole('button', { name: /Sell all unlocked/ });
     if (!(await b.isVisible().catch(() => false)) || (await b.isDisabled())) {
       await home(page);
@@ -424,7 +424,7 @@ async function watcher(p) {
         await castVote(p);
         return;
       }
-      const badge = page.locator('button.icon', { hasText: 'Messages' }).locator('.badge-count');
+      const badge = page.locator('button.app', { hasText: 'Messages' }).locator('.nb');
       if (await badge.isVisible().catch(() => false)) await readMessages(p);
     });
   }
@@ -435,7 +435,7 @@ async function castVote(p) {
   const r = R();
   const target = r < 0.5 ? st[0].playerId : r < 0.75 ? p.id : pick(players).id;
   const name = NAMES[players.findIndex((q) => q.id === target)];
-  await page.locator('button.row.panel', { hasText: name }).first().click({ timeout: 4000 });
+  await page.locator('button.pick', { hasText: name }).first().click({ timeout: 4000 });
   await page.waitForTimeout(400);
   p.votes++;
   L(p.name, `voted for ${name}${target === p.id ? ' (self)' : ''}`);
@@ -457,7 +457,7 @@ async function readMessages(p) {
       L(p.name, `memo ${acc ? 'ACCEPTED' : 'rejected'}`);
     }
   }
-  for (const m of await page.locator('button.msg.unread').all()) await m.click().catch(() => {});
+  for (const m of await page.locator('button.tipc:not(.rd)').all()) await m.click().catch(() => {});
   await home(page);
 }
 

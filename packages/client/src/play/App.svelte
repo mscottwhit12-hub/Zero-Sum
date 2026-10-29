@@ -20,6 +20,9 @@
   import { dapi, deviceToken, pendingToken, setDeviceToken, setPendingToken, store } from './device';
   import Join from './Join.svelte';
   import Statement from './Statement.svelte';
+  import './phone.css';
+  import { feedText } from '@shared/feedText';
+  import { dockfx, setOrigin, zoom } from './zoom';
 
   type Phase = 'boot' | 'join' | 'waiting' | 'phone';
   let phase = $state<Phase>('boot');
@@ -161,6 +164,11 @@
   const voteOpen = $derived(!!vote?.open && s?.night?.status === 'live');
   const voteBadge = $derived(voteOpen && vote?.myTarget == null ? 1 : 0);
   const apps = $derived(APPS.filter((a) => a.id !== 'vote' || voteOpen));
+  // Theme layout only: the four dock apps; everything else (Vote only while a poll is open) goes on the grid.
+  const DOCK = ['chat', 'market', 'messages', 'feed'];
+  const dockApps = $derived(DOCK.map((id) => apps.find((a) => a.id === id)).filter((a): a is (typeof APPS)[number] => !!a));
+  const gridApps = $derived(apps.filter((a) => !DOCK.includes(a.id)));
+  const latest = $derived(s?.feed?.[0] ? feedText(s.feed[0], s.players) : 'Quiet so far.');
   // Incoming call: once per quarter until answered or declined (decline = snooze; the badge stays).
   let callDone = $state(store.get('gn_call_done') ?? '');
   const callKey = $derived(vote && s?.night ? `${s.night.id}:${vote.quarter}` : '');
@@ -211,10 +219,18 @@
   const timeStr = $derived(new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
 </script>
 
-<Toasts />
-<div class="rotate">{t('phone.rotate')}</div>
+{#snippet tile(a: { id: string; icon: string })}
+  <button class="app a-{a.id}" onclick={(e) => { setOrigin(e); openApp(a.id); }}>
+    <div class="ic">{a.icon}</div>
+    {#if badges[a.id]}<i class="nb">{badges[a.id]}</i>{/if}
+    {t(`phone.apps.${a.id}`)}
+  </button>
+{/snippet}
 
-<div class="device">
+<div class="phone">
+  <Toasts />
+  <div class="rotate">{t('phone.rotate')}</div>
+
   {#if phase === 'boot'}
     <div class="boot mono">
       {#each BOOT.slice(0, bootLine + 1) as line}<div>{line}</div>{/each}
@@ -228,261 +244,98 @@
       <button onclick={() => (setPendingToken(null), route())}>Cancel</button>
     </div>
   {:else}
-    <header class="status mono small">
+    <header class="sb">
       <span>{timeStr}</span>
-      <span>{#if s?.me}{gold(s.me.cashH)} gold{/if}</span>
-      <span class="dot" style="background:{connected ? 'var(--good)' : 'var(--bad)'}"></span>
+      <span class="r">
+        {#if s?.me}<span class="gold">{gold(s.me.cashH)} gold</span>{/if}
+        <span class="sig" class:off={!connected} aria-label={connected ? 'connected' : 'offline'}><i style="height:4px"></i><i style="height:7px"></i><i style="height:10px"></i></span>
+      </span>
     </header>
 
-    {#if !s}
-      <p class="center pad muted">Connecting…</p>
-    {:else if !s.night || !s.me}
-      <p class="center pad muted">No session in progress.</p>
-    {:else if statementReady}
-      <Statement />
-    {:else if locked === 'paused' && funApp(lockApp)}
-      {@const F = funApp(lockApp)!.component}
-      <div class="appbar spread">
-        <button onclick={() => (lockApp = null)}>‹ {t('minter.lock_close')}</button>
-        <span class="small muted">{countdown ?? ''}</span>
-      </div>
-      <div class="appbody"><F {s} /></div>
-    {:else if locked}
-      <!-- Lock screen: pause (spec §15.3) / collapse stand-by. Inputs frozen. -->
-      <div class="lock">
-        <div class="lock-time mono">{timeStr}</div>
-        <h2>{locked === 'paused' ? t('phone.paused_title') : t('phone.ended_title')}</h2>
-        <p class="muted">{locked === 'paused' ? t('phone.paused_body') : t('phone.ended_body')}</p>
-        {#if locked === 'paused' && countdown}<p class="mono countdown">{countdown}</p>{/if}
-        {#if locked === 'paused'}
-          {#each FUN_APPS.filter((f) => f.onLockScreen) as f (f.id)}
-            <button class="primary" onclick={() => (lockApp = f.id)}>{t('minter.lock_open')}</button>
-          {/each}
-        {/if}
-      </div>
-    {:else if ringing && vote}
-      <!-- Full-screen incoming call (spec §9 / §15.2). -->
-      <div class="call">
-        <div class="muted small">{t('phone.call_title')}</div>
-        <div class="call-from">{t('phone.call_from')}</div>
-        <div class="muted">{t('phone.call_body', { quarter: vote.quarter })}</div>
-        <div class="call-actions">
-          <button class="decline" onclick={() => endCall(false)}>{t('phone.call_decline')}</button>
-          <button class="answer" onclick={() => endCall(true)}>{t('phone.call_accept')}</button>
+    <div class="stage">
+      {#if !s}
+        <p class="center pad muted">Connecting…</p>
+      {:else if !s.night || !s.me}
+        <p class="center pad muted">No session in progress.</p>
+      {:else if statementReady}
+        <div class="view final"><Statement /></div>
+      {:else if locked === 'paused' && funApp(lockApp)}
+        {@const F = funApp(lockApp)!.component}
+        <div class="view">
+          <div class="appbar lockbar">
+            <button onclick={() => (lockApp = null)}>‹ {t('minter.lock_close')}</button>
+            <span class="small muted mono">{countdown ?? ''}</span>
+          </div>
+          <div class="list appbody"><F {s} /></div>
         </div>
-      </div>
-    {:else if app}
-      <div class="appbar spread">
-        <button onclick={() => (app = null)}>‹ Home</button>
-        <strong>{t(`phone.apps.${app}`)}</strong>
-        <span style="width:60px"></span>
-      </div>
-      <div class="appbody">
-        {#if app === 'vote'}<Vote {s} {now} />
-        {:else if app === 'wallet'}<Wallet {s} />
-        {:else if app === 'market'}<Market {s} />
-        {:else if app === 'standings'}<Standings {s} />
-        {:else if app === 'messages'}<Messages {s} />
-        {:else if app === 'chat'}<Chat {s} />
-        {:else if app === 'feed'}<Feed {s} />
-        {:else if app === 'rules'}<Rules {s} />
-        {:else if app === 'profile'}<Profile {s} onsignout={() => { live?.close(); route(); }} />
-        {:else if funApp(app)}
-          {@const F = funApp(app)!.component}
-          <F {s} />
-        {/if}
-      </div>
-    {:else}
-      <div class="home">
-        <div class="wall">
-          {#if s.players.find((p) => p.id === s?.me?.id)?.left}<p class="notice small">{t('phone.left_notice')}</p>{/if}
-          <div class="muted small">{s.night.name}</div>
-          <div class="mono hero">{gold(s.me.netWorthH)}</div>
-          <div class="muted small">net worth · rank {s.me.rank ?? '—'}</div>
+      {:else if locked}
+        <!-- Lock screen: pause (spec §15.3) / collapse stand-by. Inputs frozen. -->
+        <div class="view lock">
+          <div class="clock">{timeStr}</div>
+          <h2>{locked === 'paused' ? t('phone.paused_title') : t('phone.ended_title')}</h2>
+          <p>{locked === 'paused' ? t('phone.paused_body') : t('phone.ended_body')}</p>
+          {#if locked === 'paused' && countdown}<p class="cd2">{countdown}</p>{/if}
+          {#if locked === 'paused'}
+            {#each FUN_APPS.filter((f) => f.onLockScreen) as f (f.id)}
+              <button class="primary" onclick={() => (lockApp = f.id)}>{t('minter.lock_open')}</button>
+            {/each}
+          {/if}
         </div>
-        <div class="grid">
-          {#each apps as a (a.id)}
-            <button class="icon" onclick={() => openApp(a.id)}>
-              <span class="glyph">{a.icon}</span>
-              {#if badges[a.id]}<span class="badge-count">{badges[a.id]}</span>{/if}
-              <span class="label">{t(`phone.apps.${a.id}`)}</span>
-            </button>
-          {/each}
+      {:else if ringing && vote}
+        <!-- Full-screen incoming call (spec §9 / §15.2). -->
+        <div class="view call">
+          <div class="small muted">{t('phone.call_title')}</div>
+          <div class="who">{t('phone.call_from')}</div>
+          <div class="muted">{t('phone.call_body', { quarter: vote.quarter })}</div>
+          <div class="btns">
+            <button class="rb d" onclick={() => endCall(false)}>{t('phone.call_decline')}</button>
+            <button class="rb a" onclick={() => endCall(true)}>{t('phone.call_accept')}</button>
+          </div>
         </div>
-      </div>
-    {/if}
+      {:else if app}
+        <div class="view" in:zoom={{ kind: 'app' }} out:zoom={{ kind: 'app' }}>
+          <div class="appbar">
+            <button onclick={() => (app = null)}>‹ Home</button>
+            <strong>{t(`phone.apps.${app}`)}</strong>
+          </div>
+          <div class="list appbody">
+            {#if app === 'vote'}<Vote {s} {now} />
+            {:else if app === 'wallet'}<Wallet {s} />
+            {:else if app === 'market'}<Market {s} />
+            {:else if app === 'standings'}<Standings {s} />
+            {:else if app === 'messages'}<Messages {s} />
+            {:else if app === 'chat'}<Chat {s} />
+            {:else if app === 'feed'}<Feed {s} />
+            {:else if app === 'rules'}<Rules {s} />
+            {:else if app === 'profile'}<Profile {s} onsignout={() => { live?.close(); route(); }} />
+            {:else if funApp(app)}
+              {@const F = funApp(app)!.component}
+              <F {s} />
+            {/if}
+          </div>
+        </div>
+      {:else}
+        <div class="view home" in:zoom={{ kind: 'home' }} out:zoom={{ kind: 'home' }}>
+          <div class="wd bond">
+            <span class="stamp">Approved*<small>*subject to audit</small></span>
+            {#if s.players.find((p) => p.id === s?.me?.id)?.left}<p class="notice">{t('phone.left_notice')}</p>{/if}
+            <span class="tag">{s.night.name}</span><br />
+            <span class="line-st" class:down={!connected}>● {connected ? 'line secured' : 'line down'}</span>
+            <div class="nw">
+              <div class="big">{gold(s.me.netWorthH)}</div>
+              <div class="m">net worth<br />· rank {s.me.rank ?? '—'}</div>
+            </div>
+          </div>
+          <div class="feed"><i>&gt;</i> {latest}<span class="cur">_</span></div>
+          <div class="grid">
+            {#each gridApps as a (a.id)}{@render tile(a)}{/each}
+          </div>
+          <div class="brand"><b>{t('brand.company')}</b>{t('brand.tagline')}</div>
+        </div>
+        <div class="dock" in:dockfx out:dockfx>
+          {#each dockApps as a (a.id)}{@render tile(a)}{/each}
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>
-
-<style>
-  .device {
-    min-height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg);
-  }
-  /* Desktop: centered phone frame. */
-  @media (min-width: 700px) and (pointer: fine) {
-    :global(html),
-    :global(body) {
-      background: #2a2826;
-      min-height: 100%;
-    }
-    :global(body) {
-      padding: 3vh 0;
-    }
-    .device {
-      width: 390px;
-      height: 800px;
-      min-height: 0;
-      margin: 0 auto;
-      border: 10px solid #111;
-      border-radius: 36px;
-      overflow: auto;
-    }
-  }
-  /* Phone held sideways: ask to rotate (vertical only). */
-  .rotate {
-    display: none;
-  }
-  @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
-    .rotate {
-      display: flex;
-      position: fixed;
-      inset: 0;
-      z-index: 200;
-      background: var(--bg);
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 2rem;
-    }
-  }
-  .pad {
-    padding: 1.2rem;
-  }
-  .center {
-    text-align: center;
-  }
-  .boot {
-    padding: 1.5rem 1rem;
-    font-size: 0.85rem;
-    line-height: 1.8;
-  }
-  .status {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.35rem 0.9rem;
-    border-bottom: 1px solid var(--line);
-  }
-  .home {
-    padding: 1rem;
-  }
-  .wall {
-    text-align: center;
-    margin: 1.2rem 0 1.6rem;
-  }
-  .hero {
-    font-size: 2.2rem;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem 0.5rem;
-  }
-  .icon {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.3rem;
-    border: none;
-    background: transparent;
-    padding: 0;
-  }
-  .glyph {
-    width: 58px;
-    height: 58px;
-    border-radius: 14px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-  }
-  .label {
-    font-size: 0.72rem;
-  }
-  .badge-count {
-    position: absolute;
-    top: -6px;
-    right: 6px;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 5px;
-    border-radius: 10px;
-    background: #e03131;
-    color: #fff;
-    font-size: 0.75rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .appbar {
-    padding: 0.5rem 0.7rem;
-    border-bottom: 1px solid var(--line);
-  }
-  .appbody {
-    padding: 0.8rem;
-  }
-  .lock {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 2rem;
-  }
-  .lock-time {
-    font-size: 3rem;
-  }
-  .countdown {
-    font-size: 1.6rem;
-  }
-  .call {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 2rem;
-    text-align: center;
-  }
-  .call-from {
-    font-size: 1.8rem;
-  }
-  .call-actions {
-    display: flex;
-    gap: 3rem;
-    margin-top: 3rem;
-  }
-  .call-actions button {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    color: #fff;
-    border: none;
-    font-size: 0.8rem;
-  }
-  .answer {
-    background: var(--good);
-  }
-  .decline {
-    background: var(--bad);
-  }
-</style>

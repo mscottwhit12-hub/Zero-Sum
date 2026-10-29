@@ -14,7 +14,7 @@ try {
   const pg = a.page;
   const openStock = async (tk) => {
     await openApp(pg, 'Market');
-    await pg.locator('.row-btn').filter({ has: pg.locator('span.mono', { hasText: new RegExp(`^${tk}`) }) }).first().click({ timeout: 5000 });
+    await pg.locator('button.r').filter({ has: pg.locator('span.t', { hasText: new RegExp(`^${tk}`) }) }).first().click({ timeout: 5000 });
   };
   const tryBuy = async (amount, { taps = 1 } = {}) => {
     await pg.getByPlaceholder('Gold').fill(String(amount));
@@ -92,7 +92,7 @@ try {
 
   // 6. Market screen open when trading closes; a stale tap after close.
   await openApp(bb.page, 'Market');
-  await bb.page.locator('.row-btn').first().click();
+  await bb.page.locator('button.r').first().click();
   await bb.page.getByPlaceholder('Gold').fill('2');
   await api(gm.req, s.base, 'POST', '/api/night/close-trading');
   await sleep(1500);

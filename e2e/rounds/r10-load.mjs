@@ -64,7 +64,7 @@ try {
   // 3. Everyone refreshes at once.
   await Promise.all(ps.map((p) => p.page.reload().catch(() => {})));
   await sleep(6000);
-  const homes = await Promise.all(ps.map((p) => p.page.locator('button.icon').first().isVisible().catch(() => false)));
+  const homes = await Promise.all(ps.map((p) => p.page.locator('button.app').first().isVisible().catch(() => false)));
   R.check(homes.every(Boolean), 'load', 'all 14 phones come back after refreshing at the same moment', homes.join(','));
   // 4. Half the room drops Wi-Fi for 15 s.
   await Promise.all(ps.slice(0, 7).map((p) => p.ctx.setOffline(true)));

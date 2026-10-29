@@ -88,7 +88,7 @@
 
 {#if open}
   <div class="thread">
-    <div class="spread head">
+    <div class="head">
       <button onclick={() => ((open = null), loadList())}>‹ Chats</button>
       <strong class="grow center">{title(open)}</strong>
     </div>
@@ -111,27 +111,27 @@
     <p class="tiny muted center">Compliance keeps a record of every message.</p>
   </div>
 {:else if composing}
-  <div class="panel">
+  <div class="cd">
     <h3>New chat</h3>
-    <p class="small muted">Pick one associate for a private chat, or several for a group.</p>
-    <div class="row wrap">
+    <p>Pick one associate for a private chat, or several for a group.</p>
+    <div class="row" style="margin:0.6rem 0">
       {#each others as p (p.id)}
         <button class="chip" class:on={picked.includes(p.id)} onclick={() => toggle(p.id)}>{p.displayName}</button>
       {/each}
     </div>
-    {#if picked.length > 1}<input bind:value={groupName} maxlength="40" placeholder="Group name (optional)" aria-label="Group name" />{/if}
+    {#if picked.length > 1}<input class="s" bind:value={groupName} maxlength="40" placeholder="Group name (optional)" aria-label="Group name" />{/if}
     <div class="row">
       <button onclick={() => ((composing = false), (picked = []))}>Cancel</button>
       <button class="primary" disabled={!picked.length} onclick={start}>Start chat</button>
     </div>
   </div>
 {:else}
-  <div class="row"><button class="primary grow" onclick={() => (composing = true)}>New chat</button></div>
+  <button class="primary wide" onclick={() => (composing = true)}>New chat</button>
   {#each chats as c (c.id)}
     <button class="row-btn" onclick={() => openThread(c)}>
       <span class="grow">
         <strong>{title(c)}</strong>
-        <span class="small muted last">{c.last ? `${c.last.playerId === me ? 'You' : nameOf(c.last.playerId)}: ${c.last.text}` : 'No messages yet'}</span>
+        <span class="last">{c.last ? `${c.last.playerId === me ? 'You' : nameOf(c.last.playerId)}: ${c.last.text}` : 'No messages yet'}</span>
       </span>
       {#if c.unread}<span class="badge-count">{c.unread}</span>{/if}
     </button>
@@ -139,85 +139,3 @@
     <p class="muted small center">No chats yet. Start one to talk strategy.</p>
   {/each}
 {/if}
-
-<style>
-  .thread {
-    display: flex;
-    flex-direction: column;
-    height: calc(100dvh - 9rem);
-    gap: 0.4rem;
-  }
-  .thread .msgs {
-    flex: 1;
-    min-height: 0;
-  }
-  .head {
-    gap: 0.5rem;
-  }
-  .center {
-    text-align: center;
-  }
-  .msgs {
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    padding: 0.25rem;
-  }
-  .msg {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    max-width: 85%;
-  }
-  .msg.mine {
-    align-self: flex-end;
-    align-items: flex-end;
-  }
-  .bubble {
-    padding: 0.4rem 0.6rem;
-    border-radius: 12px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  .mine .bubble {
-    background: color-mix(in srgb, var(--accent) 22%, var(--panel));
-  }
-  .tiny {
-    font-size: 0.7rem;
-  }
-  .compose {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.4rem;
-  }
-  .row-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    text-align: left;
-    margin-top: 0.4rem;
-  }
-  .last {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 70vw;
-  }
-  .wrap {
-    flex-wrap: wrap;
-  }
-  .badge-count {
-    min-width: 1.3rem;
-    padding: 0 0.35rem;
-    border-radius: 999px;
-    background: var(--bad);
-    color: #fff;
-    font-size: 0.75rem;
-    text-align: center;
-  }
-</style>

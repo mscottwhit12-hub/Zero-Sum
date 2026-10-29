@@ -239,6 +239,11 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - **Sound upload** shows a progress bar.
 - Tests: client 51, engine 116, server 90, sim 4. Browser: `e2e/features/run.mjs` (21 checks), `r11` (5).
 
+### 4d. Phone theme (Server, Oct 29)
+- Dark "burner phone" theme on the player phone only (`play/phone.css`, vars on `.phone`; GM untouched). Dock: Chat, Market, Messages, Feed. Fonts in `assets/fonts/` with licences (GFS Baskerville, Carlito, Latin Modern Mono). App open/close zoom (`play/zoom.ts`, reduced-motion respected).
+- Screen scripts unchanged; only markup/CSS. Browser tests now select by the new class names: `button.app`, `.nb`, `button.r`/`span.t`, `button.pick`, `button.tipc`/`.rd`.
+- Open (Server's next drop): serif digits/apostrophes, Minter button size, toasts over dock, stamp overflow. Claude: move the new hardcoded English to copy. TV theme is phase 2.
+
 ### 4c. Ticket to Ride boards (No, Oct 28)
 - Two boards: `ticket-to-ride` (USA) and `ticket-to-ride-europe` (stations). Final-score boards: trains left (final-round warning), last turn done, the final score the players count, tickets (tie-break), optional points breakdown and a copyable stats report. No live leader: the crown sees scores only once every player has one; a tie at the top keeps no crown (locked rule).
 - Classic games now seed **per game by name** (`seedClassics`, meta `classic:<name>`), so new classics reach existing installs; deleted ones stay deleted.

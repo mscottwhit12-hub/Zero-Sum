@@ -215,7 +215,7 @@ export async function phone(b, s, R, name, ticker, { join = true } = {}) {
     await page.getByLabel('Display name').fill(name, { timeout: 15000 });
     await page.getByLabel(/Ticker/).fill(ticker);
     await page.getByRole('button', { name: /^(Join|Request to join)$/ }).click();
-    await page.locator('button.icon').first().waitFor({ timeout: 15000 }).catch(() => {});
+    await page.locator('button.app').first().waitFor({ timeout: 15000 }).catch(() => {});
     p.token = await page.evaluate(() => localStorage.getItem('gn_device'));
     if (p.token) {
       const me = await api(ctx.request, s.base, 'GET', '/api/me', undefined, { 'x-device-token': p.token });
@@ -238,7 +238,7 @@ export async function home(page) {
 }
 export async function openApp(page, label) {
   await home(page);
-  await page.locator('button.icon', { hasText: label }).click({ timeout: 5000 });
+  await page.locator('button.app', { hasText: label }).click({ timeout: 5000 });
   await page.waitForTimeout(200);
 }
 export async function toasts(page) {

@@ -37,62 +37,35 @@
   const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 </script>
 
-<div class="pad">
+<div class="stm">
   {#if err}
     <p class="muted">{err}</p>
   {:else if !s}
     <p class="muted">{t('phone.statement.loading')}</p>
   {:else}
-    <div class="small muted mono">{s.night.name} · {s.night.date}</div>
+    <div class="hd2">{s.night.name} · {s.night.date}</div>
     <h2>{t('phone.statement.title')}</h2>
-    <div class="center">
-      <div class="small muted">{t('phone.statement.gold')}</div>
-      <div class="mono hero">{gold(s.goldH)}</div>
-      <div>{s.rank == null ? '' : t('phone.statement.rank', { rank: s.rank, players: s.players })}</div>
-      {#if s.rankStart != null}<div class="small muted">{t('phone.statement.movement', { start: s.rankStart, end: s.rank ?? '—', best: s.rankBest ?? '—' })}</div>{/if}
+    <div class="ctr">
+      <div class="muted">{t('phone.statement.gold')}</div>
+      <div class="fin">{gold(s.goldH)}</div>
+      <div style="font-size:1.05rem">{s.rank == null ? '' : t('phone.statement.rank', { rank: s.rank, players: s.players })}</div>
+      {#if s.rankStart != null}<div class="muted small">{t('phone.statement.movement', { start: s.rankStart, end: s.rank ?? '—', best: s.rankBest ?? '—' })}</div>{/if}
     </div>
-    <div class="panel rows">
-      <div class="spread"><span>{t('phone.statement.trading')}</span><span class="mono">{signedGold(s.tradingResultH)}</span></div>
-      {#if s.bestTrade}<div class="spread"><span>{t('phone.statement.best')}</span><span class="mono">{s.bestTrade.ticker} {signedGold(s.bestTrade.profitH ?? 0)}</span></div>{/if}
-      {#if s.worstTrade}<div class="spread"><span>{t('phone.statement.worst')}</span><span class="mono">{s.worstTrade.ticker} {signedGold(s.worstTrade.profitH ?? 0)}</span></div>{/if}
-      <div class="spread"><span>{t('phone.statement.votes')}</span><span class="mono">{s.correctVotes} / {s.votesCast}</span></div>
-      <div class="spread"><span>{t('phone.statement.nfts')}</span><span class="mono">{s.nftsMinted.toLocaleString()}</span></div>
-      <div class="spread"><span>{t('phone.statement.achievements')}</span><span>{s.achievements.length ? s.achievements.map((a) => t(`achievements.${a}.name`)).join(', ') : t('phone.statement.none')}</span></div>
+    <div class="cd" style="margin-top:1rem">
+      <div class="kv"><span>{t('phone.statement.trading')}</span><b>{signedGold(s.tradingResultH)}</b></div>
+      {#if s.bestTrade}<div class="kv"><span>{t('phone.statement.best')}</span><b>{s.bestTrade.ticker} {signedGold(s.bestTrade.profitH ?? 0)}</b></div>{/if}
+      {#if s.worstTrade}<div class="kv"><span>{t('phone.statement.worst')}</span><b>{s.worstTrade.ticker} {signedGold(s.worstTrade.profitH ?? 0)}</b></div>{/if}
+      <div class="kv"><span>{t('phone.statement.votes')}</span><b>{s.correctVotes} / {s.votesCast}</b></div>
+      <div class="kv"><span>{t('phone.statement.nfts')}</span><b>{s.nftsMinted.toLocaleString()}</b></div>
+      <div class="kv"><span>{t('phone.statement.achievements')}</span><b style="font:400 1rem var(--font)">{s.achievements.length ? s.achievements.map((a) => t(`achievements.${a}.name`)).join(', ') : t('phone.statement.none')}</b></div>
     </div>
     <button class="primary wide" disabled={busy} onclick={download}>{t('phone.statement.download')}</button>
-    <h3 class="small muted">{t('phone.statement.trades')} ({s.trades.length})</h3>
+    <div class="muted small">{t('phone.statement.trades')} ({s.trades.length})</div>
     {#each s.trades as tr, i (i)}
-      <div class="spread small mono line">
+      <div class="tr">
         <span>{time(tr.at)} {tr.forced ? 'AUTO' : tr.side.toUpperCase()} {tr.ticker}</span>
         <span>{tr.profitH == null ? gold(tr.cashH) : signedGold(tr.profitH)}</span>
       </div>
     {/each}
   {/if}
 </div>
-
-<style>
-  .pad {
-    padding: 1rem;
-  }
-  .center {
-    text-align: center;
-    margin: 1rem 0;
-  }
-  .hero {
-    font-size: 2.4rem;
-  }
-  .rows {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-  .wide {
-    width: 100%;
-    margin: 0.8rem 0;
-    min-height: 48px;
-  }
-  .line {
-    padding: 0.25rem 0;
-    border-bottom: 1px solid var(--line);
-  }
-</style>

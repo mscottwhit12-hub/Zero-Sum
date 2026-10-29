@@ -21,7 +21,7 @@ try {
   await sleep(4000);
   // Tapping while offline should fail gracefully.
   await openApp(ps[0].page, 'Market').catch(() => {});
-  await ps[0].page.locator('.row-btn').first().click({ timeout: 3000 }).catch(() => {});
+  await ps[0].page.locator('button.r').first().click({ timeout: 3000 }).catch(() => {});
   const gold = ps[0].page.getByPlaceholder('Gold');
   if (await gold.isVisible().catch(() => false)) {
     await gold.fill('2');
@@ -33,7 +33,7 @@ try {
   await home(ps[0].page);
   await ps[0].ctx.setOffline(false);
   await sleep(6000);
-  const badge = await ps[0].page.locator('button.icon', { hasText: 'Messages' }).locator('.badge-count').textContent().catch(() => null);
+  const badge = await ps[0].page.locator('button.app', { hasText: 'Messages' }).locator('.nb').textContent().catch(() => null);
   R.check(badge && Number(badge) >= 2, 'offline', 'back online: missed message + tip show as badges', `badge = ${badge}`);
   await openApp(ps[0].page, 'Messages');
   const txt = await ps[0].page.locator('body').innerText();
@@ -54,7 +54,7 @@ try {
   R.check(st.games?.some((x) => x.id === g.id && x.status === 'active'), 'restart', 'running game survives a crash');
   // Phone buys after restart without refresh.
   await openApp(ps[1].page, 'Market');
-  await ps[1].page.locator('.row-btn', { hasText: 'ANN' }).first().click({ timeout: 4000 });
+  await ps[1].page.locator('button.r', { hasText: 'ANN' }).first().click({ timeout: 4000 });
   await ps[1].page.getByPlaceholder('Gold').fill('3');
   await ps[1].page.getByRole('button', { name: 'Buy', exact: true }).click();
   const t2 = await toasts(ps[1].page);
@@ -81,7 +81,7 @@ try {
   const req = (await nightState(gm)).gm.requests.find((r) => r.kind === 'rejoin');
   await api(gm.req, s.base, 'POST', `/api/requests/${req.id}/approve`);
   await sleep(3500);
-  R.check(await ben2.page.locator('button.icon').first().isVisible().catch(() => false), 'devices', 'second phone gets in after approval');
+  R.check(await ben2.page.locator('button.app').first().isVisible().catch(() => false), 'devices', 'second phone gets in after approval');
   ben2.token = await ben2.page.evaluate(() => localStorage.getItem('gn_device'));
   const a1 = await dev(ps[1], s, 'POST', '/api/trade/buy', { securityId: 'index', gold: 2 });
   const a2 = await dev(ben2, s, 'POST', '/api/trade/buy', { securityId: 'crypto', gold: 2 });
@@ -115,7 +115,7 @@ try {
   const req3 = (await nightState(gm)).gm.requests.find((r) => r.displayName === 'Waiter');
   if (req3) await api(gm.req, s.base, 'POST', `/api/requests/${req3.id}/approve`);
   await sleep(4000);
-  R.check(await wait.page.locator('button.icon').first().isVisible().catch(() => false), 'devices', 'refreshed waiting phone gets in after approval');
+  R.check(await wait.page.locator('button.app').first().isVisible().catch(() => false), 'devices', 'refreshed waiting phone gets in after approval');
 
   // 6. Sign out from Profile, then come back.
   await openApp(ps[3].page, 'Profile');

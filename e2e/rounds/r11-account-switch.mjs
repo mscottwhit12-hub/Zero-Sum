@@ -30,7 +30,7 @@ try {
   await p.getByRole('button', { name: /^(Join|Request to join)$/ }).click(); await sleep(1500);
   for (const r of (await api(gm.req, s.base, 'GET', '/api/night')).body.gm.requests ?? []) await api(gm.req, s.base, 'POST', `/api/requests/${r.id}/approve`);
   await sleep(3500);
-  R.check(await p.locator('button.icon').first().isVisible().catch(() => false), 'switch', 'after signing in as someone else the phone lands on home, not the old account\'s last app');
+  R.check(await p.locator('button.app').first().isVisible().catch(() => false), 'switch', 'after signing in as someone else the phone lands on home, not the old account\'s last app');
   const zed = await p.evaluate(() => localStorage.getItem('gn_device'));
   await openApp(p, 'NFT Minter'); await sleep(800);
   for (let i = 0; i < 7; i++) await p.locator('button.mint').click({ timeout: 1000 }).catch(() => {});
