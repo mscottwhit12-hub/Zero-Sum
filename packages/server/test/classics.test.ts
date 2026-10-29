@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
-import { listLibrary, seedClassics } from '../src/services/library';
+import { importPack, listLibrary, seedClassics } from '../src/services/library';
 import { makeApp } from './helpers';
 
 const PACK = fileURLToPath(new URL('../../../assets/classics.json', import.meta.url));
@@ -24,5 +24,35 @@ describe('classic games seeding', () => {
     const names = listLibrary(t.ctx).map((g) => g.name);
     expect(names).not.toContain('Risk');
     expect(names).toContain('Ticket to Ride');
+  });
+
+  it('importing a pack whose entry has no board keeps the board (the old test pack stripped Risk)', async () => {
+    const t = await makeApp();
+    seedClassics(t.ctx, PACK);
+    const risk = () => listLibrary(t.ctx).find((g) => g.name === 'Risk')!;
+    expect(risk().board).toBe('risk');
+    const res = importPack(t.ctx, null, { format: 'game-night-pack/1', games: [{ name: 'Risk', defaultDuration: 3, leadLabel: 'Territories' }] });
+    expect(res.updated).toBe(1);
+    expect(risk().board).toBe('risk');
+    expect(risk().defaultDuration).toBe(3); // the rest of the entry still applies
+    // an explicit "board": null (a pack exported from a game without a board) doesn't strip it either
+    importPack(t.ctx, null, { format: 'game-night-pack/1', games: [{ name: 'Risk', board: null }] });
+    expect(risk().board).toBe('risk');
+    // a pack can still set a board on a game that has none
+    importPack(t.ctx, null, { format: 'game-night-pack/1', games: [{ name: 'Custom', board: 'monopoly' }] });
+    expect(listLibrary(t.ctx).find((g) => g.name === 'Custom')!.board).toBe('monopoly');
+  });
+  it('repair: a classic that already lost its board gets it back on boot; other boards are left alone', async () => {
+    const t = await makeApp();
+    seedClassics(t.ctx, PACK);
+    t.ctx.db.prepare("UPDATE library_game SET board = NULL WHERE name = 'Risk'").run(); // what the old import did
+    t.ctx.db.prepare("UPDATE library_game SET board = 'other-board' WHERE name = 'Monopoly'").run();
+    seedClassics(t.ctx, PACK);
+    const by = (n: string) => listLibrary(t.ctx).find((g) => g.name === n)!;
+    expect(by('Risk').board).toBe('risk');
+    expect(by('Monopoly').board).toBe('other-board');
+    expect(t.ctx.db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action = 'library.repair_board'").get()).toEqual({ c: 1 });
+    seedClassics(t.ctx, PACK); // nothing left to repair: no second audit row
+    expect(t.ctx.db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action = 'library.repair_board'").get()).toEqual({ c: 1 });
   });
 });

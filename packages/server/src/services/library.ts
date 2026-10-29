@@ -215,7 +215,11 @@ export function exportPack(ctx: Ctx, name = 'My game library') {
   };
 }
 
-/** Adds new games and updates existing ones with the same name. Validates every entry before writing any. */
+/**
+ * Adds new games and updates existing ones with the same name. Validates every entry before writing any.
+ * A pack entry without a `board` never removes the board an existing game already has (packs written before boards
+ * existed, e.g. test-data/packs/catan-risk.json, would otherwise silently strip Risk's GM board and phone app).
+ */
 export function importPack(ctx: Ctx, actor: GmAuth | null, pack: unknown): { added: number; updated: number } {
   if (actor) masterOnly(actor);
   const p = pack as { format?: unknown; games?: unknown };
@@ -233,9 +237,9 @@ export function importPack(ctx: Ctx, actor: GmAuth | null, pack: unknown): { add
   let updated = 0;
   ctx.db.transaction(() => {
     for (const g of games) {
-      const existing = ctx.db.prepare('SELECT id, rule_entry_id FROM library_game WHERE name = ?').get(g.name) as { id: number; rule_entry_id: number | null } | undefined;
+      const existing = ctx.db.prepare('SELECT id, rule_entry_id, board FROM library_game WHERE name = ?').get(g.name) as { id: number; rule_entry_id: number | null; board: string | null } | undefined;
       if (existing) {
-        update(ctx, existing.id, { ...g, ruleEntryId: existing.rule_entry_id });
+        update(ctx, existing.id, { ...g, ruleEntryId: existing.rule_entry_id, board: g.board ?? existing.board });
         updated++;
       } else {
         insert(ctx, g);
@@ -253,11 +257,23 @@ export function importPack(ctx: Ctx, actor: GmAuth | null, pack: unknown): { add
  * existing installs too. A game the GM deletes is not re-added (its flag stays).
  */
 export function seedClassics(ctx: Ctx, packFile: string): number {
-  let pack: { games?: { name?: unknown }[] };
+  let pack: { games?: { name?: unknown; board?: unknown }[] };
   try {
     pack = JSON.parse(readFileSync(packFile, 'utf8'));
   } catch {
     return 0;
+  }
+  // Repair: a classic that is in the library by name but lost its board (an older pack import wiped it) gets it back.
+  // Only ever fills an empty board; a different board key is left alone.
+  const repaired: string[] = [];
+  for (const g of pack.games ?? []) {
+    const board = boardKeyOf(g.board);
+    if (typeof g.name !== 'string' || !board) continue;
+    if (ctx.db.prepare('UPDATE library_game SET board = ? WHERE name = ? AND board IS NULL').run(board, g.name).changes) repaired.push(g.name);
+  }
+  if (repaired.length) {
+    audit(ctx, { nightId: null, gmId: null, action: 'library.repair_board', entity: 'library_game', after: { repaired } });
+    refresh(ctx);
   }
   let added = 0;
   for (const g of pack.games ?? []) {
