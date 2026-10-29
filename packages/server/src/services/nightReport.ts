@@ -94,7 +94,7 @@ export function playerStats(ctx: Ctx, n: NightRow, st: NightState, player: Playe
     gameGoldH: games.reduce((a, g) => a + g.goldH, 0),
     tradeCount: trades.filter((t) => !t.forced).length,
     feesH: trades.reduce((a, t) => a + t.fee_h, 0),
-    bestShortH: shortWins.length ? Math.max(...shortWins) : null,
+    bestShortH: shortWins.some((x) => x > 0) ? Math.max(...shortWins) : null,
     ownStock,
     biggestBacker: backer ? { name: nameOf(backer.player_id), sharesH: backer.s } : null,
     bountiesH,
@@ -161,8 +161,8 @@ export function playerCards(stmt: { night: { name: string; date: string }; playe
       kv(720, 'Final gold', gold(stmt.goldH)) +
       kv(800, 'Gold from games', gold(s.gameGoldH)) +
       kv(880, 'Trading result', signed(stmt.tradingResultH), stmt.tradingResultH >= 0 ? '#4fcdb8' : '#f08462') +
-      `<path d="${sparkPath(s.netWorthLine.map((x) => x.v), 110, 960, W - 220, 220)}" fill="none" stroke="#4fcdb8" stroke-width="5"/>` +
-      t(110, 1220, 26, 'Net worth across the night', '#98a29a', 'sans-serif'),
+      `<path d="${sparkPath(s.netWorthLine.map((x) => x.v), 110, 940, W - 220, 190)}" fill="none" stroke="#4fcdb8" stroke-width="5"/>` +
+      t(110, 1180, 26, 'Net worth across the night', '#98a29a', 'sans-serif'),
   );
   const o = s.ownStock;
   const card2 = frame(
