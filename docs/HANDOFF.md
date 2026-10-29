@@ -254,6 +254,20 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - Classic games now seed **per game by name** (`seedClassics`, meta `classic:<name>`), so new classics reach existing installs; deleted ones stay deleted.
 - Bug log: `docs/boards/ttr-bug-log.xlsx`. Browser test `e2e/boards/ttr.mjs` (8 checks). Client tests now 198 (Risk + both TTR).
 
+### 4f. Oct 29 real-hardware feedback round (Claude built; local commits on `feedback-oct29`)
+- **Vote call** hangs up after voting (Vote app closes to home ~0.7 s after a saved pick).
+- **Schedule drag** bug: `PATCH /api/games/:id` didn't broadcast, so the timeline kept the old start and the next drag measured from it. Now emits `game:update` + refresh. Harness `e2e/features/sched.mjs`.
+- **Audio upload**: cap 30 MB (`SOUND_MAX_MB`, route body limit 42 MB for base64), FLAC accepted (`fLaC` signature), client checks type/size first and always shows an error (FileReader failures included); MIME is set from the file extension.
+- **Early vote**: `POST /api/night/vote-early` (any GM; Dashboard "Open next vote now"). Opens the next unvoted quarter now with its own window (`vote_round.window_end_nms`, migration 15); the quarter's times don't move; drift applies from its start; bounty at its end. `voteStep` now handles several unresolved rounds; End voids an early round whose quarter never came.
+- **Past-night-end warning** when scheduling, moving or resizing a game (`pastNightEnd` in `gm/lib.ts`).
+- **Risk over-map warning**: totals above `territoryTotal` are allowed but warned (header + player panel).
+- **Live standings → stocks** (hidden): `liveLevels` (engine) per scored game, stored in `game.live_levels` (migration 16), summed into each player's target as `live` (band units). Top 50% up tapering, bottom 25% down, zero-sum; updated on every score entry, kept after the game (stacks with the result: accepted). Manual-crown games excluded. Setting `market.player.liveMax` 0.05.
+- **Shorting = inverse share**: `openShort` / `coverShort` (engine), short lots carry `entry` (migration 17: `lot.short`, `lot.entry`, `trade.short`); value = shares × max(0, 2·entry − price). Not your own stock; sale-sized impact; shared invest cap, same fee and lockout; auto-closed at End with the 10% profit fee. Trades: open = side `sell` + short, cover = side `buy` + short. Phone Market: Short / Close short; Wallet lists shorts.
+- **Risk battles**: def `battle()` (territories defender → attacker, optional casualties and rounds; one history line). GM Battle panel. Players: phone **Risk** app (only for players in a running Risk game) with live standings and an optional battle log → `board_claim` (migration 18), GM approves/rejects on the board (first decision wins; pending entries void at result/cancel). **Board contract v1.3**: `ctx.claims`, `ctx.decideClaim`.
+- **End-of-night package** (`services/nightReport.ts`): statement gains `stats` (net worth line, games + gold, trades/fees, best short win, own stock line high/low/close, biggest backer, bounties, re-rolls, Minter rank, play vs idle, chat count, fun title). PDF adds these + charts. 3 SVG cards `GET /api/me/cards/:n.svg` (phone saves/shares as PNG). GM `GET /api/export/package.zip` (Master): every player's PDF + cards, `night-summary.pdf`, JSON + CSVs (own zip writer, `services/zip.ts`). Styling is functional; Server styles later.
+- Replay animations / drop "Best investment": **Server, later**.
+- Harness `e2e/features/oct29.mjs`.
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.

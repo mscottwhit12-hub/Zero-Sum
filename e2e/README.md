@@ -33,6 +33,8 @@ for r in e2e/rounds/r*.mjs; do NODE_PATH=$(npm root -g) node $r; done   # all te
 | ttr (`e2e/boards/ttr.mjs`) | Ticket to Ride USA + Europe boards in the real app: library entries, render on laptop/phone, final scores saved, tie keeps no crown, recap on phones |
 | monopoly (`e2e/boards/monopoly.mjs`) | Monopoly board in the real app: library entry ("Assets" crown), properties given on the board are saved, crown follows assets, bankruptcy, phone width, call time, recap on phones |
 | boards (`e2e/boards/run.mjs`) | Risk board end to end: tab appears, edits save and move the crown, re-roll spends once, eliminator takes territories, second GM syncs, result pre-fill, recap on phones |
+| sched (`e2e/features/sched.mjs`) | Schedule timeline drag: earlier, later, earlier again all land where dropped |
+| oct29 (`e2e/features/oct29.mjs`) | Oct 29 round: early vote + call closes after voting, phone short (not own stock), Risk phone app + battle approved on the GM board + GM Battle panel, FLAC upload, end-of-night package zip and phone cards |
 
 **Known false positives** (checked by hand; not app bugs): r03 "selling locked…" and "past the invest cap" (the app
 correctly answers "one trade per tick" / "not enough gold"); r05 "Start disabled while paused" (timing; it is disabled);

@@ -66,6 +66,8 @@ Engineers **can't access the repo or run the app**. Tate relays everything: you 
 
 **Live on `main`:** everything through the feedback round; Risk, Ticket to Ride (USA, Europe) and Monopoly boards; the phone theme (phase 1); the iPhone home-screen app (full screen via Add to Home Screen; Android later, maybe a light app). Tests: client 263, engine 116, server 92, sim 4; all harnesses green apart from the false positives above.
 
+**Built by Claude Oct 29 (Tate's real-hardware feedback, branch `feedback-oct29`, see HANDOFF §4f):** vote call hang-up, schedule drag fix, audio 30 MB + FLAC, early vote, past-night-end warning, Risk over-map warning, live standings move stocks, shorting, Risk battles + phone Risk app, end-of-night package. Server owes: replay animations + drop Best investment; style the package/cards.
+
 **Waiting on deliveries:** Ollama (Catan), Server (TV theme + phone fixes), Gem (first advice).
 
 **To brief out (Tate: manager doesn't build):**
