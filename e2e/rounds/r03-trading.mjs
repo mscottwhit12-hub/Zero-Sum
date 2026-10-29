@@ -17,7 +17,7 @@ try {
     await pg.locator('button.r').filter({ has: pg.locator('span.t', { hasText: new RegExp(`^${tk}`) }) }).first().click({ timeout: 5000 });
   };
   const tryBuy = async (amount, { taps = 1 } = {}) => {
-    await pg.getByPlaceholder('Gold').fill(String(amount));
+    await pg.getByPlaceholder('Gold').first().fill(String(amount));
     const btn = pg.getByRole('button', { name: 'Buy', exact: true });
     if (await btn.isDisabled()) return { disabled: true, toast: '' };
     const clicks = [];
@@ -70,8 +70,8 @@ try {
   // 4. Buy your own stock and the cap.
   await home(pg);
   await openStock('ANN');
-  await pg.getByRole('button', { name: 'Max' }).click();
-  const maxVal = await pg.getByPlaceholder('Gold').inputValue();
+  await pg.getByRole('button', { name: 'Max' }).first().click();
+  const maxVal = await pg.getByPlaceholder('Gold').first().inputValue();
   R.ok(`Max fills ${maxVal}`);
   const r4 = await tryBuy(maxVal);
   R.check(!/error/i.test(r4.toast) || /cap|limit/i.test(r4.toast), 'trade', 'Max buy succeeds or explains the cap', r4.toast);
@@ -93,7 +93,7 @@ try {
   // 6. Market screen open when trading closes; a stale tap after close.
   await openApp(bb.page, 'Market');
   await bb.page.locator('button.r').first().click();
-  await bb.page.getByPlaceholder('Gold').fill('2');
+  await bb.page.getByPlaceholder('Gold').first().fill('2');
   await api(gm.req, s.base, 'POST', '/api/night/close-trading');
   await sleep(1500);
   const buyBtn = bb.page.getByRole('button', { name: 'Buy', exact: true });

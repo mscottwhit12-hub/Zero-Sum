@@ -241,7 +241,7 @@ async function uiBuy(p, ticker, goldAmt) {
     const page = p.page;
     await openApp(page, 'Market');
     await page.locator('button.r').filter({ has: page.locator('span.t', { hasText: new RegExp(`^${ticker}(\\b|$)`) }) }).first().click({ timeout: 4000 });
-    await page.getByPlaceholder('Gold').fill(String(Math.round(goldAmt * 100) / 100));
+    await page.getByPlaceholder('Gold').first().fill(String(Math.round(goldAmt * 100) / 100));
     const buy = page.getByRole('button', { name: 'Buy', exact: true });
     if (await buy.isDisabled()) {
       await home(page);

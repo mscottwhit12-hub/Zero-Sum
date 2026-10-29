@@ -22,7 +22,7 @@ try {
   // Tapping while offline should fail gracefully.
   await openApp(ps[0].page, 'Market').catch(() => {});
   await ps[0].page.locator('button.r').first().click({ timeout: 3000 }).catch(() => {});
-  const gold = ps[0].page.getByPlaceholder('Gold');
+  const gold = ps[0].page.getByPlaceholder('Gold').first();
   if (await gold.isVisible().catch(() => false)) {
     await gold.fill('2');
     await ps[0].page.getByRole('button', { name: 'Buy', exact: true }).click().catch(() => {});
@@ -55,7 +55,7 @@ try {
   // Phone buys after restart without refresh.
   await openApp(ps[1].page, 'Market');
   await ps[1].page.locator('button.r', { hasText: 'ANN' }).first().click({ timeout: 4000 });
-  await ps[1].page.getByPlaceholder('Gold').fill('3');
+  await ps[1].page.getByPlaceholder('Gold').first().fill('3');
   await ps[1].page.getByRole('button', { name: 'Buy', exact: true }).click();
   const t2 = await toasts(ps[1].page);
   R.check(!/error|failed|network/i.test(t2) && (await ps[1].page.locator('.toast.error').count()) === 0, 'restart', 'phone can trade after a server crash without refreshing', `toast: ${t2}`);
