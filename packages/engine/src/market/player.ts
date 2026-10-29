@@ -9,6 +9,8 @@ export interface PlayerTickInput {
   drift: number;
   /** Mood bias, band units. */
   mood: number;
+  /** Live-standings bias summed over the night's scored games, band units (optional; 0 when absent). */
+  live?: number;
   impulses: Impulse[];
 }
 
@@ -31,7 +33,7 @@ export function tickPlayer(sec: SecurityState, input: PlayerTickInput, settings:
     fair = input.fair ?? sec.lastFair ?? sec.price;
   }
   next.lastFair = fair;
-  const terms = sec.gmOffset + input.drift + input.mood;
+  const terms = sec.gmOffset + input.drift + input.mood + (input.live ?? 0);
   const target = fair + terms * bandWidth(band);
   const model = sec.price + ps.reversion * (target - sec.price);
   const c = applyImpulsesAndClamp(sec.price, model, input.impulses, band, settings.market.maxChangeFrac);

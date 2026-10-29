@@ -18,6 +18,8 @@ export interface TickContext {
   mood: Map<string, number>;
   /** Impulses queued since the last tick (trades, espionage, kingfall, re-rolls). */
   impulses: Impulse[];
+  /** Live-standings bias per player, band units (summed over the night's scored games). */
+  live?: Map<string, number>;
   /** Hidden index growth minus running games' start drops, price units (see indexExtra). */
   indexExtra?: number;
 }
@@ -52,6 +54,7 @@ export function tickMarket(securities: SecurityState[], ctx: TickContext, settin
           fair: fair.get(pid),
           drift: sec.left ? 0 : ctx.drift.get(pid) ?? 0,
           mood: sec.left ? 0 : ctx.mood.get(pid) ?? 0,
+          live: sec.left ? 0 : ctx.live?.get(pid) ?? 0,
           impulses: imp(sec.id),
         },
         settings,

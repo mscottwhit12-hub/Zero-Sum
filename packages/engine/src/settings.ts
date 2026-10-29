@@ -74,6 +74,12 @@ export interface Settings {
       leaverDecay: number;
       /** Espionage success +frac / fail −frac. */
       espionageFrac: number;
+      /**
+       * Live standings in a scored game: the 1st place's lasting target bias, band units. The top 50% get a bias
+       * tapering by place, the bottom 25% a negative bias that balances it (zero-sum). Updated whenever live places
+       * change; the last levels stay after the game.
+       */
+      liveMax: number;
     };
     index: {
       scale: number;
@@ -247,6 +253,7 @@ export const DEFAULT_SETTINGS: Settings = {
       reversion: 0.2,
       leaverDecay: 0.02,
       espionageFrac: 0.03,
+      liveMax: 0.05,
     },
     index: { scale: 1, smoothing: 0.3, growthPerGold: 0.23, startDropPerGold: 0.15, noiseFrac: 0.01, noiseReversion: 0.1 },
     crypto: {
@@ -365,6 +372,7 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   frac(m.player.reversion, 'market.player.reversion');
   frac(m.player.leaverDecay, 'market.player.leaverDecay');
   frac(m.player.espionageFrac, 'market.player.espionageFrac');
+  frac(m.player.liveMax, 'market.player.liveMax');
   pos(m.index.scale, 'market.index.scale');
   frac(m.index.smoothing, 'market.index.smoothing');
   nonNeg(m.index.growthPerGold, 'market.index.growthPerGold');

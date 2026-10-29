@@ -13,6 +13,7 @@ import {
   validateResult,
   type CrownState,
   type GameResult,
+  liveLevels,
 } from '@gn/engine';
 import { j } from '../db';
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
@@ -423,6 +424,17 @@ export function latestScores(ctx: Ctx, gameId: number): Map<number, number> {
   return new Map(rows.map((r) => [r.player_id, r.score]));
 }
 
+/**
+ * Live standings move stocks (hidden): the game's live levels follow its current places (top 50% up, tapering;
+ * bottom 25% down; zero-sum). Stored per game and kept after it ends, so each change of place is a lasting nudge.
+ */
+function updateLiveLevels(ctx: Ctx, n: NightRow, g: GameRow, scores: Map<number, number>) {
+  const lv = liveLevels(new Map([...scores].map(([k, v]) => [pid(k), v])), g.lead_mode === 'low', nightSettings(n));
+  const next = JSON.stringify(Object.fromEntries([...lv].map(([k, v]) => [k, Math.round(v * 1e6) / 1e6])));
+  const prev = (ctx.db.prepare('SELECT live_levels FROM game WHERE id = ?').get(g.id) as { live_levels: string | null }).live_levels;
+  if (prev !== next) ctx.db.prepare('UPDATE game SET live_levels = ? WHERE id = ?').run(next, g.id);
+}
+
 /** Score entry (any GM): update some or all players' current scores; the crown follows automatically. */
 export function enterScores(ctx: Ctx, actor: GmAuth, gameId: number, input: { scores?: unknown }) {
   const { n, g, eligible } = activeGameFor(ctx, gameId);
@@ -451,6 +463,7 @@ export function enterScores(ctx: Ctx, actor: GmAuth, gameId: number, input: { sc
   const current = crownOf(ctx, gameId).leaderId;
   const next = leaderFromScores(new Map([...scores].map(([k, v]) => [pid(k), v])), g.lead_mode, current);
   const crown = next && next !== current ? setCrown(ctx, actor, n, g, Number(next)) : null;
+  updateLiveLevels(ctx, n, g, scores);
   if (changed.length) ctx.bus.all('game:update', { id: gameId, status: g.status });
   if (changed.length || crown) ctx.bus.refresh(n.id);
   return { leaderId: next ? Number(next) : null, changed: !!crown?.changed, dethroned: !!crown?.dethroned, scores: Object.fromEntries(scores) };

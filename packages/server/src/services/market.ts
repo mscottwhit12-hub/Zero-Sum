@@ -28,6 +28,14 @@ function activeDrift(ctx: Ctx, nightId: number, quarter: number | null): Map<str
   return new Map(Object.entries(j.parse<Record<string, number>>(r?.drift, {})));
 }
 
+/** Live-standings bias per player: the sum of each non-cancelled game's last live levels (band units). */
+export function liveBias(ctx: Ctx, nightId: number): Map<string, number> {
+  const out = new Map<string, number>();
+  const rows = ctx.db.prepare("SELECT live_levels FROM game WHERE night_id = ? AND status != 'cancelled' AND live_levels IS NOT NULL").all(nightId) as { live_levels: string }[];
+  for (const r of rows) for (const [k, v] of Object.entries(j.parse<Record<string, number>>(r.live_levels, {}))) out.set(k, (out.get(k) ?? 0) + v);
+  return out;
+}
+
 export function moodReadings(ctx: Ctx, nightId: number): MoodReading[] {
   return (ctx.db.prepare('SELECT player_id, mood, self_assessment, tick FROM mood_reading WHERE night_id = ? ORDER BY id').all(nightId) as {
     player_id: number;
@@ -65,6 +73,7 @@ export function runTick(ctx: Ctx, nightId: number): boolean {
         earned,
         drift: activeDrift(ctx, nightId, n.current_quarter),
         mood: moodBiasMap(moodReadings(ctx, nightId), tick, st.settings),
+        live: liveBias(ctx, nightId),
         impulses,
         indexExtra: indexTerms(ctx, n).extra,
       },

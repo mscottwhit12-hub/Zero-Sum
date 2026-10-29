@@ -20,6 +20,7 @@ export * from './market/event';
 export * from './market/dead';
 export * from './market/tick';
 export * from './market/trade';
+export * from './market/live';
 export * from './minter';
 export * from './hints';
 export * from './handicap';

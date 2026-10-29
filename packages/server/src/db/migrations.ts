@@ -504,4 +504,7 @@ export const MIGRATIONS: string[] = [
   /* 15 — GM opens a quarter's vote early (own window end, night-clock ms) */ `
   ALTER TABLE vote_round ADD COLUMN window_end_nms INTEGER;
   `,
+  /* 16 — live-standings bias per scored game: {playerId: band units}, kept after the game (JSON) */ `
+  ALTER TABLE game ADD COLUMN live_levels TEXT;
+  `,
 ];
