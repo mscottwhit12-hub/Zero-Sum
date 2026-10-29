@@ -29,7 +29,6 @@ export const SETTINGS: Record<string, BoardSetting> = {
   stationValue: { label: 'Points for each unused station at the end', default: 4, min: 0, max: 20 },
   ticketsMax: { label: 'Most destination tickets one player can complete', default: 46, min: 1, max: 100 },
   scoreMax: { label: 'Biggest final score the board accepts (and, as a minus, the smallest)', default: 500, min: 100, max: 2000, step: 50 },
-  plannedMinutes: { label: 'Planned game length in minutes (only used when the host gives no planned end; keep it equal to the library game\'s length)', default: 60, min: 10, max: 480, step: 5 },
   longestBonus: { label: 'Points for the European Express bonus (used by the optional points breakdown)', default: 10, min: 0, max: 50 },
   ticketTiebreak: { label: 'Break tied scores by most destination tickets completed (1 = yes, 0 = no)', default: 1, min: 0, max: 1 },
   stationTiebreak: { label: 'Then break ties by fewest stations built (1 = yes, 0 = no)', default: 1, min: 0, max: 1 },
@@ -365,11 +364,11 @@ export function syncEnded(s: TtrState, ctx: BoardContext, now: number): TtrState
 
 export interface Clock {
   startedAt: number;
-  /** Planned end (epoch ms): the host's if it gives one, otherwise start + the planned-length setting. */
-  endsAt: number;
+  /** Planned end (epoch ms) from the host (start + the library game's length); null when the game has no length. */
+  endsAt: number | null;
   elapsedMs: number;
-  /** Time left; negative once the game has run over. */
-  remainingMs: number;
+  /** Time left; negative once the game has run over. null without a planned end. */
+  remainingMs: number | null;
   over: boolean;
   /** True once every final score is in: the clock is frozen at that moment. */
   finished: boolean;
@@ -385,12 +384,12 @@ export function clock(s: TtrState, ctx: BoardContext, now: number): Clock | null
   const fromHost = fin(t.startedAt);
   const startedAt = fromHost ? (t.startedAt as number) : fin(s.startedAt) ? s.startedAt : null;
   if (startedAt === null) return null;
-  // a host end time at or before the start can't be right: fall back to the planned-length setting
-  const endsAt = fin(t.endsAt) && t.endsAt > startedAt ? t.endsAt : startedAt + cfg(ctx.settings, 'plannedMinutes') * 60000;
+  // the planned end comes only from the host (the library game's length); one at or before the start can't be right
+  const endsAt = fin(t.endsAt) && t.endsAt > startedAt ? t.endsAt : null;
   const finished = fin(s.endedAt);
   const at = finished ? (s.endedAt as number) : now;
-  const remainingMs = endsAt - at;
-  return { startedAt, endsAt, elapsedMs: Math.max(0, at - startedAt), remainingMs, over: remainingMs < 0, finished, source: fromHost ? 'host' : 'board' };
+  const remainingMs = endsAt === null ? null : endsAt - at;
+  return { startedAt, endsAt, elapsedMs: Math.max(0, at - startedAt), remainingMs, over: remainingMs !== null && remainingMs < 0, finished, source: fromHost ? 'host' : 'board' };
 }
 
 /** "1h 12m", "28 min", "under a minute". */

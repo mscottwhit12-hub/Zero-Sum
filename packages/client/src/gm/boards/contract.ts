@@ -33,6 +33,10 @@ export interface BoardContext {
   useReroll: (playerId: number) => Promise<unknown>;
   /** Current values of this board's settings (defaults merged with GM edits). */
   settings: Record<string, number>;
+  /** v1.2: when the game started (epoch ms), null before start. */
+  startedAt?: number | null;
+  /** v1.2: planned end = start + the library game's length (epoch ms); null without a length. */
+  endsAt?: number | null;
 }
 
 export interface BoardSetting {

@@ -25,6 +25,9 @@ try {
   const errs = [];
   page.on('pageerror', (e) => errs.push(String(e)));
   R.check((await page.locator('.pp, [aria-label="All players"]').count()) > 0, 'board', 'USA board renders in the real app');
+  const clockTxt = (await page.locator('.clock').first().innerText().catch(() => '')).replace(/\s+/g, ' ');
+  R.check(/planned end/.test(clockTxt) && /left|over/.test(clockTxt), 'clock', 'planned end comes from the library game length (no board setting)', clockTxt.slice(0, 120));
+  R.check(!/Planned game length/i.test(await page.content()), 'settings', 'no duplicate planned-length board setting');
   await page.screenshot({ path: `${s.dir}/shots/01-usa-laptop.png`, fullPage: true });
   // Final scores for everyone via the board: type into each player's Final score box
   const boxes = page.getByLabel('Final score', { exact: true });

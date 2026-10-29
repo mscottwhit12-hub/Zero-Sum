@@ -320,8 +320,10 @@
     <p class="small clock">
       {#if clk}
         <span>{clk.finished ? 'Finished after' : 'Playing for'} <strong class="mono">{duration(clk.elapsedMs)}</strong></span>
-        · <span>planned end <strong class="mono">{clockTime(clk.endsAt)}</strong></span>
-        · <span class:bad={clk.over}>{clk.over ? `${duration(clk.remainingMs)} over` : clk.finished ? `${duration(clk.remainingMs)} early` : `${duration(clk.remainingMs)} left`}</span>
+        {#if clk.endsAt !== null && clk.remainingMs !== null}
+          · <span>planned end <strong class="mono">{clockTime(clk.endsAt)}</strong></span>
+          · <span class:bad={clk.over}>{clk.over ? `${duration(clk.remainingMs)} over` : clk.finished ? `${duration(clk.remainingMs)} early` : `${duration(clk.remainingMs)} left`}</span>
+        {/if}
       {:else}
         <span class="muted">Starting the game clock…</span>
       {/if}

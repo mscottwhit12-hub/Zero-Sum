@@ -319,13 +319,13 @@ describe('game clock', () => {
     expect(s.startedAt).toBe(T0);
     expect(markStarted(s, T0 + 5000)).toBe(s);
   });
-  it('uses the planned-length setting for the end when the host gives none', () => {
-    const ctx = mk(2, { plannedMinutes: 90 });
+  it('has no planned end when the host gives none', () => {
+    const ctx = mk(2);
     const c = clock(markStarted(init(ctx), T0), ctx, T0 + 30 * 60000)!;
-    expect(c).toMatchObject({ elapsedMs: 30 * 60000, remainingMs: 60 * 60000, over: false, source: 'board', endsAt: T0 + 90 * 60000 });
+    expect(c).toMatchObject({ elapsedMs: 30 * 60000, remainingMs: null, over: false, source: 'board', endsAt: null });
   });
   it('goes over once past the planned end', () => {
-    const ctx = mk(2);
+    const ctx = { ...mk(2), startedAt: T0, endsAt: T0 + 60 * 60000 } as BoardContext;
     const c = clock(markStarted(init(ctx), T0), ctx, T0 + 75 * 60000)!;
     expect(c.over).toBe(true);
     expect(c.remainingMs).toBe(-15 * 60000);
@@ -464,14 +464,14 @@ describe('clock stops when the game is scored (BUG-003)', () => {
     expect(syncEnded(e, ctx, T0 + 90 * 60000)).toBe(e);
   });
   it('freezes the clock at the end time', () => {
-    const ctx = mk(2);
+    const ctx = { ...mk(2), startedAt: T0, endsAt: T0 + 60 * 60000 } as BoardContext;
     let s = scoredAll(markStarted(init(ctx), T0), ctx);
     s = syncEnded(s, ctx, T0 + 50 * 60000);
     const c = clock(s, ctx, T0 + 500 * 60000)!;
     expect(c).toMatchObject({ finished: true, elapsedMs: 50 * 60000, remainingMs: 10 * 60000, over: false });
   });
   it('reports a late finish as over', () => {
-    const ctx = mk(2);
+    const ctx = { ...mk(2), startedAt: T0, endsAt: T0 + 60 * 60000 } as BoardContext;
     let s = syncEnded(scoredAll(markStarted(init(ctx), T0), ctx), ctx, T0 + 80 * 60000);
     expect(clock(s, ctx, T0 + 999 * 60000)).toMatchObject({ finished: true, over: true, remainingMs: -20 * 60000 });
   });
@@ -524,12 +524,12 @@ describe('final round at the very start (BUG-009)', () => {
 
 describe('host planned end before the start (BUG-010)', () => {
   const T0 = 1_000_000_000_000;
-  it('ignores an end at or before the start and uses the planned length', () => {
-    const base = mk(2, { plannedMinutes: 90 });
+  it('ignores an end at or before the start', () => {
+    const base = mk(2);
     for (const endsAt of [T0 - 5000, T0]) {
       const ctx = { ...base, startedAt: T0, endsAt } as BoardContext;
       const c = clock(init(ctx), ctx, T0 + 60000)!;
-      expect(c.endsAt).toBe(T0 + 90 * 60000);
+      expect(c.endsAt).toBeNull();
       expect(c.over).toBe(false);
     }
   });

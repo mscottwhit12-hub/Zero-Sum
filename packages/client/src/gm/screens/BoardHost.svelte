@@ -38,6 +38,8 @@
     rerollsLeft,
     useReroll: (playerId: number) => post('/api/rerolls', { gameId: game.id, playerId, requestId: newRequestId() }),
     settings,
+    startedAt: game.startedAt,
+    endsAt: game.startedAt != null && game.plannedDurationHours ? game.startedAt + game.plannedDurationHours * 3_600_000 : null,
   });
 
   let board = $state<unknown>(null);
