@@ -18,7 +18,7 @@ import {
 import { j } from '../db';
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit } from './audit';
-import { sendBoardRecap } from './boards';
+import { sendBoardRecap, voidClaims } from './boards';
 import { pushFeed } from './feed';
 import type { GmAuth } from './gm';
 import { getLibraryGame, leadLabelOf, leadModeOf, type GameMode } from './library';
@@ -198,6 +198,7 @@ export function cancelGame(ctx: Ctx, actor: GmAuth, id: number): void {
   if (g.status === 'final' || g.status === 'cancelled') throw conflict('game_not_cancellable');
   ctx.db.transaction(() => {
     ctx.db.prepare("UPDATE game SET status = 'cancelled' WHERE id = ?").run(id);
+    voidClaims(ctx, id);
     audit(ctx, { nightId: g.night_id, gmId: actor.gmId, action: 'game.cancel', entity: 'game', entityId: id, before: { status: g.status } });
   })();
   ctx.bus.all('game:update', { id, status: 'cancelled' });
@@ -312,6 +313,7 @@ export function submitResult(ctx: Ctx, actor: GmAuth, id: number, input: ResultI
       .run(now, now, result.actualHours, result.coopWon == null ? null : result.coopWon ? 1 : 0, Math.round(pausedMs / 1000), id);
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.result', entity: 'game', entityId: id, after: result });
     recapTo = sendBoardRecap(ctx, id, actor.gmId);
+    voidClaims(ctx, id);
   })();
   for (const p of recapTo) ctx.bus.player(p, 'notify:player', { gameId: id });
   snapshotStandings(ctx, n.id);

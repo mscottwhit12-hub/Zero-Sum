@@ -107,6 +107,7 @@
         navigator.vibrate?.(80);
       },
       'board:update': (d) => window.dispatchEvent(new CustomEvent('gn:board-update', { detail: d })),
+      'board:claims': (d) => window.dispatchEvent(new CustomEvent('gn:board-claims', { detail: d })),
       'chat:message': () => window.dispatchEvent(new Event('gn:gm-chat')),
       'chat:thread': () => window.dispatchEvent(new Event('gn:gm-chat')),
       'gm:device_pause': async () => {

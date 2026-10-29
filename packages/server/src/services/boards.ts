@@ -7,7 +7,7 @@
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit } from './audit';
 import type { GmAuth } from './gm';
-import { currentNight } from './state';
+import { currentNight, type PlayerRow } from './state';
 
 const MAX_STATE_BYTES = 256 * 1024;
 const MAX_RECAP_TEXT = 1000;
@@ -33,10 +33,125 @@ function boardGame(ctx: Ctx, gameId: number) {
   return g;
 }
 
-export function getBoard(ctx: Ctx, _actor: GmAuth, gameId: number): { state: unknown; version: number } {
+export function getBoard(ctx: Ctx, _actor: GmAuth, gameId: number): { state: unknown; version: number; claims: BoardClaim[] } {
   boardGame(ctx, gameId);
   const r = ctx.db.prepare('SELECT state, version FROM game_board WHERE game_id = ?').get(gameId) as { state: string; version: number } | undefined;
-  return r ? { state: JSON.parse(r.state), version: r.version } : { state: null, version: 0 };
+  const claims = claimsOf(ctx, gameId, 'pending');
+  return r ? { state: JSON.parse(r.state), version: r.version, claims } : { state: null, version: 0, claims };
+}
+
+// ---------- player-submitted entries (Risk battles), approved by a GM ----------
+
+export interface BattlePayload {
+  attackerId: number;
+  defenderId: number;
+  territories: number;
+  attackerLosses: number | null;
+  defenderLosses: number | null;
+  rounds: number | null;
+}
+export interface BoardClaim {
+  id: number;
+  gameId: number;
+  playerId: number;
+  kind: 'battle';
+  payload: BattlePayload;
+  status: 'pending' | 'approved' | 'rejected' | 'void';
+  createdAt: number;
+}
+interface ClaimRow {
+  id: number;
+  game_id: number;
+  player_id: number;
+  kind: 'battle';
+  payload: string;
+  status: BoardClaim['status'];
+  created_at: number;
+}
+const toClaim = (r: ClaimRow): BoardClaim => ({ id: r.id, gameId: r.game_id, playerId: r.player_id, kind: r.kind, payload: JSON.parse(r.payload), status: r.status, createdAt: r.created_at });
+const MAX_PENDING = 10;
+
+export function claimsOf(ctx: Ctx, gameId: number, status?: BoardClaim['status']): BoardClaim[] {
+  const rows = (status
+    ? ctx.db.prepare('SELECT * FROM board_claim WHERE game_id = ? AND status = ? ORDER BY id').all(gameId, status)
+    : ctx.db.prepare('SELECT * FROM board_claim WHERE game_id = ? ORDER BY id').all(gameId)) as ClaimRow[];
+  return rows.map(toClaim);
+}
+
+const optInt = (v: unknown, max: number, name: string): number | null => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > max) throw bad(`bad_${name}`);
+  return n;
+};
+
+/** A player in a running Risk game logs a battle they attacked in. It waits for a GM. */
+export function createClaim(ctx: Ctx, player: PlayerRow, gameId: number, input: Record<string, unknown>): BoardClaim {
+  const g = boardGame(ctx, gameId);
+  if (g.status !== 'active') throw conflict('board_closed', 'This game is not running.');
+  if (g.board !== 'risk') throw conflict('no_claims', 'This game does not take player entries.');
+  const parts = (ctx.db.prepare('SELECT player_id FROM game_participant WHERE game_id = ?').all(gameId) as { player_id: number }[]).map((r) => r.player_id);
+  if (!parts.includes(player.id)) throw forbidden('not_a_participant');
+  const defenderId = Number(input.defenderId);
+  if (!parts.includes(defenderId) || defenderId === player.id) throw bad('bad_defender', 'Pick who you attacked.');
+  const territories = Number(input.territories);
+  if (!Number.isInteger(territories) || territories < 0 || territories > 100) throw bad('bad_territories', 'Territories taken must be a whole number.');
+  const payload: BattlePayload = {
+    attackerId: player.id,
+    defenderId,
+    territories,
+    attackerLosses: optInt(input.attackerLosses, 1000, 'losses'),
+    defenderLosses: optInt(input.defenderLosses, 1000, 'losses'),
+    rounds: optInt(input.rounds, 1000, 'rounds'),
+  };
+  const pending = (ctx.db.prepare("SELECT COUNT(*) c FROM board_claim WHERE game_id = ? AND player_id = ? AND status = 'pending'").get(gameId, player.id) as { c: number }).c;
+  if (pending >= MAX_PENDING) throw conflict('too_many_pending', 'Wait for the GM to check your earlier battles.');
+  const id = Number(
+    ctx.db.prepare("INSERT INTO board_claim (game_id, night_id, player_id, kind, payload, created_at) VALUES (?,?,?,'battle',?,?)").run(gameId, g.night_id, player.id, JSON.stringify(payload), ctx.now()).lastInsertRowid,
+  );
+  ctx.bus.gm('board:claims', { gameId });
+  ctx.bus.refresh(g.night_id);
+  return toClaim(ctx.db.prepare('SELECT * FROM board_claim WHERE id = ?').get(id) as ClaimRow);
+}
+
+/** GM approves or rejects a pending entry. Only the first decision counts (two GMs can't both apply it). */
+export function decideClaim(ctx: Ctx, actor: GmAuth, claimId: number, approve: boolean): BoardClaim {
+  const r = ctx.db.prepare('SELECT * FROM board_claim WHERE id = ?').get(claimId) as ClaimRow | undefined;
+  if (!r) throw notFound('claim_not_found');
+  const res = ctx.db.prepare("UPDATE board_claim SET status = ?, gm_id = ?, decided_at = ? WHERE id = ? AND status = 'pending'").run(approve ? 'approved' : 'rejected', actor.gmId, ctx.now(), claimId);
+  if (!res.changes) throw conflict('claim_decided', 'Another GM already handled this entry.');
+  audit(ctx, { nightId: null, gmId: actor.gmId, action: approve ? 'claim.approve' : 'claim.reject', entity: 'board_claim', entityId: claimId, after: JSON.parse(r.payload) });
+  ctx.bus.gm('board:claims', { gameId: r.game_id });
+  const n = currentNight(ctx);
+  if (n) ctx.bus.refresh(n.id);
+  return toClaim(ctx.db.prepare('SELECT * FROM board_claim WHERE id = ?').get(claimId) as ClaimRow);
+}
+
+/**
+ * Phone "Risk" app: only for players in a running Risk game. Standings come straight from the board state
+ * (territories, armies, out), plus this player's own entries and their status.
+ */
+export function playerBoardGames(ctx: Ctx, nightId: number, playerId: number) {
+  const games = ctx.db
+    .prepare(
+      `SELECT g.id, g.name, b.state FROM game g JOIN library_game l ON l.id = g.library_game_id JOIN game_participant gp ON gp.game_id = g.id
+       LEFT JOIN game_board b ON b.game_id = g.id WHERE g.night_id = ? AND g.status = 'active' AND l.board = 'risk' AND gp.player_id = ? ORDER BY g.id`,
+    )
+    .all(nightId, playerId) as { id: number; name: string; state: string | null }[];
+  return games.map((g) => {
+    const st = g.state ? (JSON.parse(g.state) as { players?: Record<string, { territories?: number; armies?: number; eliminated?: boolean }> }) : {};
+    const parts = (ctx.db.prepare('SELECT player_id FROM game_participant WHERE game_id = ?').all(g.id) as { player_id: number }[]).map((r) => r.player_id);
+    return {
+      gameId: g.id,
+      name: g.name,
+      board: 'risk' as const,
+      players: parts.map((id) => {
+        const p = st.players?.[String(id)] ?? {};
+        return { id, territories: p.territories ?? 0, armies: p.armies ?? 0, out: !!p.eliminated };
+      }),
+      myClaims: (ctx.db.prepare('SELECT * FROM board_claim WHERE game_id = ? AND player_id = ? ORDER BY id DESC LIMIT 20').all(g.id, playerId) as ClaimRow[]).map(toClaim),
+    };
+  });
 }
 
 function cleanRecap(v: unknown): { playerId: number; text: string }[] | null {
@@ -69,7 +184,13 @@ export function saveBoard(ctx: Ctx, _actor: GmAuth, gameId: number, input: { sta
   if (row) ctx.db.prepare('UPDATE game_board SET state = ?, version = ?, recap = ?, updated_at = ? WHERE game_id = ?').run(json, next, recapJson, ctx.now(), gameId);
   else ctx.db.prepare('INSERT INTO game_board (game_id, night_id, state, version, recap, updated_at) VALUES (?,?,?,?,?,?)').run(gameId, g.night_id, json, next, recapJson, ctx.now());
   ctx.bus.gm('board:update', { gameId, version: next });
+  if (g.board === 'risk') ctx.bus.refresh(g.night_id); // players' Risk app shows live standings
   return { version: next };
+}
+
+/** Game over (result or cancel): entries still waiting can't be applied any more. */
+export function voidClaims(ctx: Ctx, gameId: number): void {
+  ctx.db.prepare("UPDATE board_claim SET status = 'void', decided_at = ? WHERE game_id = ? AND status = 'pending'").run(ctx.now(), gameId);
 }
 
 /** Sends the stored recap to each player once (call inside the result transaction). Returns who got one. */

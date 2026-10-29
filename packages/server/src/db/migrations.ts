@@ -512,4 +512,19 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE lot ADD COLUMN entry REAL;
   ALTER TABLE trade ADD COLUMN short INTEGER NOT NULL DEFAULT 0;
   `,
+  /* 18 — player-submitted board entries (Risk battles) waiting for a GM to approve or reject */ `
+  CREATE TABLE board_claim (
+    id INTEGER PRIMARY KEY,
+    game_id INTEGER NOT NULL REFERENCES game(id),
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    kind TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','void')),
+    gm_id INTEGER,
+    created_at INTEGER NOT NULL,
+    decided_at INTEGER
+  );
+  CREATE INDEX board_claim_game ON board_claim(game_id, status);
+  `,
 ];

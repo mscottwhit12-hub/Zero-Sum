@@ -16,6 +16,7 @@
   import Standings from './apps/Standings.svelte';
   import Wallet from './apps/Wallet.svelte';
   import Vote from './apps/Vote.svelte';
+  import RiskApp from './apps/RiskApp.svelte';
   import { FUN_APPS } from './fun';
   import { dapi, deviceToken, pendingToken, setDeviceToken, setPendingToken, store } from './device';
   import Join from './Join.svelte';
@@ -40,6 +41,7 @@
   const BOOT: string[] = (copy as { phone: { boot: string[] } }).phone.boot;
   const APPS = [
     { id: 'vote', icon: '☎' },
+    { id: 'risk', icon: '⚔' },
     { id: 'wallet', icon: '◎' },
     { id: 'market', icon: '↗' },
     { id: 'standings', icon: '≡' },
@@ -163,7 +165,8 @@
   const vote = $derived(s?.me?.vote ?? null);
   const voteOpen = $derived(!!vote?.open && s?.night?.status === 'live');
   const voteBadge = $derived(voteOpen && vote?.myTarget == null ? 1 : 0);
-  const apps = $derived(APPS.filter((a) => a.id !== 'vote' || voteOpen));
+  const hasRisk = $derived(!!s?.me?.boardGames?.length);
+  const apps = $derived(APPS.filter((a) => (a.id !== 'vote' || voteOpen) && (a.id !== 'risk' || hasRisk)));
   // Theme layout only: the four dock apps; everything else (Vote only while a poll is open) goes on the grid.
   const DOCK = ['chat', 'market', 'messages', 'feed'];
   const dockApps = $derived(DOCK.map((id) => apps.find((a) => a.id === id)).filter((a): a is (typeof APPS)[number] => !!a));
@@ -186,6 +189,9 @@
   });
   $effect(() => {
     if (app === 'vote' && !voteOpen && vote == null) app = null;
+  });
+  $effect(() => {
+    if (app === 'risk' && !hasRisk) app = null; // the game ended: the app goes away
   });
   const unseenFeed = $derived((s?.feed ?? []).filter((f) => f.id > feedSeen).length);
   const chatUnread = $derived(s?.me?.chatUnread ?? 0);
@@ -300,6 +306,7 @@
           </div>
           <div class="list appbody">
             {#if app === 'vote'}<Vote {s} {now} ondone={() => { if (app === 'vote') app = null; }} />
+            {:else if app === 'risk'}<RiskApp {s} />
             {:else if app === 'wallet'}<Wallet {s} />
             {:else if app === 'market'}<Market {s} />
             {:else if app === 'standings'}<Standings {s} />

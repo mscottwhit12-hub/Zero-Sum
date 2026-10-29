@@ -11,7 +11,7 @@ import { castBallot, openVoteEarly } from '../services/votes';
 import { logReroll, recordMood, sendNotification, setOffset } from '../services/field';
 import { createRule, deleteRule, listRules, updateRule } from '../services/rules';
 import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '../services/seating';
-import { getBoard, saveBoard, setBoardSettings } from '../services/boards';
+import { createClaim, decideClaim, getBoard, saveBoard, setBoardSettings } from '../services/boards';
 import { chatMessages, gmChatMessages, gmChats, markChatRead, myChats, sendChat, startChat, useWiretap } from '../services/chat';
 import { deleteSound, listSounds, playSound, soundFileMime, uploadSound } from '../services/sounds';
 import { minterGet, minterSync } from '../services/minter';
@@ -348,6 +348,8 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // Per-game GM boards (any GM plays a board; settings are Master only)
   app.get<Id>('/api/games/:id/board', async (req) => getBoard(ctx, requireGm(ctx, req), Number(req.params.id)));
+  app.post<Id>('/api/games/:id/claims', async (req) => ({ claim: createClaim(ctx, device(req), Number(req.params.id), b(req.body)) }));
+  app.post<Id>('/api/claims/:id/decide', async (req) => ({ claim: decideClaim(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body).approve === true) }));
   app.put<Id>('/api/games/:id/board', async (req) => saveBoard(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body)));
   app.patch<{ Params: { key: string } }>('/api/boards/:key/settings', async (req) => ({ settings: setBoardSettings(ctx, requireGm(ctx, req, { master: true }), req.params.key, b(req.body)) }));
 

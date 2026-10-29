@@ -10,6 +10,7 @@
     CONTINENTS,
     NOTE_MAX,
     addNote,
+    battle,
     cfg,
     describeEntry,
     eliminate,
@@ -55,6 +56,34 @@
   const selPlayer = $derived(ctx.players.find((p) => p.id === sel) ?? null);
   const stat = $derived(status(game, ctx));
   const standings = $derived(recap(game, ctx));
+  // Battles: the GM logs one directly, or approves one a player sent from their phone.
+  const aliveIds = $derived(ctx.players.filter((p) => !pl(game, p.id).eliminated).map((p) => p.id));
+  let bAtt = $state<number | null>(null);
+  let bDef = $state<number | null>(null);
+  let bTerr = $state(1);
+  let bAL = $state<number | ''>('');
+  let bDL = $state<number | ''>('');
+  let bRounds = $state<number | ''>('');
+  const optN = (v: number | '') => (v === '' || v == null ? null : Math.max(0, Math.floor(Number(v))));
+  function logBattle() {
+    if (bAtt == null || bDef == null || bAtt === bDef) return;
+    apply(battle(game, ctx, { attackerId: bAtt, defenderId: bDef, territories: bTerr, attackerLosses: optN(bAL), defenderLosses: optN(bDL), rounds: optN(bRounds) }, now()));
+    bTerr = 1;
+    bAL = bDL = bRounds = '';
+  }
+  let deciding = $state<number | null>(null);
+  async function decide(c: NonNullable<typeof ctx.claims>[number], approve: boolean) {
+    if (!ctx.decideClaim || deciding !== null) return;
+    deciding = c.id;
+    const ok = await ctx.decideClaim(c.id, approve);
+    deciding = null;
+    if (ok && approve) apply(battle(game, ctx, { attackerId: c.payload.attackerId, defenderId: c.payload.defenderId, territories: c.payload.territories, attackerLosses: c.payload.attackerLosses, defenderLosses: c.payload.defenderLosses, rounds: c.payload.rounds }, now(), true));
+  }
+  const claimText = (c: NonNullable<typeof ctx.claims>[number]) => {
+    const x = c.payload;
+    const extra = [x.attackerLosses != null ? `${first(nameOf(x.attackerId))} lost ${x.attackerLosses}` : '', x.defenderLosses != null ? `${first(nameOf(x.defenderId))} lost ${x.defenderLosses}` : '', x.rounds != null ? `${x.rounds} rounds` : ''].filter(Boolean);
+    return `${nameOf(x.attackerId)} attacked ${nameOf(x.defenderId)} and took ${x.territories}${extra.length ? ` (${extra.join(', ')})` : ''}`;
+  };
   const assigned = $derived(ctx.players.reduce((n, p) => n + pl(game, p.id).territories, 0));
   const total = $derived(cfg(ctx.settings, 'territoryTotal'));
   const armiesMax = $derived(cfg(ctx.settings, 'armiesMax'));
@@ -229,6 +258,44 @@
       <p class="win"><strong>{nameOf(stat.winnerId)} has conquered the world.</strong> Finish the game from the result screen; the places are filled in for you.</p>
     {/if}
   </section>
+
+  {#if ctx.claims?.length}
+    <section class="panel">
+      <h3>From players ({ctx.claims.length})</h3>
+      <p class="small muted">Battles players logged on their phones. Approve to apply them to the board.</p>
+      {#each ctx.claims as c (c.id)}
+        <div class="claim">
+          <span>{claimText(c)}</span>
+          <div class="row">
+            <button class="big primary" disabled={deciding !== null} onclick={() => decide(c, true)}>Approve</button>
+            <button class="big" disabled={deciding !== null} onclick={() => decide(c, false)}>Reject</button>
+          </div>
+        </div>
+      {/each}
+    </section>
+  {/if}
+
+  {#if !stat.over && aliveIds.length >= 2}
+    <section class="panel">
+      <h3>Battle</h3>
+      <div class="bgrid">
+        <label class="field"><span class="small muted">Who attacked</span>
+          <select bind:value={bAtt} aria-label="Attacker"><option value={null}>Choose…</option>{#each aliveIds as id (id)}<option value={id}>{nameOf(id)}</option>{/each}</select></label>
+        <label class="field"><span class="small muted">Who defended</span>
+          <select bind:value={bDef} aria-label="Defender"><option value={null}>Choose…</option>{#each aliveIds.filter((x) => x !== bAtt) as id (id)}<option value={id}>{nameOf(id)}</option>{/each}</select></label>
+      </div>
+      {@render stepper('Territories taken', bTerr, [1], (v) => (bTerr = Math.max(0, v)))}
+      <details>
+        <summary class="small">Casualties and rounds (optional)</summary>
+        <div class="bgrid">
+          <label class="field"><span class="small muted">Attacker lost</span><input class="mono" type="number" inputmode="numeric" min="0" bind:value={bAL} aria-label="Attacker lost" /></label>
+          <label class="field"><span class="small muted">Defender lost</span><input class="mono" type="number" inputmode="numeric" min="0" bind:value={bDL} aria-label="Defender lost" /></label>
+          <label class="field"><span class="small muted">Rounds fought</span><input class="mono" type="number" inputmode="numeric" min="0" bind:value={bRounds} aria-label="Rounds fought" /></label>
+        </div>
+      </details>
+      <button class="big primary" disabled={bAtt == null || bDef == null || bAtt === bDef} onclick={logBattle}>Log battle</button>
+    </section>
+  {/if}
 
   {#if ctx.table}
     <section class="panel">
@@ -570,5 +637,17 @@
   }
   .log li.note-entry span:last-child {
     font-weight: 600;
+  }
+  .claim {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--line, #ddd);
+  }
+  .bgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 0.5rem;
   }
 </style>

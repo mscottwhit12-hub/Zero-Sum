@@ -1,6 +1,7 @@
 /**
  * GAME BOARD CONTRACT v1.1 — binding for every board engineer. Changes go through the manager.
  * v1.1 (additive): BoardDef.recap, BoardProps.onfinish.
+ * v1.3 (additive): BoardContext.claims + decideClaim (player-submitted entries a GM approves; Risk battles first).
  * Svelte note: don't keep the `state` prop under that name (it clashes with the $state rune); destructure it as
  * `let { ctx, state: game, onchange, onfinish }: BoardProps<S> = $props();`
  *
@@ -37,6 +38,22 @@ export interface BoardContext {
   startedAt?: number | null;
   /** v1.2: planned end = start + the library game's length (epoch ms); null without a length. */
   endsAt?: number | null;
+  /** v1.3: entries players sent from their phones, waiting for a GM (oldest first). */
+  claims?: BoardClaim[];
+  /**
+   * v1.3: approve or reject an entry. Resolves true only if this GM's decision counted (another GM may have been
+   * first). On approve, apply the entry to the state AFTER this resolves true.
+   */
+  decideClaim?: (id: number, approve: boolean) => Promise<boolean>;
+}
+
+/** v1.3: a player-submitted entry. `payload` is board-specific (Risk: a battle). */
+export interface BoardClaim {
+  id: number;
+  playerId: number;
+  kind: 'battle';
+  payload: { attackerId: number; defenderId: number; territories: number; attackerLosses: number | null; defenderLosses: number | null; rounds: number | null };
+  createdAt: number;
 }
 
 export interface BoardSetting {

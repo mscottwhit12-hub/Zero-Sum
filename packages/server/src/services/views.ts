@@ -5,6 +5,7 @@
  *  - Player only (own): holdings, lots, cash.
  * Views are built field-by-field from DB/engine data; nothing is spread wholesale.
  */
+import { playerBoardGames } from './boards';
 import { capRemainingH, hoursPlayed, positionPrice, sellValueH, type GoldH } from '@gn/engine';
 import { gmHintLog, playerHints, tipShop } from './hints';
 import { handicapGmView, playerGifts } from './handicap';
@@ -132,7 +133,7 @@ export interface PlayerView extends PublicView {
     rank: number | null;
     rerollsLeft: number;
     capRemainingH: GoldH;
-    holdings: { securityId: string; sharesH: number; costBasisH: GoldH; valueH: GoldH; lots: { sharesH: number; unlockNms: number }[] }[];
+    holdings: { securityId: string; short: boolean; sharesH: number; costBasisH: GoldH; valueH: GoldH; lots: { sharesH: number; unlockNms: number; entry?: number }[] }[];
     achievements: { type: string; createdAt: number }[];
     messages: { id: number; message: string; createdAt: number; read: boolean }[];
     /** Unread player-chat messages (phone badge). */
@@ -146,6 +147,7 @@ export interface PlayerView extends PublicView {
     gifts: ReturnType<typeof playerGifts>;
     /** Tip shop: buying (off by default) and re-roll trade-ins. */
     tipShop: ReturnType<typeof tipShop>;
+    boardGames: ReturnType<typeof playerBoardGames>;
   };
 }
 
@@ -195,6 +197,7 @@ export function playerView(ctx: Ctx, st: NightState, playerId: number, base?: Pu
       achievements: ach.map((a) => ({ type: a.type, createdAt: a.created_at })),
       messages: playerMessages(ctx, st.night.id, playerId),
       chatUnread: chatUnread(ctx, playerId),
+      boardGames: playerBoardGames(ctx, st.night.id, playerId),
       trades: myTrades(ctx, p),
       vote: voteView(ctx, st, playerId),
       challenges: playerChallenges(ctx, playerId, st.night.id),

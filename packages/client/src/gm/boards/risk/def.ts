@@ -72,7 +72,7 @@ export interface RiskPlayer {
   backup: { territories: number; armies: number; continents: ContinentKey[]; gave?: number; gaveTo?: number | null } | null;
 }
 
-export type LogKind = 'note' | 'territories' | 'armies' | 'continent' | 'eliminate' | 'restore' | 'reroll';
+export type LogKind = 'note' | 'territories' | 'armies' | 'continent' | 'eliminate' | 'restore' | 'reroll' | 'battle';
 
 export interface LogEntry {
   id: number;
@@ -88,8 +88,14 @@ export interface LogEntry {
   by?: number | null;
   /** Notes. */
   text?: string;
-  /** Eliminations: territories handed to the eliminator; restores: territories taken back. */
+  /** Eliminations: territories handed to the eliminator; restores: territories taken back; battles: territories taken. */
   moved?: number;
+  /** Battles: the defender (playerId = attacker), optional casualties each side and rounds fought, and whether a player logged it. */
+  defender?: number;
+  attackerLosses?: number | null;
+  defenderLosses?: number | null;
+  rounds?: number | null;
+  fromPlayer?: boolean;
 }
 
 export interface RiskState {
@@ -331,6 +337,52 @@ export function restore(s: RiskState, ctx: BoardContext, pid: number, now: numbe
   return addLog(next, { t: now, kind: 'restore', playerId: pid, ...(moved > 0 ? { moved } : {}) }, ctx);
 }
 
+export interface Battle {
+  attackerId: number;
+  defenderId: number;
+  /** Territories the attacker took from the defender. */
+  territories: number;
+  attackerLosses?: number | null;
+  defenderLosses?: number | null;
+  rounds?: number | null;
+}
+
+/**
+ * A battle: `territories` move from defender to attacker (never more than the defender holds), and optional
+ * casualties come off each side's armies (never below 0). Logged as one history line. Both must still be in.
+ * A defender left with 0 territories is NOT eliminated automatically (the GM does that, choosing who did it).
+ */
+export function battle(s: RiskState, ctx: BoardContext, b: Battle, now: number, fromPlayer = false): RiskState {
+  if (b.attackerId === b.defenderId) return s;
+  const a = editable(s, ctx, b.attackerId);
+  const d = a ? editable(a.s, ctx, b.defenderId) : null;
+  if (!a || !d) return s;
+  const att = d.s.players[b.attackerId]!;
+  const def = d.p;
+  const total = cfg(ctx.settings, 'territoryTotal');
+  const moved = Math.max(0, Math.min(Math.floor(b.territories || 0), def.territories, total - att.territories));
+  const aLoss = b.attackerLosses == null ? 0 : clampInt(b.attackerLosses, 0, att.armies);
+  const dLoss = b.defenderLosses == null ? 0 : clampInt(b.defenderLosses, 0, def.armies);
+  if (moved === 0 && aLoss === 0 && dLoss === 0 && b.rounds == null) return d.s;
+  let s1 = put(d.s, b.attackerId, { ...att, territories: att.territories + moved, armies: att.armies - aLoss });
+  s1 = put(s1, b.defenderId, { ...def, territories: def.territories - moved, armies: def.armies - dLoss });
+  return addLog(
+    s1,
+    {
+      t: now,
+      kind: 'battle',
+      playerId: b.attackerId,
+      defender: b.defenderId,
+      moved,
+      attackerLosses: b.attackerLosses ?? null,
+      defenderLosses: b.defenderLosses ?? null,
+      rounds: b.rounds ?? null,
+      ...(fromPlayer ? { fromPlayer: true } : {}),
+    },
+    ctx,
+  );
+}
+
 /** Records a re-roll the host has already spent (call only after `ctx.useReroll` succeeded). */
 export function recordReroll(s: RiskState, ctx: BoardContext, pid: number, now: number): RiskState {
   if (!ctx.players.some((x) => x.id === pid)) return s;
@@ -370,6 +422,14 @@ export function describeEntry(e: LogEntry, nameOf: (id: number) => string): stri
       return `${who} is back in (elimination undone${e.moved ? `, ${e.moved} territories returned` : ''})`;
     case 'reroll':
       return `${who} used a re-roll`;
+    case 'battle': {
+      const extra = [
+        e.attackerLosses != null ? `${who} lost ${e.attackerLosses}` : '',
+        e.defenderLosses != null ? `${nameOf(e.defender ?? -1)} lost ${e.defenderLosses}` : '',
+        e.rounds != null ? `${e.rounds} round${e.rounds === 1 ? '' : 's'}` : '',
+      ].filter(Boolean);
+      return `${who} attacked ${nameOf(e.defender ?? -1)}: took ${e.moved ?? 0} territor${e.moved === 1 ? 'y' : 'ies'}${extra.length ? ` (${extra.join(', ')})` : ''}${e.fromPlayer ? ' · logged by player' : ''}`;
+    }
   }
 }
 

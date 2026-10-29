@@ -118,7 +118,8 @@
       "profile": "Profile",
       "vote": "Vote",
       "minter": "NFT Minter",
-      "chat": "Chat"
+      "chat": "Chat",
+      "risk": "Risk"
     },
     "paused_title": "Markets suspended",
     "paused_body": "Pending a routine review. Please remain calm and keep your hands visible.",

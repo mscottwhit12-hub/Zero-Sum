@@ -311,6 +311,8 @@ export interface Me {
   messages: { id: number; message: string; createdAt: number; read: boolean }[];
   /** Unread player-chat messages. */
   chatUnread: number;
+  /** Running Risk games this player is in (phone Risk app): live standings + their own battle entries. */
+  boardGames?: PlayerBoardGame[];
   trades: { securityId: string; side: 'buy' | 'sell'; short?: number; sharesH: number; price: number; cashH: number; feeH: number; forced: number; createdAt: number }[];
   vote: VoteInfo | null;
   challenges: MyChallenge[];
@@ -328,4 +330,17 @@ export interface PendingRequest {
   displayName: string;
   ticker: string | null;
   createdAt: number;
+}
+
+export interface PlayerBoardGame {
+  gameId: number;
+  name: string;
+  board: 'risk';
+  players: { id: number; territories: number; armies: number; out: boolean }[];
+  myClaims: {
+    id: number;
+    status: 'pending' | 'approved' | 'rejected' | 'void';
+    createdAt: number;
+    payload: { attackerId: number; defenderId: number; territories: number; attackerLosses: number | null; defenderLosses: number | null; rounds: number | null };
+  }[];
 }

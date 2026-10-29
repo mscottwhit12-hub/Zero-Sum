@@ -27,7 +27,7 @@ describe('game boards', () => {
 
   it('saves versioned state; stale writes refused; repeating the same save is harmless', async () => {
     const { t, gm, g } = await boardNight();
-    expect((await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json()).toEqual({ state: null, version: 0 });
+    expect((await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json()).toEqual({ state: null, version: 0, claims: [] });
     const s1 = { v: 1, players: { 1: { territories: 10 } } };
     expect((await call(t, gm, 'PUT', `/api/games/${g.id}/board`, { state: s1, version: 0 })).json()).toEqual({ version: 1 });
     // same save again (double tap / retry): no-op success, same version
@@ -36,7 +36,7 @@ describe('game boards', () => {
     const stale = await call(t, gm, 'PUT', `/api/games/${g.id}/board`, { state: { v: 1, players: {} }, version: 0 });
     expect(stale.statusCode).toBe(409);
     expect(stale.json().error).toBe('board_stale');
-    expect((await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json()).toEqual({ state: s1, version: 1 });
+    expect((await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json()).toEqual({ state: s1, version: 1, claims: [] });
     expect((await call(t, gm, 'PUT', `/api/games/${g.id}/board`, { state: 'nope', version: 1 })).json().error).toBe('bad_board_state');
   });
 
@@ -86,5 +86,26 @@ describe('game boards', () => {
     const pub = JSON.stringify(publicView(t.ctx, st));
     expect(pub).not.toContain('boardSettings');
     expect(pub).not.toContain('secretBoardThing');
+  });
+});
+
+describe('player battle entries (Risk)', () => {
+  it('a player logs a battle; GMs see it; the first decision counts; the phone shows standings and status', async () => {
+    const { t, gm, devices, ids, g } = await boardNight();
+    const dev = (payload: unknown) => t.app.inject({ method: 'POST', url: `/api/games/${g.id}/claims`, payload: payload as object, headers: { 'x-device-token': devices[0]!.token } });
+    const r = await dev({ defenderId: ids[1], territories: 2, rounds: 3 });
+    expect(r.statusCode).toBe(200);
+    const claim = r.json().claim;
+    expect(claim.payload).toMatchObject({ attackerId: ids[0], defenderId: ids[1], territories: 2, rounds: 3, attackerLosses: null });
+    expect((await dev({ defenderId: ids[0], territories: 1 })).statusCode).toBe(400);
+    expect((await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json().claims).toHaveLength(1);
+    expect((await call(t, gm, 'POST', `/api/claims/${claim.id}/decide`, { approve: true })).statusCode).toBe(200);
+    expect((await call(t, gm, 'POST', `/api/claims/${claim.id}/decide`, { approve: false })).statusCode).toBe(409);
+    expect((await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json().claims).toHaveLength(0);
+    const { playerView } = await import('../src/services/views');
+    const st = computeNightState(t.ctx, currentNight(t.ctx)!.id)!;
+    const me = playerView(t.ctx, st, ids[0]!).me!;
+    expect(me.boardGames).toHaveLength(1);
+    expect(me.boardGames[0]!.myClaims[0]!.status).toBe('approved');
   });
 });

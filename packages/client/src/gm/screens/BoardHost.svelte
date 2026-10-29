@@ -10,7 +10,7 @@
   import type { GameInfo, GmState } from '@shared/types';
   import { BOARDS, boardSettingsFor } from '../boards';
   import { gameClock, gameTag } from '@shared/gameTime';
-  import type { BoardContext, BoardPlayer } from '../boards/contract';
+  import type { BoardClaim, BoardContext, BoardPlayer } from '../boards/contract';
 
   let { gs, game, onfinish }: { gs: GmState | null; game: GameInfo; onfinish: (placements: number[][] | null) => void } = $props();
 
@@ -30,6 +30,25 @@
       };
     }),
   );
+  let claims = $state<BoardClaim[]>([]);
+  async function decideClaim(id: number, approve: boolean): Promise<boolean> {
+    try {
+      await post(`/api/claims/${id}/decide`, { approve });
+      claims = claims.filter((c) => c.id !== id);
+      return true;
+    } catch (e) {
+      toast(errorText(e), 'error');
+      void loadClaims();
+      return false;
+    }
+  }
+  async function loadClaims() {
+    try {
+      claims = (await get<{ claims: BoardClaim[] }>(`/api/games/${game.id}/board`)).claims ?? [];
+    } catch {
+      /* the next board load retries */
+    }
+  }
   const newRequestId = () => `rr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const ctx = $derived<BoardContext>({
     players,
@@ -40,6 +59,8 @@
     settings,
     startedAt: game.startedAt,
     endsAt: game.startedAt != null && game.plannedDurationHours ? game.startedAt + game.plannedDurationHours * 3_600_000 : null,
+    claims,
+    decideClaim,
   });
 
   let board = $state<unknown>(null);
@@ -53,8 +74,9 @@
 
   async function load() {
     try {
-      const r = await get<{ state: unknown; version: number }>(`/api/games/${game.id}/board`);
+      const r = await get<{ state: unknown; version: number; claims?: BoardClaim[] }>(`/api/games/${game.id}/board`);
       version = r.version;
+      claims = r.claims ?? [];
       if (r.state == null && entry) {
         board = entry.def.init(ctx);
         dirty = true;
@@ -121,15 +143,20 @@
     const d = (e as CustomEvent<{ gameId: number; version: number }>).detail;
     if (d.gameId === game.id && d.version > version && !dirty && !saving) void load();
   }
+  function onClaims(e: Event) {
+    if ((e as CustomEvent<{ gameId: number }>).detail.gameId === game.id) void loadClaims();
+  }
   let now = $state(Date.now());
   const tick = setInterval(() => (now = Date.now()), 15_000);
   onMount(() => {
     void load();
     window.addEventListener('gn:board-update', onRemote);
+    window.addEventListener('gn:board-claims', onClaims);
   });
   onDestroy(() => {
     clearInterval(tick);
     window.removeEventListener('gn:board-update', onRemote);
+    window.removeEventListener('gn:board-claims', onClaims);
     if (timer) clearTimeout(timer);
     if (dirty) void flush();
   });

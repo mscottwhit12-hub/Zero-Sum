@@ -468,3 +468,35 @@ describe('territory transfer on elimination (manager follow-up)', () => {
     expect(r.find((x) => x.playerId === 2)!.text).toContain('Eliminated by P1');
   });
 });
+
+import { battle as doBattle, describeEntry as describe2, init as init2, pl as pl2 } from './def';
+
+describe('battle', () => {
+  it('moves territories defender → attacker, takes optional casualties, logs one line', () => {
+    const ctx = mk(4);
+    const s0 = init2(ctx);
+    const a0 = pl2(s0, 1);
+    const d0 = pl2(s0, 2);
+    const s1 = doBattle(s0, ctx, { attackerId: 1, defenderId: 2, territories: 3, attackerLosses: 2, defenderLosses: 4, rounds: 5 }, 1000);
+    expect(pl2(s1, 1).territories).toBe(a0.territories + 3);
+    expect(pl2(s1, 2).territories).toBe(d0.territories - 3);
+    expect(pl2(s1, 1).armies).toBe(a0.armies - 2);
+    expect(pl2(s1, 2).armies).toBe(d0.armies - 4);
+    const last = s1.log[s1.log.length - 1]!;
+    expect(last.kind).toBe('battle');
+    expect(describe2(last, (id) => `P${id}`)).toContain('P1 attacked P2: took 3 territories');
+  });
+  it('never takes more than the defender holds and keeps the map total', () => {
+    const ctx = mk(4);
+    const s0 = init2(ctx);
+    const s1 = doBattle(s0, ctx, { attackerId: 1, defenderId: 2, territories: 999 }, 1000);
+    expect(pl2(s1, 2).territories).toBe(0);
+    const total = ctx.players.reduce((n, p) => n + pl2(s1, p.id).territories, 0);
+    expect(total).toBe(ctx.players.reduce((n, p) => n + pl2(s0, p.id).territories, 0));
+  });
+  it('ignores self-attacks', () => {
+    const ctx = mk(4);
+    const s0 = init2(ctx);
+    expect(doBattle(s0, ctx, { attackerId: 1, defenderId: 1, territories: 2 }, 1)).toBe(s0);
+  });
+});
