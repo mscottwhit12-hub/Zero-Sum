@@ -40,6 +40,33 @@ describe('game boards', () => {
     expect((await call(t, gm, 'PUT', `/api/games/${g.id}/board`, { state: 'nope', version: 1 })).json().error).toBe('bad_board_state');
   });
 
+  it('board edits reach the audit log as what changed (player + before/after), not the whole board', async () => {
+    const { t, gm, g, ids } = await boardNight();
+    const p = String(ids[0]);
+    const put = (state: unknown, version: number) => call(t, gm, 'PUT', `/api/games/${g.id}/board`, { state, version });
+    const edits = async () => ((await call(t, gm, 'GET', '/api/gm/audit?limit=50')).json().entries as { action: string; entity: string; entityId: string; before: string | null; after: string }[]).filter((e) => e.action === 'board.edit');
+    // first save: only what was actually set (blank defaults are not "changes"); the board's own log is skipped
+    await put({ v: 1, players: { [p]: { territories: 12, armies: 0, eliminated: false, continents: [] } }, log: [{ id: 1, kind: 'territories', from: 0, to: 12 }], seq: 1 }, 0);
+    let e = await edits();
+    expect(e).toHaveLength(1);
+    expect(e[0]!.entity).toBe('game');
+    expect(e[0]!.entityId).toBe(String(g.id));
+    expect(JSON.parse(e[0]!.after)).toEqual({ [`players.${p}.territories`]: 12 });
+    // second save: territories 12 → 15 shows both sides
+    await put({ v: 1, players: { [p]: { territories: 15, armies: 0, eliminated: false, continents: [] } }, log: [{ id: 1 }, { id: 2 }], seq: 2 }, 1);
+    e = await edits();
+    expect(e).toHaveLength(2);
+    expect(JSON.parse(e[0]!.before!)).toEqual({ [`players.${p}.territories`]: 12 });
+    expect(JSON.parse(e[0]!.after)).toEqual({ [`players.${p}.territories`]: 15 });
+    // saving the same state again (double tap) and a save that only touches the log add nothing
+    await put({ v: 1, players: { [p]: { territories: 15, armies: 0, eliminated: false, continents: [] } }, log: [{ id: 1 }, { id: 2 }, { id: 3 }], seq: 3 }, 2);
+    expect(await edits()).toHaveLength(2);
+    // the audit screen gets names for the ids it mentions
+    const names = (await call(t, gm, 'GET', '/api/gm/audit?limit=5')).json().names;
+    expect(names.players[p]).toBeTruthy();
+    expect(names.games[String(g.id)]).toBe('Risk');
+  });
+
   it('a game without a board refuses; a finished game is closed', async () => {
     const { t, gm, ids, plain, g } = await boardNight();
     const pg = (await call(t, gm, 'POST', '/api/games', { libraryGameId: plain.id, participants: ids })).json().game;

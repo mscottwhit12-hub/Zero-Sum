@@ -24,7 +24,7 @@ import { getNight, type PlayerRow } from '../services/state';
 import { CSV_KINDS, exportNightCsv, exportNightJson, listNights } from '../services/exports';
 import { replayFinale, skipFinale } from '../services/night';
 import { createChallenge, readChallenge, reassignChallenge, resolveChallenge, respondChallenge, usePeek } from '../services/espionage';
-import { audit, auditTail } from '../services/audit';
+import { audit, auditNames, auditTail } from '../services/audit';
 import {
   createSubGm,
   deactivateSubGm,
@@ -140,7 +140,7 @@ export function registerRoutes(app: FastifyInstance, ctx: Ctx) {
   });
   app.get<{ Querystring: { limit?: string } }>('/api/gm/audit', async (req) => {
     requireGm(ctx, req, { master: true });
-    return { entries: auditTail(ctx, Math.min(500, Number(req.query.limit ?? 100))) };
+    return { entries: auditTail(ctx, Math.min(500, Number(req.query.limit ?? 100))), names: auditNames(ctx) };
   });
 
   // ---- night

@@ -5,7 +5,7 @@
  * when the result is submitted. GM only: nothing here reaches players or the TV except the recap messages.
  */
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
-import { audit } from './audit';
+import { audit, boardDiff } from './audit';
 import type { GmAuth } from './gm';
 import { currentNight, type PlayerRow } from './state';
 
@@ -167,7 +167,7 @@ function cleanRecap(v: unknown): { playerId: number; text: string }[] | null {
  * Saves a board. `version` must be the version the client last saw; a stale write is refused (409 board_stale)
  * and the client reloads. Saving the exact same state at the same version again is a no-op success.
  */
-export function saveBoard(ctx: Ctx, _actor: GmAuth, gameId: number, input: { state?: unknown; version?: unknown; recap?: unknown }): { version: number } {
+export function saveBoard(ctx: Ctx, actor: GmAuth, gameId: number, input: { state?: unknown; version?: unknown; recap?: unknown }): { version: number } {
   const g = boardGame(ctx, gameId);
   if (g.status !== 'active') throw conflict('board_closed', 'This game is not running.');
   if (input.state === undefined || input.state === null || typeof input.state !== 'object') throw bad('bad_board_state');
@@ -183,6 +183,10 @@ export function saveBoard(ctx: Ctx, _actor: GmAuth, gameId: number, input: { sta
   const recapJson = recap ? JSON.stringify(recap) : (row?.recap ?? null);
   if (row) ctx.db.prepare('UPDATE game_board SET state = ?, version = ?, recap = ?, updated_at = ? WHERE game_id = ?').run(json, next, recapJson, ctx.now(), gameId);
   else ctx.db.prepare('INSERT INTO game_board (game_id, night_id, state, version, recap, updated_at) VALUES (?,?,?,?,?,?)').run(gameId, g.night_id, json, next, recapJson, ctx.now());
+  // The audit log keeps what the GM changed (not the whole board): "players.12.territories 12 → 15".
+  const d = boardDiff(row ? JSON.parse(row.state) : null, input.state);
+  if (Object.keys(d.after).length)
+    audit(ctx, { nightId: g.night_id, gmId: actor.gmId, action: 'board.edit', entity: 'game', entityId: gameId, before: d.before, after: d.more ? { ...d.after, _more: d.more } : d.after });
   ctx.bus.gm('board:update', { gameId, version: next });
   if (g.board === 'risk') ctx.bus.refresh(g.night_id); // players' Risk app shows live standings
   return { version: next };
