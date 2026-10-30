@@ -59,7 +59,7 @@
       "rerollsAllowed": true,
       "color": "#862e9c",
       "leadMode": "manual",
-      "leadLabel": "Closest to solving",
+      "leadLabel": null,
       "board": "clue"
     }
   ]

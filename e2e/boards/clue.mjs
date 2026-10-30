@@ -1,4 +1,4 @@
-// Clue board in the real app: library entry (manual crown), tab, crown by hand, wrong accusation -> out, phone width, solve -> result + recap.
+// Clue board in the real app: library entry (manual crown), tab, no crown, wrong accusation -> out, phone width, solve -> result + recap.
 import { api, browser, gmLogin, gmRoute, gmSetup, makeRound, newNight, openApp, phone, sleep, startServer } from '../rounds/lib.mjs';
 const R = makeRound('clue');
 const s = await startServer('clue', { scale: 1 });
@@ -26,10 +26,9 @@ try {
   R.check((await page.locator('.pp').count()) >= 4, 'board', 'board renders with a panel per player');
   await page.screenshot({ path: `${s.dir}/shots/01-laptop.png`, fullPage: true });
   const panel = (i) => page.locator(`.right #clue-p-${ids[i]}`);
-  // crown Ben by hand
-  await panel(1).getByRole('button', { name: /Give the crown/ }).click(); await sleep(2000);
-  let ng = (await night(gm)).games.find((x) => x.id === g.id);
-  R.check(ng.leaderId === ids[1], 'crown', 'GM crowns Ben by hand', JSON.stringify({ leader: ng.leaderId }));
+  // no crown during Clue (Tate): the board offers no crown button
+  R.check((await page.getByRole('button', { name: /crown/i }).count()) === 0, 'crown', 'no crown button on the Clue board');
+  let ng;
   // Dev accuses wrong -> out
   await panel(3).getByRole('button', { name: 'Wrong accusation' }).click(); await sleep(300);
   await panel(3).getByRole('button', { name: 'Yes, wrong' }).click(); await sleep(1500);
@@ -47,7 +46,7 @@ try {
   await panel(0).getByRole('button', { name: 'Correct accusation' }).click(); await sleep(300);
   await panel(0).getByRole('button', { name: 'Yes, solved it' }).click(); await sleep(2000);
   ng = (await night(gm)).games.find((x) => x.id === g.id);
-  R.check(ng.leaderId === ids[0], 'crown', 'crown follows the correct accusation (Ann)', JSON.stringify({ leader: ng.leaderId }));
+  R.check(ng.leaderId == null, 'crown', 'still no crown after the case is solved (the result decides)', JSON.stringify({ leader: ng.leaderId }));
   await page.screenshot({ path: `${s.dir}/shots/04-solved.png`, fullPage: true });
   const body = (await page.textContent('body')) ?? '';
   R.check(!/envelope contains|solution:/i.test(body), 'hidden', 'no solution envelope shown on the board');

@@ -24,7 +24,6 @@
     pl,
     recap,
     recordReroll,
-    setLeader,
     status,
     suspectBlock,
     suspectName,
@@ -211,7 +210,6 @@
         <h2>{p.name}</h2>
       </div>
       <div class="row">
-        {#if game.leader === p.id}<span class="badge live">Crown</span>{/if}
         <span class="badge" class:live={!d.out}>{badgeText(p.id)}</span>
       </div>
     </div>
@@ -291,14 +289,7 @@
     {/if}
     {#if notice[p.id]}<p class="error">{notice[p.id]}</p>{/if}
 
-    {#if !d.out && !stat.over}
-      <div class="field">
-        <button class="big" class:primary={game.leader === p.id} onclick={() => apply(setLeader(game, ctx, p.id, now()))}>
-          {game.leader === p.id ? 'Remove crown' : 'Give the crown (closest to solving)'}
-        </button>
-      </div>
-    {/if}
-
+    <!-- No crown during Clue (Tate, Oct 29): the winner is only set by the result. -->
     {#if ctx.rerollsAllowed && !d.out && !stat.over}
       <div class="field">
         <div class="spread">
