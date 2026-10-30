@@ -18,6 +18,8 @@ export interface SeatingTable {
   y: number;
   w: number;
   h: number;
+  /** Where each seat sits around the table: fractions (0–1) along its edge, clockwise from the top-left; index = seat − 1. null = evenly spaced. */
+  seatPos: number[] | null;
   /** seat number (1-based) → player id */
   assignments: { seat: number; playerId: number }[];
   /** Active game at this table, if any (else the next scheduled one). */
@@ -36,7 +38,26 @@ export function minSize(seats: number) {
   return { w: Math.min(TABLE_W.max, TABLE_W.min * k), h: Math.min(TABLE_H.max, TABLE_H.min * k) };
 }
 
-type TableRow = { id: number; name: string; seats: number; map_x: number; map_y: number; map_w: number; map_h: number };
+type TableRow = { id: number; name: string; seats: number; map_x: number; map_y: number; map_w: number; map_h: number; seat_pos: string | null };
+
+/** Stored seat positions, or null when unset or no longer matching the seat count. */
+function readSeatPos(raw: string | null, seats: number): number[] | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) && v.length === seats && v.every((x) => typeof x === 'number' && x >= 0 && x < 1) ? v : null;
+  } catch {
+    return null;
+  }
+}
+/** Smallest gap between two seats (fraction of the table's edge) that keeps their icons apart. Mirrors the client. */
+const minGapFrac = (w: number, h: number) => (SEAT_EDGE * 0.9) / (2 * (w + h));
+/** True when every pair of seats is at least a seat icon apart along the edge (the edge is a loop). */
+function spacedOk(pos: number[], w: number, h: number) {
+  const gap = minGapFrac(w, h);
+  const s = [...pos].sort((a, b) => a - b);
+  return s.every((v, i) => (i === 0 ? s.length < 2 || v + 1 - s[s.length - 1]! >= gap : v - s[i - 1]! >= gap));
+}
 
 function night(ctx: Ctx): NightRow {
   const n = currentNight(ctx);
@@ -75,6 +96,7 @@ export function seatingView(ctx: Ctx, nightId: number): SeatingTable[] {
     y: t.map_y,
     w: t.map_w,
     h: t.map_h,
+    seatPos: readSeatPos(t.seat_pos, t.seats),
     assignments: seats.filter((s) => s.table_id === t.id).map((s) => ({ seat: s.seat, playerId: s.player_id })),
     gameId: games.find((g) => g.table_id === t.id)?.id ?? null,
   }));
@@ -109,7 +131,7 @@ export function createTable(ctx: Ctx, actor: GmAuth, input: { name?: unknown; se
   return { id };
 }
 
-export function updateTable(ctx: Ctx, actor: GmAuth, id: number, input: { name?: unknown; seats?: unknown; x?: unknown; y?: unknown; w?: unknown; h?: unknown }) {
+export function updateTable(ctx: Ctx, actor: GmAuth, id: number, input: { name?: unknown; seats?: unknown; x?: unknown; y?: unknown; w?: unknown; h?: unknown; seatPos?: unknown }) {
   masterOnly(actor);
   const n = night(ctx);
   const t = table(ctx, n.id, id);
@@ -121,8 +143,20 @@ export function updateTable(ctx: Ctx, actor: GmAuth, id: number, input: { name?:
   const min = minSize(seats);
   const w = Math.max(min.w, input.w === undefined ? t.map_w : clampRange(input.w, t.map_w, TABLE_W));
   const h = Math.max(min.h, input.h === undefined ? t.map_h : clampRange(input.h, t.map_h, TABLE_H));
+  // Seat positions: a new list (or null = back to even spacing) must fit the seat count and keep icons apart.
+  // Changing the seat count, or shrinking the table until seats would touch, goes back to even spacing.
+  let seatPos = readSeatPos(t.seat_pos, t.seats);
+  if (input.seatPos !== undefined) {
+    if (input.seatPos === null) seatPos = null;
+    else {
+      const v = input.seatPos;
+      if (!Array.isArray(v) || v.length !== seats || !v.every((p) => typeof p === 'number' && Number.isFinite(p) && p >= 0 && p < 1)) throw bad('bad_seat_pos', 'Seat positions must be one number from 0 to 1 per seat.');
+      if (!spacedOk(v as number[], w, h)) throw bad('seats_too_close', 'Seats would overlap there.');
+      seatPos = v as number[];
+    }
+  } else if (seatPos && (seats !== t.seats || !spacedOk(seatPos, w, h))) seatPos = null;
   ctx.db.transaction(() => {
-    ctx.db.prepare('UPDATE game_table SET name = ?, seats = ?, map_x = ?, map_y = ?, map_w = ?, map_h = ? WHERE id = ?').run(name, seats, x, y, w, h, id);
+    ctx.db.prepare('UPDATE game_table SET name = ?, seats = ?, map_x = ?, map_y = ?, map_w = ?, map_h = ?, seat_pos = ? WHERE id = ?').run(name, seats, x, y, w, h, seatPos ? JSON.stringify(seatPos) : null, id);
     if (seats < t.seats) ctx.db.prepare('DELETE FROM seat_assignment WHERE table_id = ? AND seat > ?').run(id, seats);
     // Moves and resizes are frequent (drag); only audit structural edits.
     if (name !== t.name || seats !== t.seats)

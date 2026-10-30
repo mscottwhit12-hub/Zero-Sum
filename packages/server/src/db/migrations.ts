@@ -527,4 +527,7 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX board_claim_game ON board_claim(game_id, status);
   `,
+  /* 19 — seat positions: where each seat sits around its table, as fractions (0–1) along the table's edge, clockwise from the top-left. NULL = evenly spaced. */ `
+  ALTER TABLE game_table ADD COLUMN seat_pos TEXT;
+  `,
 ];

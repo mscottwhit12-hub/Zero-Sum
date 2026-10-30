@@ -89,6 +89,54 @@ describe('seating: resize and swap', () => {
   });
 });
 
+describe('seating: seat positions', () => {
+  it('a seat can be moved around its table; bad or overlapping positions are refused; resets keep it sane', async () => {
+    const t = await makeApp();
+    const { gm, devices } = await liveNight(t, 2);
+    const a = devices[0] as unknown as { id: number };
+    const t1 = (await call(t, gm, 'POST', '/api/tables', { name: 'One', seats: 4, w: 0.3, h: 0.2 })).json().id;
+    const find = () => tvView(t.ctx, state(t)).seating.find((x) => x.id === t1)!;
+    expect(find().seatPos).toBeNull(); // default: evenly spaced
+
+    // move seat 1 along the edge; the other seats stay where they were
+    const pos = [0.1, 0.3, 0.6, 0.85];
+    expect((await call(t, gm, 'PATCH', `/api/tables/${t1}`, { seatPos: pos })).statusCode).toBe(200);
+    expect(find().seatPos).toEqual(pos);
+    // seats (and who sits in them) are untouched by moving a seat
+    await call(t, gm, 'POST', `/api/tables/${t1}/seat`, { seat: 2, playerId: a.id });
+    await call(t, gm, 'PATCH', `/api/tables/${t1}`, { seatPos: [0.15, 0.3, 0.6, 0.85] });
+    expect(find().assignments).toEqual([{ seat: 2, playerId: a.id }]);
+    expect(find().seatPos).toEqual([0.15, 0.3, 0.6, 0.85]);
+
+    // refused: wrong length, out of range, junk, two seats on top of each other
+    const bad = async (seatPos: unknown) => (await call(t, gm, 'PATCH', `/api/tables/${t1}`, { seatPos })).json().error;
+    expect(await bad([0.1, 0.2])).toBe('bad_seat_pos');
+    expect(await bad([0.1, 0.3, 0.6, 1.2])).toBe('bad_seat_pos');
+    expect(await bad([0.1, 0.3, 0.6, 'x'])).toBe('bad_seat_pos');
+    expect(await bad('nope')).toBe('bad_seat_pos');
+    expect(await bad([0.5, 0.505, 0.7, 0.9])).toBe('seats_too_close');
+    expect(await bad([0.001, 0.3, 0.6, 0.999])).toBe('seats_too_close'); // the edge is a loop: 0.001 and 0.999 touch
+    expect(find().seatPos).toEqual([0.15, 0.3, 0.6, 0.85]); // refused edits change nothing
+
+    // a move/resize that still fits keeps the layout; a seat-count change or a squeeze goes back to even spacing
+    await call(t, gm, 'PATCH', `/api/tables/${t1}`, { x: 0.4, y: 0.4 });
+    expect(find().seatPos).toEqual([0.15, 0.3, 0.6, 0.85]);
+    await call(t, gm, 'PATCH', `/api/tables/${t1}`, { seats: 5 });
+    expect(find().seatPos).toBeNull();
+    await call(t, gm, 'PATCH', `/api/tables/${t1}`, { seatPos: [0, 0.2, 0.4, 0.6, 0.8] });
+    expect(find().seatPos).toEqual([0, 0.2, 0.4, 0.6, 0.8]);
+    await call(t, gm, 'PATCH', `/api/tables/${t1}`, { w: 0.1, h: 0.07 }); // the table can't get that small with 5 seats: it grows, spacing still fits
+    expect(find().seatPos).toEqual([0, 0.2, 0.4, 0.6, 0.8]);
+    // explicit reset
+    await call(t, gm, 'PATCH', `/api/tables/${t1}`, { seatPos: null });
+    expect(find().seatPos).toBeNull();
+    // Master only
+    await call(t, gm, 'POST', '/api/gm/gms', { name: 'Helper', password: 'helper pass', pin: '5555' });
+    const sub = await loginAs(t, 'Helper', 'helper pass');
+    expect((await call(t, sub, 'PATCH', `/api/tables/${t1}`, { seatPos: [0, 0.2, 0.4, 0.6, 0.8] })).statusCode).toBe(403);
+  });
+});
+
 describe('seating', () => {
   it('tables, seat moves and bumps, shrink drops seats; GM + TV only', async () => {
     const t = await makeApp();

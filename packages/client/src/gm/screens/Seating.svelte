@@ -25,6 +25,7 @@
 
   const moveTable = (id: number, x: number, y: number) => run(() => patch(`/api/tables/${id}`, { x, y }));
   const resizeTable = (id: number, g: { x: number; y: number; w: number; h: number }) => run(() => patch(`/api/tables/${id}`, g));
+  const moveSeat = (id: number, seatPos: number[]) => run(() => patch(`/api/tables/${id}`, { seatPos }));
   const seatPlayer = (tableId: number, seat: number, playerId: number | null) => run(() => post(`/api/tables/${tableId}/seat`, { seat, playerId }));
 
   let selected = $state<number | null>(null);
@@ -48,7 +49,7 @@
   </div>
   <p class="small muted">
     {master
-      ? 'Drag a table to move it. Select it, then drag the gold handles to resize (right edge = length, bottom edge = width, corner = both). Drag players onto seats; dropping on an occupied seat swaps. Only GMs and the TV see this.'
+      ? 'Drag a table to move it. Select it, then drag the gold handles to resize (right edge = length, bottom edge = width, corner = both). Drag players onto seats; dropping on an occupied seat swaps. Drag an empty seat to move it around its table. Only GMs and the TV see this.'
       : 'Click a table to see its seats. Only GMs and the TV see this.'}
   </p>
   <FloorPlan
@@ -62,6 +63,7 @@
     onmove={moveTable}
     onresize={resizeTable}
     onseat={seatPlayer}
+    onseatpos={moveSeat}
   />
 </section>
 
@@ -72,6 +74,7 @@
       {#if master}
         <span class="row">
           <input type="number" min="2" max="8" value={sel.seats} style="width:70px" onchange={(e) => run(() => patch(`/api/tables/${sel.id}`, { seats: Number((e.currentTarget as HTMLInputElement).value) }))} />
+          {#if sel.seatPos}<button onclick={() => run(() => patch(`/api/tables/${sel.id}`, { seatPos: null }), 'Seats evened out')}>Even out seats</button>{/if}
           <button class="danger" onclick={() => confirm(`Delete ${sel.name}?`) && run(() => del(`/api/tables/${sel.id}`), 'Deleted').then(() => (selected = null))}>Delete</button>
         </span>
       {/if}

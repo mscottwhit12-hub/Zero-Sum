@@ -4,7 +4,7 @@
    * around it (seat order matches the floor plan). Read-only.
    */
   import Avatar from '@shared/Avatar.svelte';
-  import { clamp, seatPoints } from '@shared/seating';
+  import { clamp, relaxSeats, seatFractions, seatPoints } from '@shared/seating';
   import type { PlayerInfo, SeatingTable } from '@shared/types';
 
   let { table, players, game = '' }: { table: SeatingTable; players: PlayerInfo[]; game?: string } = $props();
@@ -35,7 +35,8 @@
       <strong>{table.name}</strong>
       <span class="muted cnt">{table.assignments.length}/{table.seats}{game ? ` · ${game}` : ''}</span>
     </div>
-    {#each seatPoints(table.seats, tw, th, S, 6) as p (p.seat)}
+    <!-- seats where the GM dragged them, nudged apart if the bigger icons here would touch -->
+    {#each seatPoints(table.seats, tw, th, S, 6, table.seatPos ? relaxSeats(seatFractions(table.seats, table.seatPos), (S + 6) / (2 * (tw + th))) : null) as p (p.seat)}
       {@const pid = table.assignments.find((a) => a.seat === p.seat)?.playerId ?? null}
       {@const pl = pid == null ? null : (byId.get(pid) ?? null)}
       {@const top = p.y < -th / 2}

@@ -2,10 +2,10 @@
   /**
    * Seating floor plan: tables with their seats drawn around them. Editable mode (Master GM) lets you drag
    * a table, resize it (right edge = width, bottom edge = height, corner = both) and drag players between
-   * seats and the unseated tray. Read-only mode (TV) just draws it.
+   * seats and the unseated tray. An empty seat can be dragged to another spot around its table. Read-only mode (TV) just draws it.
    */
   import Avatar from './Avatar.svelte';
-  import { clamp, minSize, seatPoints, TABLE_H, TABLE_W } from './seating';
+  import { clamp, edgeDistance, minSize, SEAT_EDGE, seatFractions, seatPoints, snapToFree, TABLE_H, TABLE_W } from './seating';
   import type { PlayerInfo, SeatingTable } from './types';
 
   let {
@@ -22,6 +22,7 @@
     onmove = undefined,
     onresize = undefined,
     onseat = undefined,
+    onseatpos = undefined,
   }: {
     tables: SeatingTable[];
     players: PlayerInfo[];
@@ -37,6 +38,8 @@
     onmove?: (id: number, x: number, y: number) => unknown;
     onresize?: (id: number, g: { x: number; y: number; w: number; h: number }) => unknown;
     onseat?: (tableId: number, seat: number, playerId: number | null) => unknown;
+    /** An empty seat was dragged: the table's new seat positions (0–1 fractions along its edge, one per seat). */
+    onseatpos?: (tableId: number, pos: number[]) => unknown;
   } = $props();
 
   let W = $state(0);
@@ -53,14 +56,23 @@
   let hover = $state<{ tableId: number; seat: number } | null>(null);
   let overTray = $state(false);
   let draggingPlayer = $state<number | null>(null);
+  /** An empty seat being dragged (or just dropped, until the server's update arrives). */
+  let liveSeat = $state<{ tableId: number; seat: number; f: number } | null>(null);
+  let seatTok = 0;
 
   type Op =
     | { kind: 'move'; id: number; offX: number; offY: number; sx: number; sy: number; moved: boolean }
     | { kind: 'resize'; id: number; axis: 'w' | 'h' | 'wh'; sx: number; sy: number; tlx: number; tly: number; tw: number; th: number; minW: number; minH: number; moved: boolean }
-    | { kind: 'player'; playerId: number; from: { tableId: number; seat: number } | null; sx: number; sy: number; moved: boolean };
+    | { kind: 'player'; playerId: number; from: { tableId: number; seat: number } | null; sx: number; sy: number; moved: boolean }
+    | { kind: 'seat'; tableId: number; seat: number; sx: number; sy: number; moved: boolean };
   let op: Op | null = null;
 
   const geo = (t: SeatingTable): Geo => (live && live.id === t.id ? live : t);
+  /** The table's seat positions, with the seat being dragged shown where it is now. */
+  const posOf = (t: SeatingTable): number[] => {
+    const base = seatFractions(t.seats, t.seatPos);
+    return liveSeat && liveSeat.tableId === t.id ? base.map((f, i) => (i + 1 === liveSeat!.seat ? liveSeat!.f : f)) : base;
+  };
   const byId = $derived(new Map(players.map((p) => [p.id, p])));
   const seatedIds = $derived(new Set(tables.flatMap((t) => t.assignments.map((a) => a.playerId))));
   const unseated = $derived(players.filter((p) => !p.left && !seatedIds.has(p.id)));
@@ -95,6 +107,13 @@
     op = { kind: 'player', playerId, from, sx: e.clientX, sy: e.clientY, moved: false };
   }
 
+  function startSeat(e: PointerEvent, t: SeatingTable, seat: number) {
+    if (!editable) return;
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    op = { kind: 'seat', tableId: t.id, seat, sx: e.clientX, sy: e.clientY, moved: false };
+  }
+
   function seatAt(cx: number, cy: number) {
     if (!planEl) return null;
     const r = planEl.getBoundingClientRect();
@@ -103,7 +122,7 @@
     let best: { tableId: number; seat: number; d: number } | null = null;
     for (const t of tables) {
       const g = geo(t);
-      for (const p of seatPoints(t.seats, g.w * W, g.h * W, S)) {
+      for (const p of seatPoints(t.seats, g.w * W, g.h * W, S, 3, posOf(t))) {
         const d = Math.hypot(px - (g.x * W + p.x), py - (g.y * H + p.y));
         if (d <= S * 0.9 && (!best || d < best.d)) best = { tableId: t.id, seat: p.seat, d };
       }
@@ -130,6 +149,19 @@
       const th = op.axis === 'w' ? op.th : clamp(op.th + dy, op.minH * W, TABLE_H.max * W);
       // The top-left corner stays put; the centre follows the new size.
       live = { id: live.id, w: tw / W, h: th / W, x: clamp((op.tlx + tw / 2) / W, 0, 1), y: clamp((op.tly + th / 2) / H, 0, 1) };
+    } else if (op.kind === 'seat') {
+      // The seat follows the pointer to the nearest free spot on the edge of its own table.
+      const so = op;
+      const t = tables.find((x) => x.id === so.tableId);
+      if (!t) return;
+      const g = geo(t);
+      const tw = g.w * W;
+      const th = g.h * W;
+      const per = 2 * (tw + th);
+      const d = edgeDistance(e.clientX - (r.left + g.x * W), e.clientY - (r.top + g.y * H), tw, th);
+      const others = posOf(t).filter((_, i) => i + 1 !== so.seat).map((f) => f * per);
+      const snapped = snapToFree(d, others, per, SEAT_EDGE * W);
+      if (snapped !== null) liveSeat = { tableId: t.id, seat: so.seat, f: snapped / per };
     } else if (op.kind === 'player') {
       ghost = { playerId: op.playerId, x: e.clientX, y: e.clientY };
       draggingPlayer = op.playerId;
@@ -154,6 +186,24 @@
       else if (!target && toTray && o.from) await onseat?.(o.from.tableId, o.from.seat, null);
       return;
     }
+    if (o.kind === 'seat') {
+      const t = tables.find((x) => x.id === o.tableId);
+      const ls = liveSeat;
+      const tok = ++seatTok;
+      if (!o.moved || !t || !ls) {
+        liveSeat = null;
+        return;
+      }
+      try {
+        await onseatpos?.(t.id, posOf(t));
+      } finally {
+        // Keep the seat where it was dropped until the server's update arrives.
+        setTimeout(() => {
+          if (tok === seatTok) liveSeat = null;
+        }, 400);
+      }
+      return;
+    }
     const l = live;
     const tok = liveTok;
     if (!l || !o.moved) {
@@ -173,6 +223,7 @@
   function cancel() {
     op = null;
     live = null;
+    liveSeat = null;
     ghost = null;
     hover = null;
     overTray = false;
@@ -200,16 +251,20 @@
             <strong>{t.name}</strong>
             {#if th >= 34}<span class="muted cnt">{t.assignments.length}/{t.seats}{gameName && t.gameId ? ` · ${gameName(t.gameId)}` : ''}</span>{/if}
           </button>
-          {#each seatPoints(t.seats, tw, th, S) as p (p.seat)}
+          {#each seatPoints(t.seats, tw, th, S, 3, posOf(t)) as p (p.seat)}
             {@const pid = t.assignments.find((a) => a.seat === p.seat)?.playerId ?? null}
             {@const pl = pid == null ? null : (byId.get(pid) ?? null)}
             <div
               class="seat"
               class:target={hover?.tableId === t.id && hover?.seat === p.seat}
               class:empty={!pl}
+              class:mv={editable && !pl && !dots}
+              class:moving={liveSeat?.tableId === t.id && liveSeat?.seat === p.seat}
               class:dot={dots && !!pl}
               style="left:{tw / 2 + p.x}px;top:{th / 2 + p.y}px;width:{S}px;height:{S}px;font-size:{Math.round(S * 0.4)}px"
-              title={pl ? pl.displayName : `Seat ${p.seat}`}
+              title={pl ? pl.displayName : editable && !dots ? `Seat ${p.seat}: drag to move it around the table` : `Seat ${p.seat}`}
+              onpointerdown={(e) => !pl && !dots && startSeat(e, t, p.seat)}
+              role="presentation"
             >
               {#if dots}
                 <!-- filled / empty only -->
@@ -319,6 +374,15 @@
   .seat.empty {
     border: 1.5px dashed var(--muted);
     color: var(--muted);
+  }
+  .seat.mv {
+    cursor: grab;
+    touch-action: none;
+  }
+  .seat.moving {
+    z-index: 3;
+    border-style: solid;
+    border-color: var(--accent);
   }
   .seat.dot {
     background: var(--accent);

@@ -175,6 +175,8 @@ export interface SeatingTable {
   /** size as fractions of the floor-plan width */
   w: number;
   h: number;
+  /** Where each seat sits around the table: 0–1 fractions along its edge (clockwise from the top-left), index = seat − 1. null = evenly spaced. */
+  seatPos: number[] | null;
   assignments: { seat: number; playerId: number }[];
   gameId: number | null;
 }
