@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { queueImpulse, runTick } from '../src/services/market';
 import { computeNightState, currentNight } from '../src/services/state';
 import { tickOnce } from '../src/tickLoop';
+import { publicView } from '../src/services/views';
 import { call, liveNight, makeApp } from './helpers';
 
 describe('market tick', () => {
@@ -84,5 +85,22 @@ describe('market tick', () => {
     t.clock.advance(10 * 60_000);
     tickOnce(t.ctx);
     expect(currentNight(t.ctx)!.current_quarter).toBe(1);
+  });
+
+  it('the public view carries lastTickAt so clients can count down to the next tick', async () => {
+    const t = await makeApp();
+    const { gm } = await liveNight(t, 2);
+    const view = () => publicView(t.ctx, computeNightState(t.ctx, currentNight(t.ctx)!.id)!).night;
+    const started = view().lastTickAt;
+    expect(started).toBe(t.ctx.now()); // before the first tick: the night's start
+    expect(view().tickSeconds).toBe(20);
+    t.clock.advance(20_000);
+    expect(tickOnce(t.ctx)).toBe(true);
+    expect(view().lastTickAt).toBe(t.ctx.now()); // moves with each tick
+    expect(view().lastTickAt).toBeGreaterThan(started!);
+    await call(t, gm, 'POST', '/api/night/pause');
+    t.clock.advance(60_000);
+    await call(t, gm, 'POST', '/api/night/resume');
+    expect(view().lastTickAt).toBe(t.ctx.now()); // resume restarts the interval
   });
 });

@@ -10,6 +10,7 @@ export interface NightInfo {
   currentQuarter: number | null;
   quarters: { n: number; startMin: number; endMin: number; windowEndMin: number }[];
   tickSeconds: number;
+  lastTickAt: number | null;
   serverTime: number;
   pauseUntil: number | null;
   recapUntil: number | null;

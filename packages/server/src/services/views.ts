@@ -41,6 +41,8 @@ export interface PublicView {
     currentQuarter: number | null;
     quarters: { n: number; startMin: number; endMin: number; windowEndMin: number }[];
     tickSeconds: number;
+    /** Wall-clock epoch ms of the last market tick (the night's start before the first). Clients count down from it. */
+    lastTickAt: number | null;
     serverTime: number;
     /** Optional pause countdown (wall-clock epoch ms). */
     pauseUntil: number | null;
@@ -80,6 +82,7 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
       currentQuarter: n.current_quarter,
       quarters: st.quarters.map((q) => ({ n: q.n, startMin: q.startMin, endMin: q.endMin, windowEndMin: q.windowEndMin })),
       tickSeconds: st.settings.market.tickSeconds,
+      lastTickAt: n.last_tick_at ?? n.started_at ?? null,
       serverTime: ctx.now(),
       pauseUntil: n.status === 'paused' ? n.pause_until : null,
       recapUntil: n.recap_until,

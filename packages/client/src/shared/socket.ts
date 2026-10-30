@@ -61,3 +61,15 @@ export function nightNow(night: { nightMs: number; serverTime: number; status: s
   if (!night) return 0;
   return night.status === 'live' ? night.nightMs + Math.max(0, now - night.serverTime) : night.nightMs;
 }
+
+/**
+ * Whole seconds until the next market tick, or null when ticks aren't running (night not live, trading closed,
+ * or no tick time yet). `serverNow` is the server's clock (night.serverTime plus time since it arrived).
+ */
+export function secondsToNextTick(
+  night: { status: string; tradingClosed: boolean; lastTickAt: number | null; tickSeconds: number } | null | undefined,
+  serverNow: number,
+): number | null {
+  if (!night || night.status !== 'live' || night.tradingClosed || night.lastTickAt == null) return null;
+  return Math.max(0, Math.ceil((night.lastTickAt + night.tickSeconds * 1000 - serverNow) / 1000));
+}

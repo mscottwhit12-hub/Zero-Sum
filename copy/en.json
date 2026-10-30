@@ -218,6 +218,9 @@
     "no_shares": "You don't hold that many shares.",
     "locked": "Those shares are still locked."
   },
+  "tick": {
+    "next": "Next update {s}s"
+  },
   "tv": {
     "memo": "BREAKING — An associate has received a confidential memo",
     "memo_accepted": "UPDATE — The confidential memo has been accepted",

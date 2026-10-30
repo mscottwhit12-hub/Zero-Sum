@@ -2,6 +2,7 @@
   import { patch } from '@shared/api';
   import { feedText } from '@shared/feedText';
   import Sparkline from '@shared/Sparkline.svelte';
+  import TickCountdown from '@shared/TickCountdown.svelte';
   import { run } from '@shared/ui';
   import type { GmState, WhoAmI } from '@shared/types';
 
@@ -15,7 +16,7 @@
 </script>
 
 <section class="panel">
-  <h2>Market</h2>
+  <div class="spread"><h2>Market</h2><TickCountdown night={gs?.night} /></div>
   <p class="small muted">Offsets (Master, player stocks only) shift fair value in band units (±0.50 max) until cleared. Players never see them.</p>
   <div class="scroll-x">
     <table>

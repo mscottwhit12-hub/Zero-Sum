@@ -4,6 +4,7 @@
   import { gold, price, signedGold } from '@shared/format';
   import { nightNow } from '@shared/socket';
   import Sparkline from '@shared/Sparkline.svelte';
+  import TickCountdown from '@shared/TickCountdown.svelte';
   import { run } from '@shared/ui';
   import type { PlayerState, Security } from '@shared/types';
   import { dapi } from '../device';
@@ -74,7 +75,7 @@
 
 {#if !sec}
   {#if !open}<p class="notice small">{s.night?.tradingClosed ? t('trade_errors.market_closed') : 'Trading opens when the market is live.'}</p>{/if}
-  <div class="sub">All prices final. Until they aren’t.</div>
+  <div class="sub">All prices final. Until they aren’t. <TickCountdown night={s.night} /></div>
   <div class="grp">
     {#each list as m (m.id)}
       {@const h = me.holdings.find((x) => x.securityId === m.id && !x.short)}

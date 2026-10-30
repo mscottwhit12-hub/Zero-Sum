@@ -16,6 +16,7 @@
   import type { FeedItem, TvState } from '@shared/types';
   import { cueTone } from './tones';
   import Finale from './Finale.svelte';
+  import TickCountdown from '@shared/TickCountdown.svelte';
 
   // ---- boot sequence (terminal touch)
   const BOOT: string[] = (copy as unknown as { tv: { boot: string[] } }).tv.boot;
@@ -211,6 +212,7 @@
         {#if s?.night}
           <span class="badge" class:live={s.night.status === 'live'} class:warn={s.night.status === 'paused'}>{t(`status.${s.night.status}`)}</span>
           {#if s.night.tradingClosed}<span class="badge warn">{t('tv.trading_closed')}</span>{/if}
+          <TickCountdown night={s.night} />
           {#if s.night.currentQuarter}<span>Q{s.night.currentQuarter}</span>{/if}
           <span class="clock">{clock(nightNow(s.night, now))}</span>
         {/if}
