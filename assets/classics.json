@@ -73,6 +73,18 @@
       "leadMode": "high",
       "leadLabel": "Score",
       "board": "scrabble"
+    },
+    {
+      "name": "Catan",
+      "minPlayers": 3,
+      "maxPlayers": 4,
+      "defaultDuration": 1.25,
+      "mode": "competitive",
+      "rerollsAllowed": true,
+      "color": "#d9480f",
+      "leadMode": "high",
+      "leadLabel": "Victory points",
+      "board": "catan"
     }
   ]
 }
