@@ -128,6 +128,9 @@ describe('player battle entries (Risk)', () => {
     expect((await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json().claims).toHaveLength(1);
     expect((await call(t, gm, 'POST', `/api/claims/${claim.id}/decide`, { approve: true })).statusCode).toBe(200);
     expect((await call(t, gm, 'POST', `/api/claims/${claim.id}/decide`, { approve: false })).statusCode).toBe(409);
+    // the audit entry says which game the battle was in (the audit filters need it)
+    const ae = ((await call(t, gm, 'GET', '/api/gm/audit?limit=20')).json().entries as { action: string; after: string }[]).find((x) => x.action === 'claim.approve')!;
+    expect(JSON.parse(ae.after)).toMatchObject({ gameId: g.id, territories: 2 });
     expect((await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json().claims).toHaveLength(0);
     const { playerView } = await import('../src/services/views');
     const st = computeNightState(t.ctx, currentNight(t.ctx)!.id)!;

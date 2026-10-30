@@ -120,7 +120,7 @@ export function decideClaim(ctx: Ctx, actor: GmAuth, claimId: number, approve: b
   if (!r) throw notFound('claim_not_found');
   const res = ctx.db.prepare("UPDATE board_claim SET status = ?, gm_id = ?, decided_at = ? WHERE id = ? AND status = 'pending'").run(approve ? 'approved' : 'rejected', actor.gmId, ctx.now(), claimId);
   if (!res.changes) throw conflict('claim_decided', 'Another GM already handled this entry.');
-  audit(ctx, { nightId: null, gmId: actor.gmId, action: approve ? 'claim.approve' : 'claim.reject', entity: 'board_claim', entityId: claimId, after: JSON.parse(r.payload) });
+  audit(ctx, { nightId: null, gmId: actor.gmId, action: approve ? 'claim.approve' : 'claim.reject', entity: 'board_claim', entityId: claimId, after: { ...JSON.parse(r.payload), gameId: r.game_id } });
   ctx.bus.gm('board:claims', { gameId: r.game_id });
   const n = currentNight(ctx);
   if (n) ctx.bus.refresh(n.id);
