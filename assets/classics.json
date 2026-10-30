@@ -49,6 +49,18 @@
       "leadMode": "high",
       "leadLabel": "Assets",
       "board": "monopoly"
+    },
+    {
+      "name": "Clue",
+      "minPlayers": 3,
+      "maxPlayers": 6,
+      "defaultDuration": 1.5,
+      "mode": "competitive",
+      "rerollsAllowed": true,
+      "color": "#862e9c",
+      "leadMode": "manual",
+      "leadLabel": "Closest to solving",
+      "board": "clue"
     }
   ]
 }
