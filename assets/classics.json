@@ -61,6 +61,18 @@
       "leadMode": "manual",
       "leadLabel": null,
       "board": "clue"
+    },
+    {
+      "name": "Scrabble",
+      "minPlayers": 2,
+      "maxPlayers": 4,
+      "defaultDuration": 1.5,
+      "mode": "competitive",
+      "rerollsAllowed": false,
+      "color": "#e8590c",
+      "leadMode": "high",
+      "leadLabel": "Score",
+      "board": "scrabble"
     }
   ]
 }

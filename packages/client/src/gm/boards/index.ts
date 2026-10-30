@@ -11,6 +11,8 @@ import { def as monoDef } from './monopoly/def';
 import MonoBoard from './monopoly/Board.svelte';
 import { def as clueDef } from './clue/def';
 import ClueBoard from './clue/Board.svelte';
+import { def as scrabbleDef } from './scrabble/def';
+import ScrabbleBoard from './scrabble/Board.svelte';
 
 export interface BoardEntry {
   def: BoardDef<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -23,6 +25,7 @@ export const BOARDS: Record<string, BoardEntry> = {
   'ticket-to-ride-europe': { def: ttrEuDef, Board: TtrEuBoard as unknown as BoardEntry['Board'] },
   monopoly: { def: monoDef, Board: MonoBoard as unknown as BoardEntry['Board'] },
   clue: { def: clueDef, Board: ClueBoard as unknown as BoardEntry['Board'] },
+  scrabble: { def: scrabbleDef, Board: ScrabbleBoard as unknown as BoardEntry['Board'] },
 };
 
 /** Defaults from the board's def, overridden by the Master's saved values. */
