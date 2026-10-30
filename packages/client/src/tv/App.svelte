@@ -355,7 +355,7 @@
   }
   .tv {
     min-height: 100vh;
-    padding: 1rem 1.5rem 3.2rem;
+    padding: 1rem 1.5rem calc(var(--crawl-h) + 0.5rem);
     font-size: clamp(15px, 1.25vw, 24px);
     display: flex;
     flex-direction: column;
@@ -424,12 +424,20 @@
   .tiny {
     font-size: 0.7em;
   }
+  /* Stock crawl size, shared by the crawl, the page's bottom padding and the banner that sits above it.
+     Text is about twice the old size (clamp is 2x the .tv base clamp). Scroll speed is unchanged. */
+  :global(:root) {
+    --crawl-fs: clamp(30px, 2.5vw, 48px);
+    --crawl-h: calc(var(--crawl-fs) * 1.25 + 1.2rem);
+  }
   .crawl {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    padding: 0.5rem 0;
+    padding: 0.6rem 0;
+    font-size: var(--crawl-fs);
+    line-height: 1.25;
     background: var(--panel);
     border-top: 1px solid var(--line);
     overflow: hidden;
@@ -472,7 +480,7 @@
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 2.6rem;
+    bottom: var(--crawl-h);
     z-index: 50;
     padding: 1.2rem 2rem;
     font-size: 2rem;

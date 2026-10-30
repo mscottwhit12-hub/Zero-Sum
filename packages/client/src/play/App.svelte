@@ -9,8 +9,7 @@
   import type { PlayerState } from '@shared/types';
   import Feed from './apps/Feed.svelte';
   import Market from './apps/Market.svelte';
-  import Messages from './apps/Messages.svelte';
-  import Chat from './apps/Chat.svelte';
+  import MessagesHub from './apps/MessagesHub.svelte';
   import Profile from './apps/Profile.svelte';
   import Rules from './apps/Rules.svelte';
   import Standings from './apps/Standings.svelte';
@@ -46,7 +45,6 @@
     { id: 'market', icon: '↗' },
     { id: 'standings', icon: '≡' },
     { id: 'messages', icon: '✉' },
-    { id: 'chat', icon: '❝' },
     { id: 'feed', icon: '☰' },
     { id: 'rules', icon: '§' },
     { id: 'profile', icon: '☺' },
@@ -168,7 +166,7 @@
   const hasRisk = $derived(!!s?.me?.boardGames?.length);
   const apps = $derived(APPS.filter((a) => (a.id !== 'vote' || voteOpen) && (a.id !== 'risk' || hasRisk)));
   // Theme layout only: the four dock apps; everything else (Vote only while a poll is open) goes on the grid.
-  const DOCK = ['chat', 'market', 'messages', 'feed'];
+  const DOCK = ['messages', 'market', 'wallet', 'feed'];
   const dockApps = $derived(DOCK.map((id) => apps.find((a) => a.id === id)).filter((a): a is (typeof APPS)[number] => !!a));
   const gridApps = $derived(apps.filter((a) => !DOCK.includes(a.id)));
   const latest = $derived(s?.feed?.[0] ? feedText(s.feed[0], s.players) : 'Quiet so far.');
@@ -195,7 +193,7 @@
   });
   const unseenFeed = $derived((s?.feed ?? []).filter((f) => f.id > feedSeen).length);
   const chatUnread = $derived(s?.me?.chatUnread ?? 0);
-  const badges = $derived<Record<string, number>>({ messages: unreadMessages, chat: chatUnread, feed: unseenFeed, vote: voteBadge });
+  const badges = $derived<Record<string, number>>({ messages: unreadMessages + chatUnread, feed: unseenFeed, vote: voteBadge });
   let lastTotal = -1;
   $effect(() => {
     const total = unreadMessages + chatUnread + unseenFeed + voteBadge;
@@ -310,8 +308,7 @@
             {:else if app === 'wallet'}<Wallet {s} />
             {:else if app === 'market'}<Market {s} />
             {:else if app === 'standings'}<Standings {s} />
-            {:else if app === 'messages'}<Messages {s} />
-            {:else if app === 'chat'}<Chat {s} />
+            {:else if app === 'messages'}<MessagesHub {s} inboxUnread={unreadMessages} {chatUnread} />
             {:else if app === 'feed'}<Feed {s} />
             {:else if app === 'rules'}<Rules {s} />
             {:else if app === 'profile'}<Profile {s} onsignout={() => { live?.close(); route(); }} />

@@ -86,7 +86,8 @@ try {
   R.check(/Catan · \d+ min in/.test(seatTxt), 'seating', 'tables show their game with start/elapsed or planned time', seatTxt.replace(/\s+/g, ' ').slice(0, 120));
 
   // Chat: Ann -> Ben, GM reads, Ben gets a badge
-  await openApp(pa, 'Chat'); await sleep(600);
+  await openApp(pa, 'Messages'); await sleep(600);
+  await pa.getByRole('tab', { name: /Chats/ }).click(); await sleep(300);
   await pa.getByRole('button', { name: 'New chat' }).click();
   await pa.locator('button.chip', { hasText: 'Ben' }).click();
   await pa.getByRole('button', { name: 'Start chat' }).click(); await sleep(800);
@@ -95,9 +96,12 @@ try {
   await shot(pa, '04-phone-chat');
   const pb = ps[1].page;
   await home(pb); await sleep(500);
-  const chatBadge = await pb.locator('button.app', { hasText: 'Chat' }).locator('.nb').textContent().catch(() => '');
-  R.check(chatBadge === '1', 'chat', 'the other player gets an unread badge', String(chatBadge));
-  await openApp(pb, 'Chat'); await sleep(600);
+  const chatBadge = await pb.locator('button.app', { hasText: 'Messages' }).locator('.nb').textContent().catch(() => '');
+  R.check(Number(chatBadge) >= 1, 'chat', 'the other player gets an unread badge on Messages', String(chatBadge));
+  await openApp(pb, 'Messages'); await sleep(600);
+  const tabBadge = await pb.getByRole('tab', { name: /Chats/ }).locator('.badge-count').textContent().catch(() => '');
+  R.check(tabBadge === '1', 'chat', 'the Chats tab shows 1 unread', String(tabBadge));
+  await pb.getByRole('tab', { name: /Chats/ }).click(); await sleep(300);
   await pb.locator('button.row-btn').first().click(); await sleep(800);
   R.check(((await pb.locator('.msgs').textContent()) ?? '').includes('Sell CAT before the poll'), 'chat', 'the message arrives');
   await pb.getByLabel('Message').fill('Deal'); await pb.getByRole('button', { name: 'Send' }).click(); await sleep(1500);
@@ -115,6 +119,7 @@ try {
   await api(gm.req, s.base, 'POST', `/api/challenges/${memo.id}/resolve`, { success: true });
   const pd = ps[3].page;
   await openApp(pd, 'Messages'); await sleep(900);
+  await pd.getByRole('tab', { name: /Inbox/ }).click(); await sleep(400);
   await pd.getByLabel('First associate').selectOption({ label: 'Ann' });
   await pd.getByLabel('Second associate').selectOption({ label: 'Ben' });
   await pd.getByRole('button', { name: 'Listen in' }).click(); await sleep(1200);
