@@ -17,8 +17,10 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
   color-scheme: dark;
   position: relative; display: flex; flex-direction: column; width: 100%; max-width: 430px; height: 100vh; height: 100dvh; margin: 0 auto; overflow: hidden;
   color: var(--text); font: 15px/1.4 var(--font);
-  background: repeating-linear-gradient(90deg, #ffffff08 0 1px, #0000 1px 16px), radial-gradient(130% 60% at 50% 0, #1a2d27, #0b0f0e 78%);
+  background: radial-gradient(130% 60% at 50% 0, #1a2d27, #0b0f0e 78%);
 }
+/* Background bar lines: one fixed layer above every view, so open/close transitions never scale, fade or clip them. */
+.phone .bars { position: absolute; inset: 0; z-index: 50; pointer-events: none; background: repeating-linear-gradient(90deg, #ffffff08 0 1px, #0000 1px 16px); }
 .phone * { box-sizing: border-box; }
 .phone h1, .phone h2, .phone h3, .phone .ser { font-family: var(--serif); font-weight: 600; font-variant-numeric: lining-nums; }
 .phone .mono, .phone .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -57,7 +59,7 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 /* stage + views */
 .phone .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .phone .view { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; }
-.phone .view:not(.home) { background: repeating-linear-gradient(90deg, #ffffff08 0 1px, #0000 1px 16px), radial-gradient(130% 60% at 50% 0, #1a2d27, #0b0f0e 78%); overflow: hidden; }
+.phone .view:not(.home) { background: radial-gradient(130% 60% at 50% 0, #1a2d27, #0b0f0e 78%); overflow: hidden; }
 .phone .home { padding: 0.4rem 1.1rem 0; gap: 0.8rem; padding-bottom: calc(max(env(safe-area-inset-bottom, 0px), 24px) + 104px); }
 .phone .wd { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 0.9rem 1.1rem; box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 4px #c9a24a30; }
 .phone .bond { position: relative; border: 2px dashed #c9a24a88; box-shadow: none; }
@@ -172,7 +174,7 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 .phone .field { margin-bottom: 0.6rem; } .phone .screen input { width: 100%; }
 .phone .swatch { width: 34px; height: 34px; min-height: 34px; border-radius: 50%; padding: 0; border: 2px solid transparent; } .phone .swatch.on { border-color: var(--paper); }
 .phone .boot { padding: calc(env(safe-area-inset-top, 0px) + 1.5rem) 1.1rem; font: 0.85rem/1.8 var(--mono); color: var(--good); }
-.phone .pad { padding: 1.2rem; } .phone .error { color: var(--bad); font-size: 0.9rem; }
+.phone .pad { padding: 1.2rem; }
 .phone .rotate { display: none; }
 @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) { .phone .rotate { display: flex; position: fixed; inset: 0; z-index: 200; background: var(--bg); align-items: center; justify-content: center; text-align: center; padding: 2rem; font: 1rem var(--serif); } }
 

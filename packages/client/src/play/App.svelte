@@ -242,6 +242,8 @@
 {/snippet}
 
 <div class="phone">
+  <!-- The background bar lines live here, fixed, so app open/close zooms never scale, fade or cut them. -->
+  <div class="bars" aria-hidden="true"></div>
   <Toasts />
   <div class="rotate">{t('phone.rotate')}</div>
 
