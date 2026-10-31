@@ -133,6 +133,18 @@
       "leadMode": "high",
       "leadLabel": "Score",
       "board": "yahtzee"
+    },
+    {
+      "name": "Texas Hold'em",
+      "minPlayers": 2,
+      "maxPlayers": 10,
+      "defaultDuration": 3,
+      "mode": "competitive",
+      "rerollsAllowed": false,
+      "color": "#c92a2a",
+      "leadMode": "high",
+      "leadLabel": "Chips",
+      "board": "poker"
     }
   ]
 }

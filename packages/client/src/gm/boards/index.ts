@@ -23,6 +23,8 @@ import { def as sorryDef } from './sorry/def';
 import SorryBoard from './sorry/Board.svelte';
 import { def as yahtzeeDef } from './yahtzee/def';
 import YahtzeeBoard from './yahtzee/Board.svelte';
+import { def as pokerDef } from './poker/def';
+import PokerBoard from './poker/Board.svelte';
 
 export interface BoardEntry {
   def: BoardDef<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -41,6 +43,7 @@ export const BOARDS: Record<string, BoardEntry> = {
   parcheesi: { def: parcheesiDef, Board: ParcheesiBoard as unknown as BoardEntry['Board'] },
   sorry: { def: sorryDef, Board: SorryBoard as unknown as BoardEntry['Board'] },
   yahtzee: { def: yahtzeeDef, Board: YahtzeeBoard as unknown as BoardEntry['Board'] },
+  poker: { def: pokerDef, Board: PokerBoard as unknown as BoardEntry['Board'] },
 };
 
 /** Defaults from the board's def, overridden by the Master's saved values. */
