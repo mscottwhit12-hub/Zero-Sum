@@ -268,6 +268,15 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - Replay animations / drop "Best investment": **Server, later**.
 - Harness `e2e/features/oct29.mjs`.
 
+### 4g. Oct 29–31 QoL rounds (Rocket League; QoL-1…9)
+- **Risk board import fix** (`library.importPack` no longer nulls `board`; `seedClassics` repairs null boards). **Tick countdown** on GM Market, phone Market and the TV header (`lastTickAt`, `secondsToNextTick`).
+- **Audit log in plain language** (`gm/auditText.ts`, "Computer speak" toggle shows the raw JSON) and **filters** (`gm/auditFilter.ts`: hide / only a game, player, GM, kind of event or text). Board edits are audited (`board.edit`).
+- **Draggable empty seats** (`game_table.seat_pos`, migration 19; GM Seating + TV; "Even out seats" resets). Per-game boards still draw seats evenly.
+- **Phone**: waiting/denied text clears the iPhone notch (`.pad.edge`); the background bar lines are one fixed layer (`.bars`) so app zooms never scale or cut them; **swipe right on home → full-screen Leaderboard** (page dots; dock hides there); the Standings app is gone.
+- **Rejoin trust** (`player_phone`, migration 20): a phone a GM approves is remembered (several per player). **GM sign-in is name + password only**: no device chooser or check (layout is detected; Devices screen can still switch it); the `gn_gm` cookie is a **session cookie** (signs in again after the browser closes).
+- **Bets** (migration 21: `bet` table, `adjustment.kind = 'bet'`; `engine/betting.ts`, `services/betting.ts`, phone Bets app, GM Bets screen). Player-to-player only: win ("X wins") and place ("X in the top 2–5") bets on a scheduled/running game, odds "a to b" (1–10 each), open to all or one named player. The offerer risks the stake and wins stake×a÷b; the taker risks that amount. The most either side can lose is `betting.maxStake` (5 gold); a **High Roller ticket** (new challenge reward `high_roller`) lifts it to `betting.ticketMaxStake` (10) for one bet. Stakes are held through the gold ledger when a bet is taken (they leave cash but still count toward net worth) and paid when the result is recorded. Tie, cancelled game, night end, GM void, or a player who wasn't in the game: stakes go back. Open offers lapse when the game ends. Only people in the game's player list can be bet on; a top-N that can't lose is refused. Settings: `betting.enabled / maxStake / ticketMaxStake / maxOpenOffers`. A correction after payout does not re-pay.
+- Harnesses: `e2e/seating/seats.mjs`, `e2e/swipe/pages.mjs`, `e2e/bets/bets.mjs`.
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
