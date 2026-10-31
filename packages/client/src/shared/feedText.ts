@@ -18,6 +18,8 @@ export function feedText(f: FeedItem, players: PlayerInfo[], opts: { tv?: boolea
     correct: String(d.correct ?? 0),
     leaders: Array.isArray(d.leaders) && d.leaders.length ? (d.leaders as unknown[]).map(name).join(' & ') : 'Nobody',
     achievement: d.type ? t(`achievements.${String(d.type)}.name`) : '',
+    terms: String(d.terms ?? ''),
+    winner: name(d.winnerId),
     winners: Array.isArray(d.winners) && d.winners.length ? (d.winners as unknown[]).map(name).join(' & ') : 'Nobody',
   };
   void gold;

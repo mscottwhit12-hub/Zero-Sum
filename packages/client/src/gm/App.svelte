@@ -19,6 +19,7 @@
   import Setup from './screens/Setup.svelte';
   import Mood from './screens/Mood.svelte';
   import Espionage from './screens/Espionage.svelte';
+  import Bets from './screens/Bets.svelte';
   import Notify from './screens/Notify.svelte';
   import Market from './screens/Market.svelte';
   import Rulebook from './screens/Rulebook.svelte';
@@ -48,6 +49,7 @@
     { id: 'notify', label: 'Messages', field: true },
     { id: 'chats', label: 'Player chats', field: true },
     { id: 'players', label: 'Players', field: true },
+    { id: 'bets', label: 'Bets', field: false },
     { id: 'market', label: 'Market', field: false },
     { id: 'handicaps', label: 'Handicaps', field: false },
     { id: 'seating', label: 'Seating', field: false },
@@ -177,6 +179,7 @@
       {:else if route === 'espionage'}<Espionage gs={gmState} />
       {:else if route === 'notify'}<Notify gs={gmState} />
       {:else if route === 'chats'}<Chats gs={gmState} />
+      {:else if route === 'bets'}<Bets gs={gmState} />
       {:else if route === 'market'}<Market gs={gmState} {whoami} />
       {:else if route === 'handicaps'}<Handicaps gs={gmState} {whoami} />
       {:else if route === 'seating'}<Seating gs={gmState} {whoami} />

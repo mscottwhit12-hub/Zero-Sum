@@ -29,6 +29,7 @@ for r in e2e/rounds/r*.mjs; do NODE_PATH=$(npm root -g) node $r; done   # all te
 | seating (`e2e/seating/run.mjs`) | table resize handles and limits, moving tables, drag players onto seats, swap, unseat, dropdown fallback, TV floor dots + table close-up |
 | seat-move (`e2e/seating/seats.mjs`) | Drag an empty seat around its table on GM Seating: saved on the server, stays around the table, never on top of another seat, seated players unaffected, TV mirrors it, "Even out seats" resets |
 | swipe-pages (`e2e/swipe/pages.mjs`) | Phone home screen: swipe right to the full-screen leaderboard, short drag snaps back, no overscroll, dots and swipe return home, dock hides on the leaderboard, no Standings app, taps still open apps |
+| bets (`e2e/bets/bets.mjs`) | Player-to-player bets through the real screens: offer on one phone, take on another, the 5-gold limit, live bets in the GM Bets screen and the feed, payout when the GM records the result |
 | r11-account-switch | sign out and in as someone else in one tab with a second tab open: lands on home, Minter counts for the right account, tabs never mix accounts |
 | features (`e2e/features/run.mjs`) | Oct 28 round: gold 0.01/TV 0.1, Dashboard timeline + length edit, time guards, schedule drag + clashes, seating timing, chat + GM read, wiretap, Minter rework, upload progress |
 | pwa (`e2e/features/pwa.mjs`) | iPhone home-screen app: manifest + icons served, iPhone tags on /play only, Add to Home Screen hint only in iPhone Safari, joining from the home-screen app |

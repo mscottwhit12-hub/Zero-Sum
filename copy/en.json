@@ -76,7 +76,11 @@
     "memo_accepted": "The confidential memo has been accepted.",
     "memo_rejected": "The confidential memo has been declined.",
     "espionage_fail": "EXPOSED: {player} was caught on a covert assignment.",
-    "espionage_success_gm": "{player} completed a covert assignment."
+    "espionage_success_gm": "{player} completed a covert assignment.",
+    "bet_accepted": "{from} and {to} have a wager on {name}: {terms}.",
+    "bet_settled": "{winner} collects {gold} on the {name} wager.",
+    "bet_tie": "The {name} wager between {from} and {to} ended level. Stakes returned.",
+    "bet_void": "The {name} wager between {from} and {to} was called off. Stakes returned."
   },
   "status": {
     "setup": "In setup",
@@ -111,6 +115,7 @@
     "apps": {
       "wallet": "Wallet",
       "market": "Market",
+      "bets": "Bets",
       "messages": "Messages",
       "feed": "Feed",
       "rules": "Rules",
@@ -174,7 +179,8 @@
       "hint": "An anonymous {tier} tip",
       "wiretap": "A wiretap: one random message from someone else's chat",
       "wiretap_pair": "A wiretap: one random message between two associates you choose",
-      "minter_boost": "NFT Minter ×10 for 5 minutes"
+      "minter_boost": "NFT Minter ×10 for 5 minutes",
+      "high_roller": "A High Roller ticket: one bet of up to 10 gold"
     },
     "dead_clue": "A tip from Logistics: the near-dead stock trades thin. A few determined buyers could move it a long way.",
     "peek_pick": "Choose one associate to investigate. One look only.",

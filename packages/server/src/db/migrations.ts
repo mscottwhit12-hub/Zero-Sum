@@ -538,4 +538,45 @@ export const MIGRATIONS: string[] = [
   );
   INSERT OR IGNORE INTO player_phone (player_id, phone_hash) SELECT id, home_phone_hash FROM player WHERE home_phone_hash IS NOT NULL;
   `,
+  /* 21 — player-to-player bets on game outcomes. Stakes are held and paid through the gold adjustments (kind 'bet'). */ `
+  CREATE TABLE adjustment_v21 (
+    id INTEGER PRIMARY KEY,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    gold_h INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'manual' CHECK (kind IN ('manual','late_join','espionage','gift','bet')),
+    gm_id INTEGER REFERENCES game_master(id),
+    created_at INTEGER NOT NULL,
+    read_at INTEGER
+  );
+  INSERT INTO adjustment_v21 (id, night_id, player_id, gold_h, reason, kind, gm_id, created_at, read_at)
+    SELECT id, night_id, player_id, gold_h, reason, kind, gm_id, created_at, read_at FROM adjustment;
+  DROP TABLE adjustment;
+  ALTER TABLE adjustment_v21 RENAME TO adjustment;
+  CREATE TABLE bet (
+    id INTEGER PRIMARY KEY,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    game_id INTEGER NOT NULL REFERENCES game(id),
+    offerer_id INTEGER NOT NULL REFERENCES player(id),
+    taker_id INTEGER REFERENCES player(id),
+    target_id INTEGER REFERENCES player(id),
+    kind TEXT NOT NULL CHECK (kind IN ('win','place')),
+    subject_id INTEGER NOT NULL REFERENCES player(id),
+    top_n INTEGER,
+    odds_a INTEGER NOT NULL,
+    odds_b INTEGER NOT NULL,
+    stake_h INTEGER NOT NULL,
+    win_h INTEGER NOT NULL,
+    ticket_id INTEGER REFERENCES challenge(id),
+    status TEXT NOT NULL CHECK (status IN ('open','accepted','settled','tie','void','cancelled','expired')),
+    winner_id INTEGER REFERENCES player(id),
+    note TEXT,
+    created_at INTEGER NOT NULL,
+    accepted_at INTEGER,
+    settled_at INTEGER
+  );
+  CREATE INDEX bet_night ON bet(night_id, status);
+  CREATE INDEX bet_game ON bet(game_id, status);
+  `,
 ];

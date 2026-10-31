@@ -226,6 +226,8 @@ export interface GmExtras {
   ambient: { current: Ambient | null; off: boolean };
   prompts: { closeTradingAt: number | null; endNight: boolean; overrun: { gameId: number; name: string; extendMinutes: number } | null };
   tips: { id: number; playerId: number; hintId: string; tier: TipTier; source: string; costH: number; nightMs: number; createdAt: number; read: boolean }[];
+  /** Every bet tonight. */
+  bets: BetInfo[];
   handicap: {
     autoEnabled: boolean;
     intervalMinutes: number;
@@ -241,7 +243,27 @@ export interface VoteInfo {
   quarterEndsNms: number | null;
   myTarget: number | null;
 }
-export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap' | 'minter_boost';
+export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap' | 'minter_boost' | 'high_roller';
+export type BetStatus = 'open' | 'accepted' | 'settled' | 'tie' | 'void' | 'cancelled' | 'expired';
+export interface BetInfo {
+  id: number;
+  gameId: number;
+  kind: 'win' | 'place';
+  subjectId: number;
+  topN: number | null;
+  oddsA: number;
+  oddsB: number;
+  stakeH: number;
+  winH: number;
+  offererId: number;
+  takerId: number | null;
+  targetId: number | null;
+  status: BetStatus;
+  winnerId: number | null;
+  ticket: boolean;
+  note: string | null;
+  createdAt: number;
+}
 export type TipTier = 'common' | 'rarer' | 'rarest';
 export interface Reward {
   type: RewardType;
@@ -340,6 +362,8 @@ export interface Me {
   tips: { id: number; hintId: string; vars: Record<string, string | number>; createdAt: number; read: boolean }[];
   gifts: { id: number; goldH: number; createdAt: number; read: boolean }[];
   tipShop: { buy: Record<TipTier, number> | null; tradeIn: { tokens: number; nextAtNms: number | null } | null };
+  /** Bets between players: offers you can see, live bets, results, the limit, and unused High Roller tickets. */
+  bets: { enabled: boolean; limitH: number; ticketLimitH: number; tickets: number; list: BetInfo[] };
 }
 export interface PlayerState extends PublicState {
   me?: Me;

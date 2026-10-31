@@ -11,6 +11,7 @@ import { gmHintLog, playerHints, tipShop } from './hints';
 import { handicapGmView, playerGifts } from './handicap';
 import { indexTerms } from './indexTerms';
 import { gameViews, type GameView } from './games';
+import { gmBets, playerBets } from './betting';
 import { pendingRequests, type PendingRequest } from './join';
 import { myTrades } from './trading';
 import { listLibrary, type LibraryGame } from './library';
@@ -151,6 +152,8 @@ export interface PlayerView extends PublicView {
     /** Tip shop: buying (off by default) and re-roll trade-ins. */
     tipShop: ReturnType<typeof tipShop>;
     boardGames: ReturnType<typeof playerBoardGames>;
+    /** Bets between players: open offers, live bets, results, the limit and any High Roller tickets. */
+    bets: ReturnType<typeof playerBets>;
   };
 }
 
@@ -207,6 +210,7 @@ export function playerView(ctx: Ctx, st: NightState, playerId: number, base?: Pu
       tips: playerHints(ctx, st.night, playerId),
       gifts: playerGifts(ctx, st.night.id, playerId),
       tipShop: tipShop(ctx, st.night, playerId),
+      bets: playerBets(ctx, st.night, playerId),
     },
   };
 }
@@ -266,6 +270,8 @@ export interface GmView extends PublicView {
     tips: ReturnType<typeof gmHintLog>;
     /** Handicap levels and the reasoning log. Master only in the UI. */
     handicap: ReturnType<typeof handicapGmView>;
+    /** Every bet tonight (the GM can void any open or accepted one). */
+    bets: ReturnType<typeof gmBets>;
   };
 }
 
@@ -312,6 +318,7 @@ export function gmView(ctx: Ctx, st: NightState, base?: PublicView): GmView {
       prompts: promptsView(ctx, st.night),
       tips: gmHintLog(ctx, st.night.id),
       handicap: handicapGmView(ctx, st.night, st.players.filter((p) => p.left_at == null).map((p) => p.id)),
+      bets: gmBets(ctx, st.night.id),
     },
   };
 }

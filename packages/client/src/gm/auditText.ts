@@ -110,6 +110,11 @@ export function describeEntry(e: AuditEntry, names: AuditNames = NO_NAMES): { te
     case 'game.schedule': return done(`${w} scheduled ${a.name}${Array.isArray(a.participants) && a.participants.length ? ` for ${list(a.participants, player)}` : ''}`);
     case 'game.update': return done(`${w} edited ${game(e.entityId)}`, diff(b, a));
     case 'game.start': return done(`${w} started ${game(e.entityId)}${Array.isArray(a.participants) && a.participants.length ? ` with ${list(a.participants, player)}` : ''}`);
+    case 'bet.offer': return done(`${player(a.playerId)} offered a bet on ${game(a.gameId)}: ${a.kind === 'win' ? `${player(a.subjectId)} wins` : `${player(a.subjectId)} finishes top ${a.topN}`} at ${a.oddsA} to ${a.oddsB}, risking ${Number(a.stakeH) / 100} gold${a.ticket ? ' (High Roller ticket)' : ''}`);
+    case 'bet.accept': return done(`${player(a.takerId)} took bet #${e.entityId}`);
+    case 'bet.cancel': return done(`The offerer withdrew bet #${e.entityId}`);
+    case 'bet.settle': return done(`Bet #${e.entityId} settled: ${player(a.winnerId)} won`);
+    case 'bet.void': return done(`${w} called off bet #${e.entityId}${a.note ? ` (${a.note})` : ''}`);
     case 'game.cancel': return done(`${w} cancelled ${game(e.entityId)}`);
     case 'game.result': return done(`${w} recorded the result of ${game(e.entityId)}: ${ranking(a)}${a.actualHours != null ? ` (${a.actualHours} h)` : ''}`);
     case 'game.correct': return done(`${w} corrected the result of ${game(e.entityId)}`, [`Before: ${ranking(b)}`, `After: ${ranking(a)}`]);

@@ -154,6 +154,16 @@ export interface Settings {
     revealDelayMinSec: number;
     revealDelayMaxSec: number;
   };
+  /** Player-to-player bets on game outcomes (the phone's Bets app). Gold, not hundredths. */
+  betting: {
+    enabled: boolean;
+    /** The most either player can lose on one bet. */
+    maxStake: number;
+    /** The same limit for a bet placed with a High Roller ticket (a challenge reward). */
+    ticketMaxStake: number;
+    /** Open (not yet accepted) offers one player can have at a time. */
+    maxOpenOffers: number;
+  };
   achievements: {
     /** Gold per achievement id. */
     gold: Record<string, number>;
@@ -279,6 +289,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mood: { moodMax: 0.06, decayPerTick: 0.01 },
   rerolls: { perPlayer: 3 },
   espionage: { goldReward: 3, revealDelayMinSec: 15, revealDelayMaxSec: 45 },
+  betting: { enabled: true, maxStake: 5, ticketMaxStake: 10, maxOpenOffers: 5 },
   achievements: {
     gold: { first_blood: 2, hat_trick: 5, regular: 2, oracle: 1 },
   },
@@ -405,6 +416,9 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   frac(s.mood.moodMax, 'mood.moodMax');
   frac(s.mood.decayPerTick, 'mood.decayPerTick');
   need(Number.isInteger(s.rerolls.perPlayer) && s.rerolls.perPlayer >= 0, 'rerolls.perPlayer', 'must be a whole number ≥ 0');
+  nonNeg(s.betting.maxStake, 'betting.maxStake');
+  need(s.betting.ticketMaxStake >= s.betting.maxStake, 'betting.ticketMaxStake', 'must be at least the normal limit');
+  need(Number.isInteger(s.betting.maxOpenOffers) && s.betting.maxOpenOffers >= 1, 'betting.maxOpenOffers', 'must be a whole number ≥ 1');
   nonNeg(s.espionage.goldReward, 'espionage.goldReward');
   nonNeg(s.espionage.revealDelayMinSec, 'espionage.revealDelayMinSec');
   need(s.espionage.revealDelayMaxSec >= s.espionage.revealDelayMinSec, 'espionage.revealDelayMaxSec', 'must be ≥ min');

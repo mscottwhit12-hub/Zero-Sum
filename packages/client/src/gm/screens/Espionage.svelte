@@ -23,6 +23,7 @@
     { id: 'hint', label: 'Mechanic tip' },
     { id: 'wiretap', label: 'Wiretap' },
     { id: 'minter_boost', label: 'NFT Minter ×10 for 5 min' },
+    { id: 'high_roller', label: 'High Roller ticket (one 10-gold bet)' },
     { id: 'custom', label: 'Custom' },
   ];
   async function assign(e: Event) {
@@ -36,7 +37,7 @@
   }
   let reassignTo = $state<Record<number, string>>({});
   const rewardLabel = (c: GmChallenge) =>
-    c.reward.type === 'gold' ? `${c.reward.gold} gold` : c.reward.type === 'custom' ? `Custom: ${c.reward.text}` : c.reward.type === 'hint' ? `Mechanic tip (${c.reward.tier ?? 'common'})` : REWARDS.find((r) => r.id === c.reward.type)?.label;
+    c.reward.type === 'gold' ? `${c.reward.gold} gold` : c.reward.type === 'custom' ? `Custom: ${c.reward.text}` : c.reward.type === 'hint' ? `Mechanic tip (${c.reward.tier ?? 'common'})` : c.reward.type === 'high_roller' ? 'High Roller ticket' : REWARDS.find((r) => r.id === c.reward.type)?.label;
   const STATUS: Record<string, string> = { sent: 'Sent', read: 'Read', accepted: 'Accepted', rejected: 'Rejected', succeeded: 'Success', failed: 'Failed', reassigned: 'Reassigned' };
   const list = $derived(gs?.gm?.challenges ?? []);
 </script>

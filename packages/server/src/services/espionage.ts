@@ -1,6 +1,6 @@
 /**
  * Espionage (spec §12).
- *  1. GM secretly assigns a challenge (reward: gold, re-roll, one-time peek, dead-stock clue, or custom).
+ *  1. GM secretly assigns a challenge (reward: gold, re-roll, one-time peek, dead-stock clue, High Roller betting ticket, or custom).
  *  2. TV: anonymous BREAKING "an associate has received a confidential memo".
  *  3. Player gets an encrypted message, decrypts it, accepts or rejects.
  *  4. After a random delay the TV shows "accepted"/"rejected" (still anonymous).
@@ -19,7 +19,7 @@ import { queueImpulse } from './market';
 import { currentNight, loadSecurities, nightSettings, pid, type NightRow, type PlayerRow } from './state';
 import { wiretapResult } from './chat';
 
-export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap' | 'minter_boost';
+export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap' | 'minter_boost' | 'high_roller';
 export interface Reward {
   type: RewardType;
   /** wiretap rewards: one random message from any chat, or between two players the holder picks. */
@@ -64,7 +64,7 @@ function getChallenge(ctx: Ctx, id: number): ChallengeRow {
 
 function normalizeReward(ctx: Ctx, n: NightRow, r: unknown): Reward {
   const x = (r ?? {}) as Reward;
-  if (!['gold', 'reroll', 'peek', 'dead_clue', 'custom', 'hint', 'wiretap', 'minter_boost'].includes(x.type)) throw bad('bad_reward');
+  if (!['gold', 'reroll', 'peek', 'dead_clue', 'custom', 'hint', 'wiretap', 'minter_boost', 'high_roller'].includes(x.type)) throw bad('bad_reward');
   if (x.type === 'wiretap') return { type: 'wiretap', mode: x.mode === 'pair' ? 'pair' : 'any' };
   if (x.type === 'hint') {
     const tier = x.tier ?? 'common';

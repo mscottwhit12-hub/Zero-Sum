@@ -24,3 +24,4 @@ export * from './market/live';
 export * from './minter';
 export * from './hints';
 export * from './handicap';
+export * from './betting';

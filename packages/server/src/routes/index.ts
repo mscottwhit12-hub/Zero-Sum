@@ -42,6 +42,7 @@ import {
 import { addAdjustment, applyNightAction, createNight, updateNightInfo, updateSettings, type NightAction } from '../services/night';
 import { computeNightState, currentNight } from '../services/state';
 import { gmView, publicView } from '../services/views';
+import { acceptBet, cancelBet, offerBet, voidBet } from '../services/betting';
 import { GM_COOKIE } from '../sockets';
 import { requireGm } from './guard';
 import {
@@ -307,6 +308,10 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // Phase 6 — player actions
   app.post('/api/vote', async (req) => castBallot(ctx, device(req), b(req.body).targetId));
+  app.post('/api/me/bets', async (req) => offerBet(ctx, device(req), b(req.body) as never));
+  app.post<Id>('/api/me/bets/:id/accept', async (req) => acceptBet(ctx, device(req), Number(req.params.id)));
+  app.post<Id>('/api/me/bets/:id/cancel', async (req) => cancelBet(ctx, device(req), Number(req.params.id)));
+  app.post<Id>('/api/bets/:id/void', async (req) => voidBet(ctx, requireGm(ctx, req), Number(req.params.id), b(req.body).reason));
   app.post<Id>('/api/me/challenges/:id/read', async (req) => readChallenge(ctx, device(req), Number(req.params.id)));
   app.post<Id>('/api/me/tips/:id/read', async (req) => (readHint(ctx, device(req), Number(req.params.id)), { ok: true }));
   app.post<Id>('/api/me/gifts/:id/read', async (req) => {

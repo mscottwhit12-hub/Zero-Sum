@@ -13,6 +13,7 @@
   import Profile from './apps/Profile.svelte';
   import Rules from './apps/Rules.svelte';
   import Leaderboard from './Leaderboard.svelte';
+  import Bets from './apps/Bets.svelte';
   import Wallet from './apps/Wallet.svelte';
   import Vote from './apps/Vote.svelte';
   import RiskApp from './apps/RiskApp.svelte';
@@ -82,6 +83,7 @@
     { id: 'risk', icon: '⚔' },
     { id: 'wallet', icon: '◎' },
     { id: 'market', icon: '↗' },
+    { id: 'bets', icon: '⚄' },
     { id: 'messages', icon: '✉' },
     { id: 'feed', icon: '☰' },
     { id: 'rules', icon: '§' },
@@ -357,6 +359,7 @@
             {:else if app === 'risk'}<RiskApp {s} />
             {:else if app === 'wallet'}<Wallet {s} />
             {:else if app === 'market'}<Market {s} />
+            {:else if app === 'bets'}<Bets {s} />
             {:else if app === 'messages'}<MessagesHub {s} inboxUnread={unreadMessages} {chatUnread} />
             {:else if app === 'feed'}<Feed {s} />
             {:else if app === 'rules'}<Rules {s} />
