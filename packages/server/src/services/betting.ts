@@ -116,6 +116,12 @@ export function offerBet(ctx: Ctx, player: PlayerRow, input: OfferInput) {
   if (kind === 'place' && !(Number.isInteger(topN) && topN! >= PLACE_MIN && topN! <= PLACE_MAX)) throw bad('bad_bet', `Top ${PLACE_MIN}–${PLACE_MAX} only.`);
   const subjectId = Number(input.subjectId);
   if (!activePlayer(ctx, n.id, subjectId)) throw bad('bad_subject', 'Pick a player in tonight’s game.');
+  // Once the table is known, only people actually playing can be bet on, and a place bet can't be a sure thing.
+  const seated = (ctx.db.prepare('SELECT player_id FROM game_participant WHERE game_id = ?').all(g.id) as { player_id: number }[]).map((r) => r.player_id);
+  if (seated.length) {
+    if (!seated.includes(subjectId)) throw bad('bad_subject', `${nameOf(ctx, subjectId)} isn’t playing ${g.name}.`);
+    if (kind === 'place' && topN! >= seated.length) throw bad('bad_bet', `Only ${seated.length} are playing, so a top ${topN} bet can’t lose. Pick a smaller number.`);
+  }
   const a = Number(input.oddsA);
   const b = Number(input.oddsB);
   if (!oddsOk(a, b)) throw bad('bad_odds', 'Odds are whole numbers from 1 to 10, like 3 to 1.');
@@ -160,6 +166,11 @@ export function acceptBet(ctx: Ctx, player: PlayerRow, id: number) {
   if (player.left_at != null) throw conflict('player_left');
   if (b.status !== 'open') throw conflict('bet_not_open', 'That bet is no longer open.');
   if (b.offerer_id === player.id) throw conflict('own_bet', 'You can’t take your own offer.');
+  if (!activePlayer(ctx, n.id, b.offerer_id)) {
+    ctx.db.prepare("UPDATE bet SET status = 'expired', note = 'The offerer left.', settled_at = ? WHERE id = ?").run(ctx.now(), id);
+    ctx.bus.refresh(n.id);
+    throw conflict('offerer_gone', 'That offer has lapsed: the offerer has left.');
+  }
   if (b.target_id != null && b.target_id !== player.id) throw conflict('not_for_you', 'That offer is for someone else.');
   const g = gameOf(ctx, b.game_id);
   if (!g || (g.status !== 'scheduled' && g.status !== 'active')) throw conflict('game_closed', 'That game is already over.');

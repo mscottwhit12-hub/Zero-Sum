@@ -13,9 +13,13 @@
   const live = $derived(bets.list.filter((b) => b.status === 'accepted'));
   const done = $derived(bets.list.filter((b) => !['open', 'accepted'].includes(b.status)).slice(0, 8));
   const games = $derived(s.games.filter((g) => g.status === 'scheduled' || g.status === 'active'));
-  const people = $derived(s.players.filter((p) => !p.left));
-
   let gameId = $state('');
+  const game = $derived(games.find((g) => String(g.id) === gameId) ?? null);
+  const people = $derived(s.players.filter((p) => !p.left));
+  /** Who is actually at the table once it's set: only they can be bet on. */
+  const seated = $derived(game && game.participants.length ? people.filter((p) => game.participants.some((x) => x.playerId === p.id)) : people);
+  const maxTop = $derived(Math.min(5, (game?.participants.length || 6) - 1));
+
   let kind = $state('win');
   let subjectId = $state('');
   let a = $state(1);
@@ -23,14 +27,18 @@
   let stake = $state(1);
   let targetId = $state('');
   let useTicket = $state(false);
-  const game = $derived(games.find((g) => String(g.id) === gameId) ?? null);
   // Start on the first open game and on yourself; keep the choice valid as games open and close.
   $effect(() => {
     if (!games.some((g) => String(g.id) === gameId)) gameId = games[0] ? String(games[0].id) : '';
   });
   $effect(() => {
-    if (!subjectId) subjectId = String(me.id);
+    if (!seated.some((p) => String(p.id) === subjectId)) subjectId = String((seated.find((p) => p.id === me.id) ?? seated[0])?.id ?? '');
   });
+  $effect(() => {
+    // A co-op game has no finishing order, and a small table can't take a big top-N
+    if (kind !== 'win' && (game?.mode === 'coop' || Number(kind) > maxTop)) kind = 'win';
+  });
+  let busy = $state(false);
   const win = $derived(Math.round((stake * 100 * a) / b) / 100);
   const worst = $derived(Math.max(stake, win));
   const limit = $derived(bets.limitH / 100);
@@ -40,7 +48,8 @@
 
   async function offer(e: Event) {
     e.preventDefault();
-    if (!game) return;
+    if (!game || busy) return;
+    busy = true;
     const r = await run(
       () =>
         dapi('POST', '/api/me/bets', {
@@ -56,6 +65,7 @@
         }),
       'Offer posted',
     );
+    busy = false;
     if (r) useTicket = false;
   }
 </script>
@@ -78,7 +88,7 @@
           {#if o.offererId === me.id}
             <button onclick={() => run(() => dapi('POST', `/api/me/bets/${o.id}/cancel`), 'Withdrawn')}>Withdraw</button>
           {:else}
-            <button class="primary" disabled={me.cashH < o.winH} onclick={() => run(() => dapi('POST', `/api/me/bets/${o.id}/accept`), 'Bet on')}>Take it: risk {gold(o.winH)} to win {gold(o.stakeH)}</button>
+            <button class="primary" disabled={me.cashH < o.winH} onclick={() => confirm(`Take the other side of “${betClaim(o, s.players)}”? You risk ${gold(o.winH)} to win ${gold(o.stakeH)}. Both stakes are held until the game ends.`) && run(() => dapi('POST', `/api/me/bets/${o.id}/accept`), 'Bet on')}>Take it: risk {gold(o.winH)} to win {gold(o.stakeH)}</button>
           {/if}
         </div>
       {/each}
@@ -107,12 +117,12 @@
           <select bind:value={gameId}>{#each games as g (g.id)}<option value={String(g.id)}>{g.name}{g.status === 'active' ? ' (running)' : ''}</option>{/each}</select>
         </label>
         <label class="field"><span>Player</span>
-          <select bind:value={subjectId}>{#each people as p (p.id)}<option value={String(p.id)}>{p.displayName}{p.id === me.id ? ' (you)' : ''}</option>{/each}</select>
+          <select bind:value={subjectId}>{#each seated as p (p.id)}<option value={String(p.id)}>{p.displayName}{p.id === me.id ? ' (you)' : ''}</option>{/each}</select>
         </label>
         <label class="field"><span>Bet that they…</span>
           <select bind:value={kind}>
             <option value="win">win</option>
-            {#if game?.mode !== 'coop'}{#each [2, 3, 4, 5] as n}<option value={String(n)}>finish in the top {n}</option>{/each}{/if}
+            {#if game?.mode !== 'coop'}{#each [2, 3, 4, 5].filter((x) => x <= maxTop) as n}<option value={String(n)}>finish in the top {n}</option>{/each}{/if}
           </select>
         </label>
         <div class="row">
@@ -131,7 +141,7 @@
             <p class="error">That puts {gold(Math.round(worst * 100))} at risk; the limit is {gold(bets.limitH)}.</p>
           {/if}
         {/if}
-        <button class="primary" type="submit" disabled={tooBig || (over && !useTicket) || stake <= 0 || me.cashH < stake * 100}>Post offer</button>
+        <button class="primary" type="submit" disabled={busy || !game || tooBig || (over && !useTicket) || !(stake > 0) || me.cashH < stake * 100}>Post offer</button>
       </form>
     {/if}
   </div>
@@ -153,6 +163,7 @@
   .bet { padding: 0.55rem 0; border-bottom: 1px solid var(--line); }
   .bet:last-child { border-bottom: 0; }
   .bet button { margin-top: 0.4rem; width: 100%; }
+  .field select, .field input[type='number'] { width: 100%; }
   .row { display: flex; gap: 0.5rem; }
   .row .field { flex: 1; min-width: 0; }
 </style>

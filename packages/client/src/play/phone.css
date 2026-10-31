@@ -60,7 +60,7 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 .phone .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .phone .view { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; }
 .phone .view:not(.home) { background: radial-gradient(130% 60% at 50% 0, #1a2d27, #0b0f0e 78%); overflow: hidden; }
-.phone .home { padding: 0.4rem 1.1rem 0; gap: 0.8rem; padding-bottom: calc(max(env(safe-area-inset-bottom, 0px), 24px) + 104px); }
+.phone .home { padding: 0.4rem 1.1rem 0; gap: 0.8rem; padding-bottom: calc(max(env(safe-area-inset-bottom, 0px), 24px) + 128px); }
 .phone .wd { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 0.9rem 1.1rem; box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 4px #c9a24a30; }
 .phone .bond { position: relative; border: 2px dashed #c9a24a88; box-shadow: none; }
 .phone .stamp { position: absolute; top: 0.7rem; right: 0.8rem; transform: rotate(7deg); border: 2px solid var(--wine); color: #e0685c; font: 0.78rem/1.2 var(--mono); padding: 0.15rem 0.5rem; border-radius: 4px; text-align: center; letter-spacing: 0.04em; }
@@ -89,7 +89,7 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 .phone .lb { padding: 0.4rem 1.1rem calc(max(env(safe-area-inset-bottom, 0px), 24px) + 60px); }
 .phone .lb h1 { font-size: 1.9rem; margin: 0.2rem 0 0.1rem; }
 .phone .lb .sr { padding: 0.75rem 0; } .phone .lb .sr .v { font-size: 1.1rem; }
-.phone .dots { position: absolute; left: 0; right: 0; bottom: calc(max(env(safe-area-inset-bottom, 0px), 24px) + 112px); z-index: 2; display: flex; justify-content: center; gap: 0.5rem; pointer-events: none; }
+.phone .dots { position: absolute; left: 0; right: 0; bottom: calc(max(env(safe-area-inset-bottom, 0px), 24px) + 118px); z-index: 2; display: flex; justify-content: center; gap: 0.5rem; pointer-events: none; }
 .phone .dots .dot { pointer-events: auto; width: 8px; height: 8px; min-height: 0; padding: 0; border-radius: 50%; border: 0; background: #ffffff40; }
 .phone .dots .dot.on { background: var(--paper); }
 @media (prefers-reduced-motion: reduce) { .phone .pager { transition: none; } }

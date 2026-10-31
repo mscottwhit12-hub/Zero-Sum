@@ -97,6 +97,19 @@ describe('bets: offer, accept, settle', () => {
   });
 });
 
+describe('bets: net worth', () => {
+  it('a held stake leaves cash but not net worth, so a live bet never drops anyone down the leaderboard', async () => {
+    const s = await setup();
+    const nw = (id: number) => computeNightState(s.t.ctx, currentNight(s.t.ctx)!.id)!.standings.find((r) => r.playerId === String(id))!.netWorthH;
+    const [nb, nc, cb] = [nw(s.b.id), nw(s.c.id), cash(s.t, s.b.id)];
+    const id = (await offer(s, s.b)).json().id;
+    await dev(s.t, s.c.token, 'POST', `/api/me/bets/${id}/accept`);
+    expect(cash(s.t, s.b.id)).toBe(cb - 100);
+    expect(nw(s.b.id)).toBe(nb);
+    expect(nw(s.c.id)).toBe(nc);
+  });
+});
+
 describe('bets: limits and rules', () => {
   it('limits what either side can lose to 5 gold; 3 to 1 at 2 gold would put 6 at risk', async () => {
     const s = await setup();
@@ -161,5 +174,43 @@ describe('bets: limits and rules', () => {
     expect(gmView(s.t.ctx, st).gm.bets.map((x) => x.id)).toContain(id);
     const feed = s.t.ctx.db.prepare("SELECT message FROM feed_event WHERE type = 'bet'").all() as { message: string }[];
     expect(feed.map((f) => f.message)).toContain('feed.bet_accepted');
+  });
+});
+
+describe('bets: safeguards', () => {
+  it('only players in the game can be bet on, and a place bet can’t be a sure thing', async () => {
+    const t = await makeApp();
+    const night = await liveNight(t, 4);
+    const lib = (await call(t, night.gm, 'POST', '/api/library', { name: 'Card Game', minPlayers: 2, maxPlayers: 6, defaultDuration: 1, mode: 'competitive' })).json().game;
+    const three = night.devices.slice(0, 3);
+    const g = (await call(t, night.gm, 'POST', '/api/games', { libraryGameId: lib.id, participants: three.map((d) => d.id) })).json().game;
+    for (const d of night.devices) await call(t, night.gm, 'POST', '/api/night/adjustments', { playerId: d.id, gold: 20, reason: 'bankroll' });
+    const [a, b] = three as [D, D];
+    const outsider = night.devices[3]!;
+    const post = (o: Record<string, unknown>) => dev(t, b.token, 'POST', '/api/me/bets', { gameId: g.id, kind: 'win', subjectId: a.id, oddsA: 1, oddsB: 1, stake: 1, ...o });
+    expect((await post({ subjectId: outsider.id })).json().error).toBe('bad_subject');
+    expect((await post({ kind: 'place', topN: 3 })).json().error).toBe('bad_bet'); // 3 players: top 3 can't lose
+    expect((await post({ kind: 'place', topN: 2 })).statusCode).toBe(200);
+  });
+
+  it('ending the night returns the stakes held on games that never finished', async () => {
+    const s = await setup();
+    const b0 = cash(s.t, s.b.id);
+    const c0 = cash(s.t, s.c.id);
+    const id = (await offer(s, s.b)).json().id;
+    await dev(s.t, s.c.token, 'POST', `/api/me/bets/${id}/accept`);
+    expect(cash(s.t, s.b.id)).toBe(b0 - 100);
+    expect((await call(s.t, s.gm, 'POST', '/api/night/end')).statusCode).toBe(200);
+    expect(cash(s.t, s.b.id)).toBe(b0);
+    expect(cash(s.t, s.c.id)).toBe(c0);
+    expect((s.t.ctx.db.prepare('SELECT status FROM bet WHERE id = ?').get(id) as { status: string }).status).toBe('void');
+  });
+
+  it('an offer from someone who has left can’t be taken', async () => {
+    const s = await setup();
+    const id = (await offer(s, s.b)).json().id;
+    await call(s.t, s.gm, 'POST', `/api/players/${s.b.id}/leave`, { left: true });
+    const r = await dev(s.t, s.c.token, 'POST', `/api/me/bets/${id}/accept`);
+    expect(r.statusCode).toBe(409);
   });
 });

@@ -227,9 +227,15 @@ export function computeNightState(ctx: Ctx, nightId: number): NightState | null 
   const lots = loadLots(ctx, nightId);
   const ledger = deriveLedger(loadLedgerInput(ctx, nightId), settings);
   const prices = new Map(securities.map((s) => [s.id, s.price]));
+  // Stakes held on live bets are still the player's gold: they leave cash but not net worth.
+  const locked = new Map<string, number>();
+  for (const r of ctx.db.prepare("SELECT offerer_id, taker_id, stake_h, win_h FROM bet WHERE night_id = ? AND status = 'accepted'").all(nightId) as { offerer_id: number; taker_id: number; stake_h: number; win_h: number }[]) {
+    locked.set(pid(r.offerer_id), (locked.get(pid(r.offerer_id)) ?? 0) + r.stake_h);
+    locked.set(pid(r.taker_id), (locked.get(pid(r.taker_id)) ?? 0) + r.win_h);
+  }
   const standings = securities.length
-    ? computeStandings(ledger, lots.map((l) => ({ playerId: l.playerId, securityId: l.securityId, sharesH: l.sharesH, short: l.short, entry: l.entry })), prices, settings)
-    : computeStandings(ledger, [], prices, settings);
+    ? computeStandings(ledger, lots.map((l) => ({ playerId: l.playerId, securityId: l.securityId, sharesH: l.sharesH, short: l.short, entry: l.entry })), prices, settings, locked)
+    : computeStandings(ledger, [], prices, settings, locked);
   return {
     night,
     settings,

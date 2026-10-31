@@ -1,4 +1,5 @@
 import { awardAchievements } from './achievements';
+import { closeBetsForGame } from './betting';
 import { finale, finaleSeconds, markRecapDone } from './recap';
 import { playCue } from './sounds';
 import {
@@ -167,7 +168,11 @@ export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction, o
         // Games with no result can't pay anymore: cancel them so nothing shows as "running" after the collapse.
         {
           const open = ctx.db.prepare("SELECT id, name FROM game WHERE night_id = ? AND status IN ('active','scheduled')").all(n.id) as { id: number; name: string }[];
-          for (const g of open) ctx.db.prepare("UPDATE game SET status = 'cancelled', ended_at = COALESCE(ended_at, ?) WHERE id = ?").run(now, g.id);
+          for (const g of open) {
+            ctx.db.prepare("UPDATE game SET status = 'cancelled', ended_at = COALESCE(ended_at, ?) WHERE id = ?").run(now, g.id);
+            // Held bet stakes go back with the cancelled game, so nobody's final standing is short.
+            closeBetsForGame(ctx, n.id, g.id);
+          }
           if (open.length) audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.cancel_at_end', entity: 'night', entityId: n.id, after: { games: open } });
         }
         finishNight(ctx, n, now);

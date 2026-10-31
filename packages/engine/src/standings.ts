@@ -105,8 +105,10 @@ export function computeStandings(
   holdings: Holding[],
   priceBySecurity: Map<string, number>,
   settings: Settings,
+  /** Gold a player still owns but has locked away (stakes on live bets): counts toward net worth, not cash. */
+  lockedH: Map<string, number> = new Map(),
 ): StandingRow[] {
-  const held = new Map<string, number>();
+  const held = new Map<string, number>(lockedH);
   for (const h of holdings) {
     const price = priceBySecurity.get(h.securityId);
     if (price === undefined) throw new Error(`no price for ${h.securityId}`);
