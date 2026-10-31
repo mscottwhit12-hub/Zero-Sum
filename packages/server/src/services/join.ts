@@ -40,6 +40,27 @@ export interface JoinInput {
 /** Hash of a phone id, or null if it isn't a plausible one. */
 const phoneHash = (v: unknown): string | null => (typeof v === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(v) ? tokenHash(`phone:${v}`) : null);
 
+/** Drops this phone's older, still-pending requests (it can only be one person), so the GM never sees stale ones. */
+function dropPendingFromPhone(ctx: Ctx, nightId: number, home: string | null) {
+  if (!home) return;
+  ctx.db.prepare("DELETE FROM device_request WHERE night_id = ? AND status = 'pending' AND json_extract(payload, '$.home') = ?").run(nightId, home);
+}
+
+/**
+ * The phone gave up waiting (Cancel): its pending request goes away. Safe to call twice.
+ * `status` says what happened: 'cancelled', or 'approved'/'denied' when the GM got there first (the phone then
+ * carries on as decided instead of dropping a device that now exists), or 'unknown' when there is nothing to cancel.
+ */
+export function cancelRequest(ctx: Ctx, token: unknown): { ok: true; status: 'cancelled' | 'approved' | 'denied' | 'unknown' } {
+  if (typeof token !== 'string' || !token) return { ok: true, status: 'unknown' };
+  const row = ctx.db.prepare('SELECT night_id, status FROM device_request WHERE token_hash = ? ORDER BY id DESC LIMIT 1').get(tokenHash(token)) as { night_id: number; status: 'pending' | 'approved' | 'denied' } | undefined;
+  if (!row) return { ok: true, status: 'unknown' };
+  if (row.status !== 'pending') return { ok: true, status: row.status };
+  ctx.db.prepare("DELETE FROM device_request WHERE token_hash = ? AND status = 'pending'").run(tokenHash(token));
+  ctx.bus.refresh(row.night_id);
+  return { ok: true, status: 'cancelled' };
+}
+
 /** Joins open → instant player. Night live → a late-join request awaiting GM approval. */
 export function join(ctx: Ctx, input: JoinInput): { deviceToken: string; player?: PlayerRow; pending: boolean } {
   const info = joinInfo(ctx);
@@ -56,6 +77,7 @@ export function join(ctx: Ctx, input: JoinInput): { deviceToken: string; player?
     if (home) ctx.db.prepare('UPDATE player SET home_phone_hash = ? WHERE id = ?').run(home, r.player.id);
     return { deviceToken: r.deviceToken, player: r.player, pending: false };
   }
+  dropPendingFromPhone(ctx, n.id, home);
   const { token, hash } = newToken();
   const r = ctx.db
     .prepare("INSERT INTO device_request (night_id, player_id, token_hash, kind, payload, created_at) VALUES (?, NULL, ?, 'late_join', ?, ?)")
@@ -77,6 +99,7 @@ export function requestRejoin(ctx: Ctx, playerId: unknown, phoneId?: unknown): {
   const home = phoneHash(phoneId);
   if (home && p.home_phone_hash === home) {
     ctx.db.transaction(() => {
+      dropPendingFromPhone(ctx, n.id, home);
       ctx.db.prepare('INSERT INTO device (player_id, token_hash, approved_by_gm_id, created_at) VALUES (?,?,NULL,?)').run(p.id, hash, ctx.now());
       const r = ctx.db
         .prepare("INSERT INTO device_request (night_id, player_id, token_hash, kind, payload, status, created_at) VALUES (?,?,?, 'rejoin', '{\"auto\":true}', 'approved', ?)")
@@ -86,9 +109,10 @@ export function requestRejoin(ctx: Ctx, playerId: unknown, phoneId?: unknown): {
     ctx.bus.refresh(n.id);
     return { deviceToken: token, approved: true };
   }
+  dropPendingFromPhone(ctx, n.id, home);
   const r = ctx.db
-    .prepare("INSERT INTO device_request (night_id, player_id, token_hash, kind, payload, created_at) VALUES (?,?,?, 'rejoin', '{}', ?)")
-    .run(n.id, p.id, hash, ctx.now());
+    .prepare("INSERT INTO device_request (night_id, player_id, token_hash, kind, payload, created_at) VALUES (?,?,?, 'rejoin', ?, ?)")
+    .run(n.id, p.id, hash, j.str(home ? { home } : {}), ctx.now());
   ctx.bus.gm('device:approval', { id: Number(r.lastInsertRowid), kind: 'rejoin', displayName: p.display_name });
   ctx.bus.refresh(n.id);
   return { deviceToken: token, approved: false };

@@ -122,6 +122,16 @@
     unsub = [live.state.subscribe((v) => (s = v)), live.connected.subscribe((c) => (connected = c))];
   }
 
+  /** Tell the server too, so the GM's approval list drops this request. A failed call must not trap the player here. */
+  async function cancelWaiting() {
+    const tok = pendingToken();
+    const r = tok ? await dapi<{ status: string }>('POST', '/api/join/cancel', {}, tok).catch(() => null) : null;
+    // The GM approved at the very same moment: keep the token so the poll lets them in, rather than leave a ghost player.
+    if (r?.status === 'approved') return route();
+    setPendingToken(null);
+    route();
+  }
+
   function startPoll() {
     const check = async () => {
       const r = await dapi<{ status: string }>('GET', '/api/join/status', undefined, pendingToken()).catch(() => null);
@@ -245,7 +255,7 @@
   {:else if phase === 'waiting'}
     <div class="center pad">
       <p>{t('phone.waiting')}</p>
-      <button onclick={() => (setPendingToken(null), route())}>Cancel</button>
+      <button onclick={cancelWaiting}>Cancel</button>
     </div>
   {:else}
     <header class="sb">

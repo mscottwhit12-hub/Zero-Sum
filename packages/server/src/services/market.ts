@@ -1,6 +1,6 @@
 import { createRng, moodBiasMap, tickMarket, type Impulse, type MoodReading } from '@gn/engine';
 import { j } from '../db';
-import type { Ctx } from '../context';
+import { bad, notFound, type Ctx } from '../context';
 import { computeNightState, getNight, pid, upsertSecurities } from './state';
 import { indexTerms } from './indexTerms';
 
@@ -124,6 +124,30 @@ export function priceHistoryPoints(ctx: Ctx, nightId: number, points = 60): Map<
 /** Recent public price history per security (for sparklines). */
 export function priceHistory(ctx: Ctx, nightId: number, points = 60): Map<string, number[]> {
   return new Map([...priceHistoryPoints(ctx, nightId, points)].map(([k, v]) => [k, v.prices]));
+}
+
+/** At most `max` values, evenly spread, always keeping the first and the last. */
+export function thin<T>(rows: T[], max: number): T[] {
+  if (rows.length <= max || max < 2) return rows;
+  return Array.from({ length: max }, (_, i) => rows[Math.round((i * (rows.length - 1)) / (max - 1))]!);
+}
+
+/** Longest window a chart can ask for (minutes); anything beyond it means "the whole night". */
+export const CHART_MAX_MINUTES = 24 * 60;
+
+/**
+ * Public price series for one stock over the last `minutes` (null = the whole night), for the phone's chart.
+ * Prices only (never fair value, targets or causes), thinned to `maxPoints`. A window with fewer than two
+ * ticks (just after a pause) falls back to the latest two so the chart still draws.
+ */
+export function priceSeries(ctx: Ctx, nightId: number, securityId: string, minutes: number | null, maxPoints = 200): { prices: number[]; from: number | null; to: number | null } {
+  if (!ctx.db.prepare('SELECT 1 FROM security WHERE night_id = ? AND id = ?').get(nightId, securityId)) throw notFound('security_not_found');
+  if (minutes != null && (!Number.isFinite(minutes) || minutes <= 0)) throw bad('bad_minutes');
+  const since = minutes == null ? 0 : ctx.now() - Math.min(minutes, CHART_MAX_MINUTES) * 60_000;
+  let rows = ctx.db.prepare('SELECT price, created_at FROM price WHERE night_id = ? AND security_id = ? AND created_at >= ? ORDER BY tick').all(nightId, securityId, since) as { price: number; created_at: number }[];
+  if (rows.length < 2) rows = (ctx.db.prepare('SELECT price, created_at FROM price WHERE night_id = ? AND security_id = ? ORDER BY tick DESC LIMIT 2').all(nightId, securityId) as { price: number; created_at: number }[]).reverse();
+  const out = thin(rows, maxPoints);
+  return { prices: out.map((r) => r.price), from: out[0]?.created_at ?? null, to: out[out.length - 1]?.created_at ?? null };
 }
 
 /** Latest mood term per player stock (GM-visible impact). Drift and impulses are never exposed. */

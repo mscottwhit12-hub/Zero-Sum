@@ -34,39 +34,71 @@
       busy = false;
     }
   }
-  // Image cards: the server draws SVGs; the phone turns each into a PNG to save or share.
+  // Image cards: the server draws SVGs; the phone turns each into a PNG up front, so a tap can open the share
+  // sheet at once (iOS refuses to share if the tap has to wait for image work first).
   let cards = $state<string[]>([]);
-  async function loadCards() {
-    const out: string[] = [];
-    for (const n of [1, 2, 3]) {
-      const res = await fetch(`/api/me/cards/${n}.svg`, { headers: { 'x-device-token': deviceToken() ?? '' } });
-      if (res.ok) out.push(URL.createObjectURL(new Blob([await res.text()], { type: 'image/svg+xml' })));
-    }
-    cards = out;
-  }
-  $effect(() => {
-    if (s && !cards.length) void loadCards();
-  });
-  async function saveCard(src: string, i: number) {
+  let files = $state<(File | null)[]>([]); // same order as `cards`; null where a card couldn't be converted
+  const ready = $derived(files.filter((f): f is File => !!f));
+  let started = false;
+  async function toPng(src: string, name: string): Promise<File | null> {
     const img = new Image();
-    img.src = src;
-    await img.decode();
+    // onload, not decode(): Safari can reject decode() for SVG images that draw fine.
+    await new Promise<void>((ok, fail) => {
+      img.onload = () => ok();
+      img.onerror = () => fail(new Error('card image'));
+      img.src = src;
+    });
     const c = document.createElement('canvas');
     c.width = img.naturalWidth || 1080;
     c.height = img.naturalHeight || 1350;
     c.getContext('2d')!.drawImage(img, 0, 0);
     const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
-    if (!blob) return;
-    const file = new File([blob], `card-${i + 1}.png`, { type: 'image/png' });
-    const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
-    if (nav.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file] }).catch(() => {});
-      return;
+    return blob ? new File([blob], name, { type: 'image/png' }) : null;
+  }
+  async function loadCards() {
+    const out: string[] = [];
+    const pngs: (File | null)[] = [];
+    for (const n of [1, 2, 3]) {
+      const res = await fetch(`/api/me/cards/${n}.svg`, { headers: { 'x-device-token': deviceToken() ?? '' } });
+      if (!res.ok) continue;
+      const src = URL.createObjectURL(new Blob([await res.text()], { type: 'image/svg+xml' }));
+      out.push(src);
+      const f = await toPng(src, `game-night-${n}.png`).catch(() => null);
+      pngs.push(f);
     }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = file.name;
-    a.click();
+    cards = out;
+    files = pngs;
+  }
+  $effect(() => {
+    if (s && !started) {
+      started = true;
+      loadCards().catch(() => {}); // no cards is fine: the PDF button still works
+    }
+  });
+  const sharable = (list: File[]) => (navigator as Navigator & { canShare?: (d: unknown) => boolean }).canShare?.({ files: list }) === true;
+  function downloadFiles(list: File[]) {
+    for (const f of list) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(f);
+      a.download = f.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    }
+  }
+  /** One share sheet with every image: on an iPhone it offers "Save N Images", straight to Photos. */
+  let sharing = false; // a second tap while the sheet is open would only error
+  async function saveImages(list: File[]) {
+    if (!list.length || sharing) return;
+    if (!sharable(list)) return downloadFiles(list);
+    sharing = true;
+    try {
+      await navigator.share({ files: list });
+    } catch (e) {
+      // Closing the sheet is not an error.
+      if (!['AbortError', 'InvalidStateError'].includes((e as Error).name)) toast(t('phone.statement.save_failed'), 'error');
+    } finally {
+      sharing = false;
+    }
   }
   const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 </script>
@@ -112,12 +144,16 @@
       <div class="muted small">Cards to share</div>
       <div class="cards">
         {#each cards as src, i (src)}
-          <button class="card" onclick={() => saveCard(src, i)} aria-label={`Save card ${i + 1}`}><img {src} alt={`Card ${i + 1}`} /></button>
+          <button class="card" onclick={() => (files[i] ? saveImages([files[i]!]) : toast(t('phone.statement.save_failed'), 'error'))} aria-label={`Save card ${i + 1}`}><img {src} alt={`Card ${i + 1}`} /></button>
         {/each}
       </div>
-      <div class="muted small">Tap a card to save or share it.</div>
+      <div class="muted small">Tap a card to save or share just that one.</div>
     {/if}
-    <button class="primary wide" disabled={busy} onclick={download}>{t('phone.statement.download')}</button>
+    {#if ready.length}
+      <button class="primary wide" onclick={() => saveImages(ready)}>{t('phone.statement.save_images')}</button>
+      <div class="muted small">{t('phone.statement.save_hint')}</div>
+    {/if}
+    <button class="wide" disabled={busy} onclick={download}>{t('phone.statement.download')}</button>
     <div class="muted small">{t('phone.statement.trades')} ({s.trades.length})</div>
     {#each s.trades as tr, i (i)}
       <div class="tr">

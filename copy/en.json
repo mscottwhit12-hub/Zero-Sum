@@ -182,6 +182,17 @@
     "espionage_fail": "You've been exposed.",
     "achievement_new": "Achievement: {achievement}",
     "trading_closed_toast": "Trading closed. Your holdings auto-sell at the end; {fee}% fee on profits only.",
+    "chart": {
+      "aria": "Chart time range",
+      "m10": "10m",
+      "m30": "30m",
+      "h1": "1h",
+      "h2": "2h",
+      "h4": "4h",
+      "h8": "8h",
+      "full": "Full",
+      "span": "Showing {span}"
+    },
     "statement": {
       "title": "Final Account Statement",
       "gold": "Final gold",
@@ -195,6 +206,9 @@
       "achievements": "Achievements",
       "none": "None",
       "download": "Download PDF",
+      "save_images": "Save images to Photos",
+      "save_hint": "Opens your share sheet. On iPhone, choose Save Images.",
+      "save_failed": "Couldn’t open the share sheet. Try again, or use the PDF.",
       "trades": "Trades",
       "loading": "Preparing your statement…"
     },
@@ -409,6 +423,9 @@
     "chat_empty": "Type a message first.",
     "no_wiretap": "There is no wiretap to use here.",
     "wiretap_pick_two": "Pick two different associates.",
-    "wiretap_nothing": "Nothing on the line yet. Your wiretap is still unused."
+    "wiretap_nothing": "Nothing on the line yet. Your wiretap is still unused.",
+    "request_not_found": "That request is gone. The player probably cancelled it.",
+    "security_not_found": "That stock isn’t on the market tonight.",
+    "bad_minutes": "That chart range isn’t valid."
   }
 }

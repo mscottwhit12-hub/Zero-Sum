@@ -244,3 +244,38 @@ describe('NFT minter', () => {
     expect(frozen).toMatchObject({ minted: 35, active: false });
   });
 });
+
+describe('editing a table after it exists', () => {
+  it('renames, adds and removes seats; games stay linked; only the removed seats lose their players', async () => {
+    const t = await makeApp();
+    const { gm, devices } = await liveNight(t, 4);
+    const [a, b] = devices as unknown as [{ id: number }, { id: number }];
+    const tb = (await call(t, gm, 'POST', '/api/tables', { name: 'Table 1', seats: 4 })).json().id;
+    const g = (await call(t, gm, 'POST', '/api/games', { name: 'Cards', mode: 'competitive', tableId: tb })).json().game;
+    await call(t, gm, 'POST', `/api/tables/${tb}/seat`, { seat: 1, playerId: a.id });
+    await call(t, gm, 'POST', `/api/tables/${tb}/seat`, { seat: 4, playerId: b.id });
+    const find = () => tvView(t.ctx, state(t)).seating.find((x) => x.id === tb)!;
+
+    // Rename: trimmed; blank is refused; the name shows up on the table.
+    expect((await call(t, gm, 'PATCH', `/api/tables/${tb}`, { name: '  Poker table  ' })).statusCode).toBe(200);
+    expect(find().name).toBe('Poker table');
+    expect((await call(t, gm, 'PATCH', `/api/tables/${tb}`, { name: '   ' })).json().error).toBe('bad_name');
+    expect(find().name).toBe('Poker table');
+
+    // Add a seat: the new seat is empty, everyone stays put, the game stays linked.
+    await call(t, gm, 'PATCH', `/api/tables/${tb}`, { seats: 5 });
+    expect(find().seats).toBe(5);
+    expect(find().assignments.map((x) => [x.seat, x.playerId])).toEqual([[1, a.id], [4, b.id]]);
+    expect(publicView(t.ctx, state(t)).games.find((x) => x.id === g.id)!.tableId).toBe(tb);
+
+    // Remove seats: only players in the removed seats are unseated.
+    await call(t, gm, 'PATCH', `/api/tables/${tb}`, { seats: 3 });
+    expect(find().seats).toBe(3);
+    expect(find().assignments.map((x) => [x.seat, x.playerId])).toEqual([[1, a.id]]);
+    expect(publicView(t.ctx, state(t)).games.find((x) => x.id === g.id)!.tableId).toBe(tb);
+
+    // Rename and seat changes are audited.
+    const log = t.ctx.db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action = 'table.update'").get() as { c: number };
+    expect(log.c).toBe(3);
+  });
+});

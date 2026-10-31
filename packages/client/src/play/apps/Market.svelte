@@ -36,6 +36,47 @@
   const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
   const msg = (e: unknown) => e;
 
+  // Chart time range: the phone only keeps the last 60 prices, so other windows come from the server.
+  const RANGES: { k: 'm10' | 'm30' | 'h1' | 'h2' | 'h4' | 'h8' | 'full'; min: number | null }[] = [
+    { k: 'm10', min: 10 },
+    { k: 'm30', min: 30 },
+    { k: 'h1', min: 60 },
+    { k: 'h2', min: 120 },
+    { k: 'h4', min: 240 },
+    { k: 'h8', min: 480 },
+    { k: 'full', min: null },
+  ];
+  let range = $state<(typeof RANGES)[number]['k']>('m30');
+  let series = $state<{ id: string; k: string; prices: number[]; from: number | null; to: number | null } | null>(null);
+  let seriesReq = 0;
+  // Refetch when the stock or range changes, and again whenever the price moves (a new tick).
+  $effect(() => {
+    const id = sec?.id;
+    void sec?.price;
+    const r = RANGES.find((x) => x.k === range)!;
+    if (!id) return;
+    const mine = ++seriesReq;
+    dapi<{ prices: number[]; from: number | null; to: number | null }>('GET', `/api/market/${encodeURIComponent(id)}/history${r.min == null ? '' : `?minutes=${r.min}`}`)
+      .then((d) => {
+        if (mine === seriesReq) series = { id, k: r.k, prices: d.prices, from: d.from, to: d.to };
+      })
+      .catch(() => {});
+  });
+  const loaded = $derived(sec && series && series.id === sec.id && series.k === range ? series : null);
+  // While the server answers, show what the phone already has, cut to the chosen window where it can be.
+  const chartValues = $derived.by(() => {
+    if (loaded) return loaded.prices;
+    const h = sec?.history ?? [];
+    const min = RANGES.find((x) => x.k === range)?.min;
+    return min == null ? h : h.slice(-Math.ceil((min * 60) / (s.night?.tickSeconds || 20)) - 1);
+  });
+  /** What the chart really covers: shorter than the chip when the night is young. */
+  const spanText = $derived.by(() => {
+    if (!loaded || loaded.from == null || loaded.to == null) return '';
+    const m = Math.max(1, Math.round((loaded.to - loaded.from) / 60_000));
+    return m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} h`;
+  });
+
   async function doBuy() {
     if (!sec || !amount) return;
     busy = true;
@@ -97,7 +138,13 @@
       <div><h2>{securityName(s, sec)}</h2><span class="muted mono small">{sec.ticker}</span></div>
       <b class="px">{price(sec.price)}</b>
     </div>
-    <Sparkline values={sec.history} width={300} height={70} />
+    <Sparkline values={chartValues} width={300} height={70} />
+    <div class="ranges" role="group" aria-label={t('phone.chart.aria')}>
+      {#each RANGES as r (r.k)}
+        <button class="chip" class:on={range === r.k} aria-pressed={range === r.k} onclick={() => (range = r.k)}>{t(`phone.chart.${r.k}`)}</button>
+      {/each}
+    </div>
+    {#if spanText}<div class="muted small ctr" aria-live="polite">{t('phone.chart.span', { span: spanText })}</div>{/if}
     {#if securityBlurb(sec)}<p>{securityBlurb(sec)}</p>{/if}
   </div>
 

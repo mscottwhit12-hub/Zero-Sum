@@ -4,8 +4,9 @@ import { readGift, setHandicapOffset } from '../services/handicap';
 import { readFileSync } from 'node:fs';
 import { join as joinPath } from 'node:path';
 import { HttpError, notFound, type Ctx } from '../context';
-import { decideRequest, join, joinInfo, requestRejoin, requestStatus } from '../services/join';
+import { cancelRequest, decideRequest, join, joinInfo, requestRejoin, requestStatus } from '../services/join';
 import { markLeft, overrideTicker, playerFromDevice } from '../services/players';
+import { priceSeries } from '../services/market';
 import { playerBuy, playerCover, playerSell, playerShort } from '../services/trading';
 import { castBallot, openVoteEarly } from '../services/votes';
 import { logReroll, recordMood, sendNotification, setOffset } from '../services/field';
@@ -251,11 +252,18 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   });
   app.post('/api/join/rejoin', async (req) => requestRejoin(ctx, b(req.body).playerId, b(req.body).phoneId));
   app.get('/api/join/status', async (req) => requestStatus(ctx, req.headers['x-device-token']));
+  app.post('/api/join/cancel', async (req) => cancelRequest(ctx, req.headers['x-device-token']));
 
   // Player (device token)
   app.get('/api/me', async (req) => {
     const p = device(req);
     return { player: { id: p.id, displayName: p.display_name, ticker: p.ticker } };
+  });
+  // Chart history for one stock (device auth): ?minutes=10|30|60|120|240|480, or omit for the whole night.
+  app.get<Id & { Querystring: { minutes?: string } }>('/api/market/:id/history', async (req) => {
+    const p = device(req);
+    const m = req.query.minutes;
+    return priceSeries(ctx, p.night_id, req.params.id, m === undefined || m === '' || m === 'all' ? null : Number(m));
   });
   app.post('/api/trade/buy', async (req) => playerBuy(ctx, device(req), { securityId: b(req.body).securityId, gold: b(req.body).gold }));
   app.post('/api/trade/sell', async (req) => playerSell(ctx, device(req), { securityId: b(req.body).securityId, shares: b(req.body).shares }));

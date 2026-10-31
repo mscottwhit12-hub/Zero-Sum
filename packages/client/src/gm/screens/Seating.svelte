@@ -33,6 +33,31 @@
   let newName = $state('');
   let newSeats = $state(4);
   const seatOf = (t: SeatingTable, n: number) => t.assignments.find((a) => a.seat === n)?.playerId ?? null;
+  /** Add or remove a seat on an existing table. Removing takes the highest-numbered seat. Anything that would be lost (a seated player, hand-placed seats) is confirmed first. */
+  function setSeats(t: SeatingTable, to: number) {
+    if (!Number.isInteger(to) || to < 2 || to > 8 || to === t.seats) return;
+    const out = t.assignments.filter((a) => a.seat > to);
+    const loses: string[] = [];
+    if (out.length) loses.push(`unseat ${out.map((a) => playerName(gs, a.playerId)).join(', ')}`);
+    if (t.seatPos) loses.push('put the seats you moved back to even spacing');
+    if (loses.length && !confirm(`${to < t.seats ? `Removing seat ${t.seats}` : 'Adding a seat'} will ${loses.join(' and ')}. Go ahead?`)) return;
+    return run(() => patch(`/api/tables/${t.id}`, { seats: to }));
+  }
+  /** Blank, unchanged or refused names put the old name back in the box instead of leaving the wrong text there. */
+  async function rename(t: SeatingTable, input: HTMLInputElement) {
+    const name = input.value.trim();
+    if (!name || name === t.name) {
+      input.value = t.name;
+      return;
+    }
+    if ((await run(() => patch(`/api/tables/${t.id}`, { name }), 'Renamed')) === undefined) input.value = t.name;
+  }
+  function deleteTableAsk(t: SeatingTable) {
+    const games = (gs?.games ?? []).filter((g) => g.tableId === t.id).length;
+    const bits = [t.assignments.length ? `${t.assignments.length} seated player${t.assignments.length > 1 ? 's' : ''} will be unseated` : '', games ? `${games} linked game${games > 1 ? 's' : ''} will lose their table` : ''].filter(Boolean);
+    if (!confirm(`Delete ${t.name}?${bits.length ? ` ${bits.join(' and ')}.` : ''}`)) return;
+    return run(() => del(`/api/tables/${t.id}`), 'Deleted').then(() => (selected = null));
+  }
   const assign = (t: SeatingTable, seat: number, playerId: string) => run(() => post(`/api/tables/${t.id}/seat`, { seat, playerId: playerId === '' ? null : Number(playerId) }));
 </script>
 
@@ -70,12 +95,21 @@
 {#if sel}
   <section class="panel">
     <div class="spread">
-      <h2>{sel.name}</h2>
+      {#if master}
+        <label class="field" style="margin:0"><span class="small muted">Table name</span>
+          <input value={sel.name} maxlength="40" style="width:200px" onchange={(e) => rename(sel, e.currentTarget as HTMLInputElement)} onkeydown={(e) => { if (e.key === 'Escape') { (e.currentTarget as HTMLInputElement).value = sel.name; (e.currentTarget as HTMLInputElement).blur(); } }} />
+        </label>
+      {:else}
+        <h2>{sel.name}</h2>
+      {/if}
       {#if master}
         <span class="row">
-          <input type="number" min="2" max="8" value={sel.seats} style="width:70px" onchange={(e) => run(() => patch(`/api/tables/${sel.id}`, { seats: Number((e.currentTarget as HTMLInputElement).value) }))} />
+          <span class="small muted">Seats</span>
+          <button aria-label="Remove a seat" disabled={sel.seats <= 2} onclick={() => setSeats(sel, sel.seats - 1)}>−</button>
+          <b aria-live="polite">{sel.seats}</b>
+          <button aria-label="Add a seat" disabled={sel.seats >= 8} onclick={() => setSeats(sel, sel.seats + 1)}>+</button>
           {#if sel.seatPos}<button onclick={() => run(() => patch(`/api/tables/${sel.id}`, { seatPos: null }), 'Seats evened out')}>Even out seats</button>{/if}
-          <button class="danger" onclick={() => confirm(`Delete ${sel.name}?`) && run(() => del(`/api/tables/${sel.id}`), 'Deleted').then(() => (selected = null))}>Delete</button>
+          <button class="danger" onclick={() => deleteTableAsk(sel)}>Delete</button>
         </span>
       {/if}
     </div>

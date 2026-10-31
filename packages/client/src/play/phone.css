@@ -34,6 +34,8 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 .phone button.danger { color: var(--bad); border-color: #e08a7a66; }
 .phone button.big { min-height: 50px; border-radius: 14px; font-size: 1rem; }
 .phone button.chip { min-height: 40px; border-radius: 999px; padding: 0 0.8rem; }
+.phone .ranges { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.3rem; margin: 0.4rem 0 0.2rem; }
+.phone .ranges button.chip { padding: 0; min-width: 0; }
 .phone button.chip.on { background: var(--paper); color: var(--ink); border-color: var(--paper); }
 .phone button:disabled { opacity: 0.45; }
 .phone input, .phone select, .phone textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 0 0.9rem; min-height: 44px; max-width: 100%; }
