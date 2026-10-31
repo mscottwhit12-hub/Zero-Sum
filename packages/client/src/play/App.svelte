@@ -252,10 +252,10 @@
       {#each BOOT.slice(0, bootLine + 1) as line}<div>{line}</div>{/each}
     </div>
   {:else if phase === 'join'}
-    {#if denied}<p class="error pad">{t('phone.denied')}</p>{/if}
+    {#if denied}<p class="error pad edge">{t('phone.denied')}</p>{/if}
     <Join ondone={route} rejoin={location.hash === '#rejoin'} />
   {:else if phase === 'waiting'}
-    <div class="center pad">
+    <div class="center pad edge">
       <p>{t('phone.waiting')}</p>
       <button onclick={cancelWaiting}>Cancel</button>
     </div>

@@ -175,6 +175,8 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 .phone .swatch { width: 34px; height: 34px; min-height: 34px; border-radius: 50%; padding: 0; border: 2px solid transparent; } .phone .swatch.on { border-color: var(--paper); }
 .phone .boot { padding: calc(env(safe-area-inset-top, 0px) + 1.5rem) 1.1rem; font: 0.85rem/1.8 var(--mono); color: var(--good); }
 .phone .pad { padding: 1.2rem; }
+/* full-screen screens with no status bar of their own (waiting / denied): clear the iPhone notch in home-screen mode */
+.phone .pad.edge { padding-top: calc(env(safe-area-inset-top, 0px) + 1.6rem); } .phone .error { color: var(--bad); font-size: 0.9rem; }
 .phone .rotate { display: none; }
 @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) { .phone .rotate { display: flex; position: fixed; inset: 0; z-index: 200; background: var(--bg); align-items: center; justify-content: center; text-align: center; padding: 2rem; font: 1rem var(--serif); } }
 
