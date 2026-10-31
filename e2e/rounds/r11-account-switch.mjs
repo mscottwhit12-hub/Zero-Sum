@@ -18,7 +18,7 @@ try {
   await openApp(tab2, 'NFT Minter'); await sleep(800);
 
   await openApp(p, 'NFT Minter'); await sleep(800);
-  for (let i = 0; i < 20; i++) await p.locator('button.mint').click({ timeout: 1000 }).catch(() => {});
+  for (let i = 0; i < 20; i++) await p.locator('button.biz').first().click({ timeout: 1000 }).catch(() => {});
   await sleep(3800);
   const annBefore = (await minter(gm, ann.token)).minted; // the server caps tap rate, so not every click counts
   R.check(annBefore > 0, 'minter', 'Ann mints', String(annBefore));
@@ -33,9 +33,9 @@ try {
   R.check(await p.locator('button.app').first().isVisible().catch(() => false), 'switch', 'after signing in as someone else the phone lands on home, not the old account\'s last app');
   const zed = await p.evaluate(() => localStorage.getItem('gn_device'));
   await openApp(p, 'NFT Minter'); await sleep(800);
-  for (let i = 0; i < 7; i++) await p.locator('button.mint').click({ timeout: 1000 }).catch(() => {});
+  for (let i = 0; i < 7; i++) await p.locator('button.biz').first().click({ timeout: 1000 }).catch(() => {});
   // the second tab, still on Ann's Minter, taps too
-  for (let i = 0; i < 5; i++) await tab2.locator('button.mint').click({ timeout: 500 }).catch(() => {});
+  for (let i = 0; i < 5; i++) await tab2.locator('button.biz').first().click({ timeout: 500 }).catch(() => {});
   await sleep(4500);
   const a = await minter(gm, ann.token);
   const z = await minter(gm, zed);

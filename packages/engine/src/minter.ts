@@ -1,67 +1,63 @@
 /**
- * NFT Minter (spec §15.4): an idle clicker for fun only, in the Adventure Capitalist mould. Its own fake currency
- * ("credits"), with ZERO link to gold, the market, or scoring. All numbers are placeholders.
- * The server is authoritative: clients report taps and purchases; passive minting is computed from elapsed time.
+ * NFT Minter (spec §15.4): an Adventure Capitalist–style idle game, fun only. Its own fake currency ("credits"),
+ * with ZERO link to gold, the market, or scoring. All numbers are placeholders.
+ * The server is authoritative: phones send "run" taps and purchases; time is the night clock (pause excluded),
+ * so everything keeps running whether the app is open or not, and stops while the night is paused or over.
  *
- *  - Generators: buy as many as you like; each one costs `costGrowth` more than the last.
- *  - Milestones: owning 10 / 25 / 50 / 100 / 200 of a generator doubles its output each time.
- *  - Upgrades: one-time buys. "Overclock" triples one generator; mouse upgrades multiply taps.
- *  - Managers: a generator only mints while the Minter is open, unless it has a manager (then it keeps going away).
- *  - Rebrand: reset credits, generators, upgrades and managers for investors (permanent +% to everything).
+ *  - Businesses: you start with one Laptop. Tap a business to run one cycle; it pays when the timer fills.
+ *    Each unit owned adds its payout to every cycle; each one costs `growth` more than the last.
+ *  - Milestones: owning 25 / 50 / 100 / 200 / 300 / 400 of a business halves its cycle time each time.
+ *  - Managers: one per business; it re-runs that business's cycle automatically, forever.
+ *  - Upgrades: one-time "Overclock" buys, ×3 a business's payout.
+ *  - Rebrand: reset credits, businesses, upgrades and managers for investors (permanent +% to everything).
  *    The leaderboard is lifetime NFTs minted, which a rebrand never resets.
+ *  - Boost: a memo reward gives ×10 on everything for 5 minutes of night clock.
  */
 
 export interface MinterTier {
   id: string;
   name: string;
-  /** Base price in credits; each one owned raises the next price by `costGrowth`. */
+  /** Price of the first unit; each one owned raises the next price by `growth`. */
   cost: number;
-  /** NFTs minted per second per unit owned (before milestones/upgrades/investors). */
-  rate: number;
-  /** Only purchasable while the night is paused (intermission bonus tier). */
-  intermissionOnly?: boolean;
+  growth: number;
+  /** Seconds per cycle (before milestones). */
+  time: number;
+  /** Credits per cycle per unit owned (before upgrades/investors). */
+  payout: number;
+  managerCost: number;
 }
 
 export const MINTER_TIERS: MinterTier[] = [
-  { id: 'laptop', name: 'Laptop', cost: 15, rate: 0.2 },
-  { id: 'rig', name: 'Gaming Rig', cost: 100, rate: 1 },
-  { id: 'rack', name: 'Server Rack', cost: 600, rate: 5 },
-  { id: 'datacenter', name: 'Data Center', cost: 4_000, rate: 30 },
-  { id: 'orbital', name: 'Orbital Array', cost: 30_000, rate: 200 },
-  { id: 'breakroom', name: 'Break-Room Farm', cost: 400, rate: 8, intermissionOnly: true },
+  { id: 'laptop', name: 'Laptop', cost: 4, growth: 1.07, time: 1, payout: 1, managerCost: 1_000 },
+  { id: 'rig', name: 'Gaming Rig', cost: 60, growth: 1.15, time: 3, payout: 60, managerCost: 15_000 },
+  { id: 'rack', name: 'Server Rack', cost: 720, growth: 1.14, time: 6, payout: 540, managerCost: 100_000 },
+  { id: 'datacenter', name: 'Data Center', cost: 8_640, growth: 1.13, time: 12, payout: 4_320, managerCost: 500_000 },
+  { id: 'orbital', name: 'Orbital Array', cost: 103_680, growth: 1.12, time: 24, payout: 51_840, managerCost: 1_200_000 },
+  { id: 'quantum', name: 'Quantum Farm', cost: 1_244_160, growth: 1.11, time: 96, payout: 622_080, managerCost: 10_000_000 },
 ];
 
 export interface MinterUpgrade {
   id: string;
   name: string;
   cost: number;
-  /** Generator it multiplies, or 'tap' for tap value. */
+  /** Business it multiplies. */
   target: string;
   mult: number;
 }
 
-export const MINTER_UPGRADES: MinterUpgrade[] = [
-  { id: 'mouse', name: 'Ergonomic Mouse', cost: 250, target: 'tap', mult: 2 },
-  { id: 'macro', name: 'Macro Keyboard', cost: 15_000, target: 'tap', mult: 5 },
-  ...MINTER_TIERS.map((t) => ({ id: `oc-${t.id}`, name: `Overclock: ${t.name}`, cost: t.cost * 60, target: t.id, mult: 3 })),
-];
+export const MINTER_UPGRADES: MinterUpgrade[] = MINTER_TIERS.map((t) => ({ id: `oc-${t.id}`, name: `Overclock: ${t.name}`, cost: t.managerCost * 5, target: t.id, mult: 3 }));
 
 export const MINTER_RULES = {
-  costGrowth: 1.15,
-  /** Max taps per second accepted from a phone (anti-autoclicker, generous for humans). */
-  maxTapsPerSecond: 15,
-  /** Managed generators accrue for at most this long between syncs (phone asleep, etc.). */
-  maxIdleSeconds: 600,
-  /** Generators without a manager only count this long between syncs (i.e. while the Minter is open). */
-  unmanagedSeconds: 8,
-  /** A manager costs this many times the generator's base price. */
-  managerCostMult: 25,
-  milestones: [10, 25, 50, 100, 200],
-  milestoneMult: 2,
+  milestones: [25, 50, 100, 200, 300, 400],
+  /** Cycle time is divided by this at each milestone. */
+  milestoneSpeed: 2,
   /** Investors earned in total = floor(sqrt(lifetime minted / investorUnit)). */
-  investorUnit: 2_000,
-  /** Each investor adds this fraction to all output (taps and generators). */
+  investorUnit: 10_000_000,
+  /** Each investor adds this fraction to all payouts. */
   investorBonus: 0.05,
+  /** Memo reward "Minter boost". */
+  boostSeconds: 300,
+  boostMult: 10,
 };
 
 export interface MinterState {
@@ -70,21 +66,24 @@ export interface MinterState {
   /** Credits on hand (1 per NFT minted, spent in the shop). */
   credits: number;
   tiers: Record<string, number>;
+  /** Cycle taps (stat only). */
   taps: number;
   upgrades?: string[];
   managers?: string[];
+  /** Seconds into the current cycle, per running business (absent = idle). */
+  prog?: Record<string, number>;
+  /** Night-clock seconds of ×boostMult left. */
+  boost?: number;
   /** Investors claimed by rebranding (permanent bonus). */
   investors?: number;
   rebrands?: number;
 }
 
-export const emptyMinter = (): MinterState => ({ minted: 0, credits: 0, tiers: {}, taps: 0, upgrades: [], managers: [], investors: 0, rebrands: 0 });
+const START_TIERS = () => ({ laptop: 1 });
+export const emptyMinter = (): MinterState => ({ minted: 0, credits: 0, tiers: START_TIERS(), taps: 0, upgrades: [], managers: [], prog: {}, boost: 0, investors: 0, rebrands: 0 });
 
-export const tierCost = (t: MinterTier, owned: number) => Math.ceil(t.cost * Math.pow(MINTER_RULES.costGrowth, owned));
-export const managerCost = (t: MinterTier) => t.cost * MINTER_RULES.managerCostMult;
-
-/** ×2 per milestone reached. */
-export const milestoneMult = (owned: number) => Math.pow(MINTER_RULES.milestoneMult, MINTER_RULES.milestones.filter((m) => owned >= m).length);
+export const tierCost = (t: MinterTier, owned: number) => Math.ceil(t.cost * Math.pow(t.growth, owned));
+export const managerCost = (t: MinterTier) => t.managerCost;
 export const nextMilestone = (owned: number) => MINTER_RULES.milestones.find((m) => owned < m) ?? null;
 export const investorMult = (s: MinterState) => 1 + (s.investors ?? 0) * MINTER_RULES.investorBonus;
 /** Investors a rebrand would add now. */
@@ -92,56 +91,83 @@ export const claimableInvestors = (s: MinterState) => Math.max(0, Math.floor(Mat
 
 const upgradeMult = (s: MinterState, target: string) => MINTER_UPGRADES.filter((u) => u.target === target && (s.upgrades ?? []).includes(u.id)).reduce((a, u) => a * u.mult, 1);
 
-/** NFTs per tap. */
-export const tapValue = (s: MinterState) => upgradeMult(s, 'tap') * investorMult(s);
-
-/** One generator type's NFTs per second. */
-export function tierRate(s: MinterState, t: MinterTier): number {
-  const owned = s.tiers[t.id] ?? 0;
-  return t.rate * owned * milestoneMult(owned) * upgradeMult(s, t.id) * investorMult(s);
+/** Seconds per cycle at this many owned. */
+export function cycleTime(t: MinterTier, owned: number): number {
+  return t.time / Math.pow(MINTER_RULES.milestoneSpeed, MINTER_RULES.milestones.filter((m) => owned >= m).length);
 }
 
-/** Passive NFTs per second (before any intermission multiplier). Accepts a bare tier map for old callers. */
-export function minterRate(s: MinterState | Record<string, number>): number {
-  const st: MinterState = 'tiers' in s && typeof (s as MinterState).tiers === 'object' ? (s as MinterState) : { ...emptyMinter(), tiers: s as Record<string, number> };
-  return MINTER_TIERS.reduce((a, t) => a + tierRate(st, t), 0);
+/** Credits one cycle pays (no boost). */
+export function cyclePayout(s: MinterState, t: MinterTier): number {
+  return t.payout * (s.tiers[t.id] ?? 0) * upgradeMult(s, t.id) * investorMult(s);
+}
+
+/** Credits per second from managed businesses (no boost). */
+export function minterRate(s: MinterState): number {
+  return MINTER_TIERS.reduce((a, t) => a + ((s.managers ?? []).includes(t.id) && (s.tiers[t.id] ?? 0) > 0 ? cyclePayout(s, t) / cycleTime(t, s.tiers[t.id]!) : 0), 0);
+}
+
+const clone = (p: MinterState): MinterState => ({
+  ...emptyMinter(),
+  ...p,
+  tiers: { ...p.tiers },
+  upgrades: [...(p.upgrades ?? [])],
+  managers: [...(p.managers ?? [])],
+  prog: { ...(p.prog ?? {}) },
+});
+
+/** Advance by `dt` night-clock seconds: running cycles fill, finished ones pay, managed ones loop. */
+export function advanceMinter(prev: MinterState, dt: number): MinterState {
+  const s = clone(prev);
+  const d = Math.max(0, dt);
+  if (d === 0) return s;
+  const b = Math.min(d, s.boost ?? 0);
+  let gained = 0;
+  for (const t of MINTER_TIERS) {
+    const owned = s.tiers[t.id] ?? 0;
+    const p0 = s.prog![t.id];
+    const managed = s.managers!.includes(t.id);
+    if (!owned || (p0 == null && !managed)) continue;
+    const T = cycleTime(t, owned);
+    const start = p0 ?? 0;
+    const first = T - start; // seconds until the next payout
+    const n = first > d ? 0 : managed ? 1 + Math.floor((d - first) / T) : 1;
+    const boosted = n === 0 || first > b ? 0 : Math.min(n, 1 + Math.floor((b - first) / T));
+    gained += cyclePayout(s, t) * (n + boosted * (MINTER_RULES.boostMult - 1));
+    if (n === 0) s.prog![t.id] = start + d;
+    else if (managed) s.prog![t.id] = (d - first) % T;
+    else delete s.prog![t.id];
+  }
+  s.minted += gained;
+  s.credits += gained;
+  s.boost = Math.max(0, (s.boost ?? 0) - d);
+  return s;
 }
 
 export interface MinterSync {
-  /** Taps since the last sync. */
-  taps: number;
-  /** Purchases in order: a generator id, `up:<upgrade id>`, `mgr:<generator id>`, or `rebrand`. */
+  /** In order: `run:<id>` (start a cycle), a business id (buy one), `up:<upgrade id>`, `mgr:<business id>`, or `rebrand`. */
   buys: string[];
 }
 
-/**
- * Apply one sync: passive minting for the elapsed time (managed generators up to maxIdleSeconds, the rest only up to
- * unmanagedSeconds), clamped taps, then purchases. `mult` is the intermission multiplier when paused, else 1.
- */
-export function applyMinterSync(prev: MinterState, sync: MinterSync, elapsedSec: number, opts: { paused: boolean; mult: number }): { state: MinterState; rejected: string[] } {
-  const p: MinterState = { ...emptyMinter(), ...prev };
-  const elapsed = Math.max(0, elapsedSec);
-  const mult = opts.paused ? Math.max(1, opts.mult) : 1;
-  const taps = Math.max(0, Math.min(Math.floor(Number(sync.taps) || 0), Math.ceil(MINTER_RULES.maxTapsPerSecond * Math.max(Math.min(elapsed, MINTER_RULES.maxIdleSeconds), 1))));
-  let passive = 0;
-  for (const t of MINTER_TIERS) {
-    const managed = (p.managers ?? []).includes(t.id);
-    const dt = Math.min(elapsed, managed ? MINTER_RULES.maxIdleSeconds : MINTER_RULES.unmanagedSeconds);
-    passive += tierRate(p, t) * dt;
-  }
-  const gained = (taps * tapValue(p) + passive) * mult;
-  const s: MinterState = {
-    ...p,
-    minted: p.minted + gained,
-    credits: p.credits + gained,
-    tiers: { ...p.tiers },
-    taps: p.taps + taps,
-    upgrades: [...(p.upgrades ?? [])],
-    managers: [...(p.managers ?? [])],
-  };
+/** Advance `elapsedSec` of night clock, then apply actions in order. `active` = the night is live (not paused/over). */
+export function applyMinterSync(prev: MinterState, sync: MinterSync, elapsedSec: number, opts: { active: boolean }): { state: MinterState; rejected: string[] } {
+  const s = opts.active ? advanceMinter(prev, elapsedSec) : clone(prev);
   const rejected: string[] = [];
   for (const raw of (sync.buys ?? []).slice(0, 50)) {
     const id = String(raw);
+    if (!opts.active) {
+      rejected.push(id);
+      continue;
+    }
+    if (id.startsWith('run:')) {
+      const t = MINTER_TIERS.find((x) => x.id === id.slice(4));
+      if (!t || !(s.tiers[t.id] ?? 0) || s.prog![t.id] != null || s.managers!.includes(t.id)) {
+        rejected.push(id);
+        continue;
+      }
+      s.prog![t.id] = 0;
+      s.taps += 1;
+      continue;
+    }
     if (id === 'rebrand') {
       const add = claimableInvestors(s);
       if (add < 1) {
@@ -151,9 +177,10 @@ export function applyMinterSync(prev: MinterState, sync: MinterSync, elapsedSec:
       s.investors = (s.investors ?? 0) + add;
       s.rebrands = (s.rebrands ?? 0) + 1;
       s.credits = 0;
-      s.tiers = {};
+      s.tiers = START_TIERS();
       s.upgrades = [];
       s.managers = [];
+      s.prog = {};
       continue;
     }
     if (id.startsWith('up:')) {
@@ -177,17 +204,24 @@ export function applyMinterSync(prev: MinterState, sync: MinterSync, elapsedSec:
       continue;
     }
     const t = MINTER_TIERS.find((x) => x.id === id);
-    if (!t || (t.intermissionOnly && !opts.paused)) {
+    const c = t ? tierCost(t, s.tiers[id] ?? 0) : Infinity;
+    if (!t || c > s.credits) {
       rejected.push(id);
       continue;
     }
-    const c = tierCost(t, s.tiers[id] ?? 0);
-    if (c > s.credits) {
-      rejected.push(id);
-      continue;
-    }
+    // A running cycle keeps its progress as a fraction when a milestone shortens it.
+    const before = cycleTime(t, s.tiers[id] ?? 0);
     s.credits -= c;
     s.tiers[id] = (s.tiers[id] ?? 0) + 1;
+    const p = s.prog![id];
+    if (p != null) s.prog![id] = (p / before) * cycleTime(t, s.tiers[id]!);
   }
   return { state: s, rejected };
+}
+
+/** Memo reward: add a ×10 boost (stacks in time). */
+export function boostMinter(prev: MinterState): MinterState {
+  const s = clone(prev);
+  s.boost = (s.boost ?? 0) + MINTER_RULES.boostSeconds;
+  return s;
 }

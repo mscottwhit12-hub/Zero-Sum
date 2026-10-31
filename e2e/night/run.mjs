@@ -371,7 +371,7 @@ const behaviours = {
 async function mint(p, taps) {
   return withPhone(p, async () => {
     await openApp(p.page, 'NFT Minter');
-    const b = p.page.locator('button.mint');
+    const b = p.page.locator('button.biz').first();
     for (let k = 0; k < taps; k++) {
       if (await b.isDisabled().catch(() => true)) break;
       await b.click({ timeout: 1000 }).catch(() => {});
@@ -658,7 +658,7 @@ const intermission = (async () => {
       if (await b.isVisible().catch(() => false)) {
         await b.click();
         for (let k = 0; k < 30; k++) {
-          await p.page.locator('button.mint').click({ timeout: 800 }).catch(() => {});
+          await p.page.locator('button.biz').first().click({ timeout: 800 }).catch(() => {});
           p.mints++;
         }
         L(p.name, 'minted on the pause screen');

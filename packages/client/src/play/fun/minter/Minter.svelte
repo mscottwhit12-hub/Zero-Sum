@@ -1,25 +1,25 @@
 <script lang="ts">
   /**
-   * NFT Minter (spec §15.4): idle clicker, text and numbers only, fun only (no link to gold).
-   * The server is authoritative; this view shows an optimistic local count between syncs.
+   * NFT Minter (spec §15.4): Adventure Capitalist–style, fun only (no link to gold).
+   * Tap a business to run one cycle; managers run it nonstop. The server is authoritative and runs on the night
+   * clock, so it keeps going with the app closed and stops while paused. This view animates between syncs.
    */
   import { onDestroy, onMount } from 'svelte';
   import { t } from '@shared/copy';
   import type { PublicState } from '@shared/types';
   import { dapi, deviceToken } from '../../device';
 
-  interface Shop {
+  interface Biz {
     id: string;
     name: string;
-    rate: number;
     owned: number;
     cost: number;
-    output: number;
+    time: number;
+    payout: number;
+    progress: number | null;
     nextMilestone: number | null;
     managed: boolean;
     managerCost: number;
-    intermissionOnly: boolean;
-    available: boolean;
   }
   interface Upgrade {
     id: string;
@@ -34,11 +34,11 @@
     minted: number;
     credits: number;
     ratePerSec: number;
-    tapValue: number;
-    mult: number;
+    boostLeft: number;
+    boostMult: number;
     paused: boolean;
     active: boolean;
-    shop: Shop[];
+    shop: Biz[];
     upgrades: Upgrade[];
     investors: { have: number; claimable: number; bonusPct: number; perInvestorPct: number };
     rebrands: number;
@@ -47,49 +47,65 @@
 
   let { s }: { s: PublicState } = $props();
   let v = $state<View | null>(null);
-  let syncedAt = 0;
-  let taps = 0;
+  let syncedAt = $state(0);
   let buys: string[] = [];
   let now = $state(Date.now());
   let busy = false;
+  /** Optimistic local starts (business id → ms) until the server confirms. */
+  let started = $state<Record<string, number>>({});
 
   /** The account this Minter opened as: it never syncs under any other. */
   const token = deviceToken();
   async function sync() {
     if (busy || !token || deviceToken() !== token) return;
     busy = true;
-    const body = { taps, buys };
-    taps = 0;
+    const body = { buys };
     buys = [];
     try {
       v = await dapi<View>('POST', '/api/minter/sync', body, token);
       syncedAt = Date.now();
-      localTaps = 0;
+      started = {};
     } catch {
-      taps += body.taps; // retry next time
+      buys = [...body.buys, ...buys]; // retry next time
     } finally {
       busy = false;
     }
+    if (buys.length) void sync();
   }
-  let localTaps = $state(0);
-  const timer = setInterval(() => (now = Date.now()), 200);
+  const timer = setInterval(() => (now = Date.now()), 100);
   const syncTimer = setInterval(sync, 3000);
   onMount(sync);
   onDestroy(() => {
     clearInterval(timer);
     clearInterval(syncTimer);
-    if (taps || buys.length) void sync();
+    if (buys.length) void sync();
   });
 
-  const elapsed = $derived(v ? Math.max(0, (now - syncedAt) / 1000) : 0);
-  // Between syncs (every 3 s while open) everything mints at the full rate.
-  const gained = $derived(v ? localTaps * v.tapValue + v.ratePerSec * elapsed : 0);
+  const elapsed = $derived(v && v.active ? Math.max(0, (now - syncedAt) / 1000) : 0);
+  const boostLeft = $derived(v ? Math.max(0, v.boostLeft - elapsed) : 0);
+  // Managed businesses pay continuously between syncs; tapped cycles land on the next sync.
+  const gained = $derived(v ? v.ratePerSec * (elapsed + Math.min(elapsed, v.boostLeft) * (v.boostMult - 1)) : 0);
   const minted = $derived(Math.floor((v?.minted ?? 0) + gained));
   const credits = $derived(Math.floor((v?.credits ?? 0) + gained));
-  function mint() {
-    if (!v?.active) return;
-    taps++;
-    localTaps++;
+
+  /** Cycle fill 0..1 right now, or null when idle. */
+  function fill(b: Biz): number | null {
+    if (!b.owned) return null;
+    if (started[b.id] != null) return Math.min(1, (now - started[b.id]!) / 1000 / b.time);
+    if (b.managed) return (((((b.progress ?? 0) * b.time + elapsed) % b.time) + b.time) % b.time) / b.time;
+    if (b.progress == null) return null;
+    return Math.min(1, b.progress + elapsed / b.time);
+  }
+  // A tapped cycle that just filled: fetch the payout now rather than at the next 3 s sync.
+  $effect(() => {
+    if (v?.active && now - syncedAt > 400 && v.shop.some((b) => !b.managed && fill(b) === 1)) void sync();
+  });
+
+  function run(b: Biz) {
+    if (!v?.active || !b.owned || b.managed || fill(b) != null) return;
+    started = { ...started, [b.id]: Date.now() };
+    buys.push(`run:${b.id}`);
+    void sync();
   }
   function buy(id: string) {
     buys.push(id);
@@ -98,8 +114,11 @@
   function rebrand() {
     if (confirm(t('minter.rebrand_confirm'))) buy('rebrand');
   }
-  const short = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(1)}K` : Math.floor(n).toLocaleString());
+  const short = (n: number) =>
+    n >= 1e12 ? `${(n / 1e12).toFixed(2)}T` : n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(1)}K` : Math.floor(n).toLocaleString();
   const rate = (n: number) => (n >= 100 ? short(n) : n.toFixed(1));
+  const secs = (n: number) => (n >= 60 ? `${Math.floor(n / 60)}m ${Math.round(n % 60)}s` : n >= 1 ? `${+n.toFixed(1)}s` : `${+n.toFixed(2)}s`);
+  const clock = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
   const fmt = (n: number) => n.toLocaleString();
   const name = (id: number) => s.players.find((p) => p.id === id)?.displayName ?? '?';
 </script>
@@ -111,41 +130,46 @@
     <p class="muted">{t('minter.credits_label')}</p>
     <div class="z">{short(credits)}</div>
     <p class="mono small muted">{t('minter.minted_small', { n: fmt(minted) })}</p>
-    <p class="mono small">{t('minter.per_sec', { rate: rate(v.ratePerSec) })} · {t('minter.per_tap', { n: rate(v.tapValue) })}</p>
+    {#if v.ratePerSec}<p class="mono small">{t('minter.per_sec', { rate: rate(v.ratePerSec) })}</p>{/if}
+    {#if boostLeft > 0}<p class="small bonus">{t('minter.boost', { mult: v.boostMult, left: clock(boostLeft) })}</p>{/if}
     {#if v.investors.have}<p class="small bonus">{t('minter.investors', { n: v.investors.have, pct: v.investors.bonusPct })}</p>{/if}
-    {#if v.paused}<p class="small bonus">{t('minter.bonus', { mult: v.mult })}</p>{/if}
-    <button class="mint" disabled={!v.active} onclick={mint}>{v.active ? t('minter.mint') : t('minter.closed')}</button>
+    {#if !v.active}<p class="small bonus">{t('minter.paused_note')}</p>{/if}
   </div>
 
   <div class="lab">{t('minter.shop')}</div>
   <p class="small muted">{t('minter.managers_hint')}</p>
-  {#each v.shop.filter((x) => x.available || x.owned) as x (x.id)}
+  {#each v.shop as b (b.id)}
+    {@const f = fill(b)}
     <div class="gen">
       <div class="hw">
-        <span>
-          {x.name} <span class="mono muted">×{x.owned}</span>
-          {#if x.intermissionOnly}<span class="small bonus"> · {t('minter.exclusive')}</span>{/if}
-        </span>
-        <span class="c">{x.owned ? t('minter.per_sec', { rate: rate(x.output) }) : `+${x.rate}/s each`}</span>
-        <button disabled={!v.active || !x.available || credits < x.cost} onclick={() => buy(x.id)}>{short(x.cost)}</button>
+        {#if b.owned}
+          <button class="biz" disabled={!v.active || b.managed || f != null} onclick={() => run(b)} aria-label="{t('minter.run')} {b.name}">
+            <i style="width:{(f ?? 0) * 100}%"></i>
+            <b>{b.name} <span class="mono">×{b.owned}</span></b>
+            <small class="mono">{b.managed || f != null ? t('minter.running') : t('minter.run')}</small>
+          </button>
+          <button disabled={!v.active || credits < b.cost} onclick={() => buy(b.id)} aria-label="{t('minter.buy')} {b.name}">{short(b.cost)}</button>
+        {:else}
+          <span class="grow">{b.name}</span>
+          <button disabled={!v.active || credits < b.cost} onclick={() => buy(b.id)}>{t('minter.unlock')} · {short(b.cost)}</button>
+        {/if}
       </div>
-      {#if x.owned || x.nextMilestone}
-        <div class="more">
-          {#if x.owned}
-            {#if x.managed}
-              <span class="badge live">{t('minter.managed')}</span>
-            {:else}
-              <button disabled={!v.active || credits < x.managerCost} onclick={() => buy(`mgr:${x.id}`)}>{t('minter.hire')} · {short(x.managerCost)}</button>
-            {/if}
+      <div class="more">
+        <span class="mono">{t('minter.cycle', { payout: short(b.payout), time: secs(b.time) })}</span>
+        {#if b.owned}
+          {#if b.managed}
+            <span class="badge live">{t('minter.managed')}</span>
+          {:else}
+            <button disabled={!v.active || credits < b.managerCost} onclick={() => buy(`mgr:${b.id}`)}>{t('minter.hire')} · {short(b.managerCost)}</button>
           {/if}
-          {#if x.nextMilestone}
+          {#if b.nextMilestone}
             <span class="ms" title="Milestone">
-              <i style="width:{Math.min(100, (x.owned / x.nextMilestone) * 100)}%"></i>
-              <b>{t('minter.milestone', { owned: x.owned, next: x.nextMilestone })}</b>
+              <i style="width:{Math.min(100, (b.owned / b.nextMilestone) * 100)}%"></i>
+              <b>{t('minter.milestone', { owned: b.owned, next: b.nextMilestone })}</b>
             </span>
           {/if}
-        </div>
-      {/if}
+        {/if}
+      </div>
     </div>
   {/each}
 
@@ -153,7 +177,7 @@
     <div class="lab">{t('minter.upgrades')}</div>
     {#each v.upgrades.filter((u) => u.available && !u.bought) as u (u.id)}
       <div class="upg">
-        <span class="grow">{u.name} <span class="muted small">×{u.mult} {u.target === 'tap' ? 'taps' : 'output'}</span></span>
+        <span class="grow">{u.name} <span class="muted small">×{u.mult} payout</span></span>
         <button disabled={!v.active || credits < u.cost} onclick={() => buy(`up:${u.id}`)}>{short(u.cost)}</button>
       </div>
     {/each}
@@ -174,3 +198,35 @@
     <p class="muted small">{t('minter.nobody')}</p>
   {/each}
 {/if}
+
+<style>
+  .hw .biz {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 48px;
+    text-align: left;
+    overflow: hidden;
+    padding: 0.4rem 0.6rem;
+  }
+  .hw .biz i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--forest-hi);
+    border: 0;
+    padding: 0;
+    min-width: 0;
+    border-radius: 0;
+  }
+  .hw .biz b,
+  .hw .biz small {
+    position: relative;
+    font-weight: 400;
+  }
+  .hw .biz small {
+    margin-left: auto;
+    color: var(--muted);
+  }
+</style>

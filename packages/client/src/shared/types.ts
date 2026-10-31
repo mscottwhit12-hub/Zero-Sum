@@ -241,7 +241,7 @@ export interface VoteInfo {
   quarterEndsNms: number | null;
   myTarget: number | null;
 }
-export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap';
+export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap' | 'minter_boost';
 export type TipTier = 'common' | 'rarer' | 'rarest';
 export interface Reward {
   type: RewardType;

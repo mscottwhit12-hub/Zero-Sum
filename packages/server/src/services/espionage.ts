@@ -9,6 +9,7 @@
  */
 import { espionageImpulses, toH } from '@gn/engine';
 import { grantHint } from './hints';
+import { minterBoost } from './minter';
 import { j } from '../db';
 import { bad, conflict, notFound, type Ctx } from '../context';
 import { audit } from './audit';
@@ -18,7 +19,7 @@ import { queueImpulse } from './market';
 import { currentNight, loadSecurities, nightSettings, pid, type NightRow, type PlayerRow } from './state';
 import { wiretapResult } from './chat';
 
-export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap';
+export type RewardType = 'gold' | 'reroll' | 'peek' | 'dead_clue' | 'custom' | 'hint' | 'wiretap' | 'minter_boost';
 export interface Reward {
   type: RewardType;
   /** wiretap rewards: one random message from any chat, or between two players the holder picks. */
@@ -63,7 +64,7 @@ function getChallenge(ctx: Ctx, id: number): ChallengeRow {
 
 function normalizeReward(ctx: Ctx, n: NightRow, r: unknown): Reward {
   const x = (r ?? {}) as Reward;
-  if (!['gold', 'reroll', 'peek', 'dead_clue', 'custom', 'hint', 'wiretap'].includes(x.type)) throw bad('bad_reward');
+  if (!['gold', 'reroll', 'peek', 'dead_clue', 'custom', 'hint', 'wiretap', 'minter_boost'].includes(x.type)) throw bad('bad_reward');
   if (x.type === 'wiretap') return { type: 'wiretap', mode: x.mode === 'pair' ? 'pair' : 'any' };
   if (x.type === 'hint') {
     const tier = x.tier ?? 'common';
@@ -188,6 +189,7 @@ export function resolveChallenge(ctx: Ctx, actor: GmAuth, id: number, success: b
           .prepare("INSERT INTO adjustment (night_id, player_id, gold_h, reason, kind, gm_id, created_at) VALUES (?,?,?, 'Espionage reward', 'espionage', ?, ?)")
           .run(n.id, c.player_id, toH(reward.gold ?? settings.espionage.goldReward), actor.gmId, ctx.now());
       if (reward.type === 'reroll') ctx.db.prepare('UPDATE player SET reroll_tokens_left = reroll_tokens_left + 1 WHERE id = ?').run(c.player_id);
+      if (reward.type === 'minter_boost') minterBoost(ctx, n, c.player_id);
       if (reward.type === 'hint') grantHint(ctx, n, c.player_id, reward.tier ?? 'common', 'memo', `memo:${id}`, { force: true });
     }
     // Hidden nudges: agent's stock rises on success / dips on fail; Shadow Logistics moves on success.

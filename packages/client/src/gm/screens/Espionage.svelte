@@ -22,6 +22,7 @@
     { id: 'dead_clue', label: 'Dead-stock clue' },
     { id: 'hint', label: 'Mechanic tip' },
     { id: 'wiretap', label: 'Wiretap' },
+    { id: 'minter_boost', label: 'NFT Minter ×10 for 5 min' },
     { id: 'custom', label: 'Custom' },
   ];
   async function assign(e: Event) {

@@ -1,61 +1,79 @@
 import { describe, expect, it } from 'vitest';
-import { applyMinterSync, claimableInvestors, emptyMinter, managerCost, milestoneMult, minterRate, tapValue, tierCost, MINTER_RULES, MINTER_TIERS } from '../src';
+import { advanceMinter, applyMinterSync, boostMinter, claimableInvestors, cycleTime, emptyMinter, MINTER_RULES, MINTER_TIERS, minterRate, tierCost, type MinterState } from '../src';
 
-describe('NFT minter', () => {
-  it('taps mint 1 each, clamped to a human rate', () => {
-    expect(applyMinterSync(emptyMinter(), { taps: 10, buys: [] }, 2, { paused: false, mult: 2 }).state.minted).toBe(10);
-    expect(applyMinterSync(emptyMinter(), { taps: 1000, buys: [] }, 2, { paused: false, mult: 2 }).state.minted).toBe(30);
+const live = { active: true };
+const T = (id: string) => MINTER_TIERS.find((t) => t.id === id)!;
+const rich = (credits: number, extra: Partial<MinterState> = {}): MinterState => ({ ...emptyMinter(), credits, ...extra });
+
+describe('NFT minter (Adventure Capitalist style)', () => {
+  it('starts with one Laptop, idle until tapped; a tap runs one cycle that pays when it fills', () => {
+    let s = emptyMinter();
+    expect(s.tiers).toEqual({ laptop: 1 });
+    expect(advanceMinter(s, 10).credits).toBe(0); // idle
+    s = applyMinterSync(s, { buys: ['run:laptop'] }, 0, live).state;
+    expect(s.prog).toEqual({ laptop: 0 });
+    expect(applyMinterSync(s, { buys: ['run:laptop'] }, 0.5, live).rejected).toEqual(['run:laptop']); // already running
+    s = advanceMinter(s, 5);
+    expect(s.credits).toBe(1); // one cycle only
+    expect(s.prog).toEqual({});
   });
-  it('buys in order when affordable; costs grow; passive accrues', () => {
-    let s = applyMinterSync(emptyMinter(), { taps: 30, buys: ['laptop', 'laptop'] }, 2, { paused: false, mult: 2 }).state;
-    expect(s.tiers.laptop).toBe(1); // 15 then 18 > 15 left
-    expect(s.credits).toBe(15);
-    expect(tierCost(MINTER_TIERS[0]!, 1)).toBe(18);
-    s = applyMinterSync(s, { taps: 0, buys: [] }, 5, { paused: false, mult: 2 }).state;
-    expect(s.minted).toBeCloseTo(31); // 0.2/s × 5 s (app open: syncs are seconds apart)
-    expect(minterRate(s.tiers)).toBeCloseTo(0.2);
+
+  it('more units pay more per cycle; prices grow; the next business unlocks when affordable', () => {
+    let s = rich(100);
+    s = applyMinterSync(s, { buys: ['laptop', 'laptop', 'rig', 'quantum'] }, 0, live).state;
+    expect(s.tiers).toEqual({ laptop: 3, rig: 1 });
+    expect(s.credits).toBeCloseTo(100 - tierCost(T('laptop'), 1) - tierCost(T('laptop'), 2) - 60);
+    s = applyMinterSync(s, { buys: ['run:laptop', 'run:rig'] }, 0, live).state;
+    s = advanceMinter(s, 3);
+    expect(s.credits).toBeCloseTo(100 - tierCost(T('laptop'), 1) - tierCost(T('laptop'), 2) - 60 + 3 + 60);
   });
-  it('intermission: 2× minting and the exclusive tier', () => {
-    const rich = { ...emptyMinter(), credits: 1000, minted: 1000 };
-    expect(applyMinterSync(rich, { taps: 0, buys: ['breakroom'] }, 1, { paused: false, mult: 2 }).rejected).toEqual(['breakroom']);
-    const r = applyMinterSync(rich, { taps: 10, buys: ['breakroom'] }, 1, { paused: true, mult: 2 });
-    expect(r.state.tiers.breakroom).toBe(1);
-    expect(r.state.minted).toBe(1020);
+
+  it('milestones halve the cycle time at 25/50/100…', () => {
+    expect(cycleTime(T('rig'), 24)).toBe(3);
+    expect(cycleTime(T('rig'), 25)).toBe(1.5);
+    expect(cycleTime(T('rig'), 50)).toBe(0.75);
   });
-  it('away from the Minter: only managed generators keep minting, and only up to the idle cap', () => {
-    const s = { ...emptyMinter(), tiers: { rig: 1 } };
-    expect(applyMinterSync(s, { taps: 0, buys: [] }, 99_999, { paused: false, mult: 2 }).state.minted).toBe(MINTER_RULES.unmanagedSeconds);
-    const managed = { ...s, managers: ['rig'] };
-    expect(applyMinterSync(managed, { taps: 0, buys: [] }, 99_999, { paused: false, mult: 2 }).state.minted).toBe(600);
+
+  it('managers run a business nonstop (any amount of time) and need the business first', () => {
+    expect(applyMinterSync(rich(1e6), { buys: ['mgr:rig'] }, 0, live).rejected).toEqual(['mgr:rig']);
+    let s = applyMinterSync(rich(1000), { buys: ['mgr:laptop'] }, 0, live).state;
+    expect(s.credits).toBe(0);
+    expect(minterRate(s)).toBe(1);
+    s = advanceMinter(s, 3600);
+    expect(s.credits).toBe(3600);
+    expect(applyMinterSync(s, { buys: ['run:laptop'] }, 0, live).rejected).toEqual(['run:laptop']);
   });
-  it('milestones double a generator at 10/25/50/100/200 owned', () => {
-    expect(milestoneMult(9)).toBe(1);
-    expect(milestoneMult(10)).toBe(2);
-    expect(milestoneMult(50)).toBe(8);
-    expect(minterRate({ ...emptyMinter(), tiers: { laptop: 10 } })).toBeCloseTo(0.2 * 10 * 2);
+
+  it('paused or over: nothing advances and nothing can be bought', () => {
+    const s = applyMinterSync(rich(1000, { managers: ['laptop'] }), { buys: ['laptop'] }, 600, { active: false });
+    expect(s.state.credits).toBe(1000);
+    expect(s.rejected).toEqual(['laptop']);
   });
-  it('upgrades: overclock ×3 a generator, mouse ×2 taps; once each', () => {
-    const rich = { ...emptyMinter(), credits: 10_000, tiers: { laptop: 1 } };
-    const r = applyMinterSync(rich, { taps: 0, buys: ['up:mouse', 'up:mouse', 'up:oc-laptop'] }, 0, { paused: false, mult: 1 });
-    expect(r.state.upgrades).toEqual(['mouse', 'oc-laptop']);
-    expect(r.rejected).toEqual(['up:mouse']);
-    expect(tapValue(r.state)).toBe(2);
-    expect(minterRate(r.state)).toBeCloseTo(0.6);
+
+  it('overclock ×3 a business once', () => {
+    let s = rich(5000 + 5000, { managers: ['laptop'] });
+    s = applyMinterSync(s, { buys: ['up:oc-laptop', 'up:oc-laptop'] }, 0, live).state;
+    expect(s.upgrades).toEqual(['oc-laptop']);
+    expect(minterRate(s)).toBe(3);
   });
-  it('managers need the generator first and cost a multiple of its base price', () => {
-    const rig = MINTER_TIERS.find((t) => t.id === 'rig')!;
-    const s = { ...emptyMinter(), credits: managerCost(rig) * 2 };
-    expect(applyMinterSync(s, { taps: 0, buys: ['mgr:rig'] }, 0, { paused: false, mult: 1 }).rejected).toEqual(['mgr:rig']);
-    const r = applyMinterSync({ ...s, tiers: { rig: 1 } }, { taps: 0, buys: ['mgr:rig'] }, 0, { paused: false, mult: 1 });
-    expect(r.state.managers).toEqual(['rig']);
-    expect(r.state.credits).toBe(managerCost(rig));
+
+  it('boost: ×10 for 5 minutes of clock, then normal; stacks in time', () => {
+    let s = boostMinter(rich(0, { managers: ['laptop'] }));
+    expect(s.boost).toBe(MINTER_RULES.boostSeconds);
+    s = advanceMinter(s, 400);
+    expect(s.credits).toBe(300 * 10 + 100);
+    expect(s.boost).toBe(0);
+    expect(boostMinter(boostMinter(emptyMinter())).boost).toBe(600);
+    // A tapped cycle finishing inside the boost pays ×10.
+    const t = advanceMinter(boostMinter(applyMinterSync(emptyMinter(), { buys: ['run:laptop'] }, 0, live).state), 2);
+    expect(t.credits).toBe(10);
   });
-  it('rebrand: resets the run for investors; lifetime minted (leaderboard) stays', () => {
-    const s = { ...emptyMinter(), minted: 20_000, credits: 5_000, tiers: { rig: 4 }, upgrades: ['mouse'], managers: ['rig'] };
-    expect(claimableInvestors(s)).toBe(3); // sqrt(20000/2000) = 3.16
-    const r = applyMinterSync(s, { taps: 0, buys: ['rebrand'] }, 0, { paused: false, mult: 1 });
-    expect(r.state).toMatchObject({ minted: 20_000, credits: 0, tiers: {}, upgrades: [], managers: [], investors: 3, rebrands: 1 });
-    expect(tapValue(r.state)).toBeCloseTo(1 + 3 * MINTER_RULES.investorBonus);
-    expect(applyMinterSync(r.state, { taps: 0, buys: ['rebrand'] }, 0, { paused: false, mult: 1 }).rejected).toEqual(['rebrand']); // nothing new to claim
+
+  it('rebrand: resets to one Laptop for investors; lifetime minted stays', () => {
+    const s = rich(5, { minted: MINTER_RULES.investorUnit * 4, tiers: { laptop: 30, rig: 5 }, managers: ['laptop'] });
+    expect(claimableInvestors(s)).toBe(2);
+    const r = applyMinterSync(s, { buys: ['rebrand'] }, 0, live).state;
+    expect(r).toMatchObject({ credits: 0, tiers: { laptop: 1 }, managers: [], investors: 2, rebrands: 1, minted: MINTER_RULES.investorUnit * 4 });
+    expect(applyMinterSync(r, { buys: ['rebrand'] }, 0, live).rejected).toEqual(['rebrand']);
   });
 });

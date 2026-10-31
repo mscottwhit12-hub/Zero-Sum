@@ -133,7 +133,7 @@ try {
   await home(pa); await openApp(pa, 'NFT Minter'); await sleep(1200);
   const mt = (await pa.locator('body').textContent()) ?? '';
   R.check(/Credits/.test(mt) && /NFTs minted tonight/.test(mt) && /Rebrand/.test(mt) && /Hire manager|manager/.test(mt), 'minter', 'credits are the main number; NFTs, managers and rebrand shown', mt.replace(/\s+/g, ' ').slice(0, 120));
-  for (let i = 0; i < 20; i++) await pa.locator('button.mint').click({ timeout: 800 }).catch(() => {});
+  for (let i = 0; i < 20; i++) await pa.locator('button.biz').first().click({ timeout: 800 }).catch(() => {});
   await sleep(3500);
   await pa.locator('.gen', { hasText: 'Laptop' }).getByRole('button').first().click().catch(() => {}); await sleep(3500);
   const st = (await dev(ps[0], s, 'GET', '/api/minter')).body;

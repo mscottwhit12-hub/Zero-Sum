@@ -208,31 +208,44 @@ describe('sounds', () => {
 });
 
 describe('NFT minter', () => {
-  it('server-authoritative sync; pause bonus; leaderboard public; zero effect on gold; TV crawl', async () => {
+  it('runs on the night clock (app open or not), stops while paused/over; leaderboard public; zero effect on gold; TV crawl; memo boost', async () => {
     const t = await makeApp();
     const { gm, devices } = await liveNight(t, 2);
     const [a, b] = devices as [{ id: number; token: string }, { id: number; token: string }];
     const cashBefore = playerView(t.ctx, state(t), a.id)!.me.cashH;
-    expect((await dev(t, a.token, 'POST', '/api/minter/sync', { taps: 5 })).json()).toMatchObject({ minted: 5, credits: 5 });
+    const first = (await dev(t, a.token, 'POST', '/api/minter/sync', { buys: ['run:laptop'] })).json();
+    expect(first).toMatchObject({ credits: 0, active: true });
+    expect(first.shop.map((x: { id: string }) => x.id)).toEqual(['laptop', 'rig']); // owned + next to unlock
     t.clock.advance(2000);
-    const r = (await dev(t, a.token, 'POST', '/api/minter/sync', { taps: 1000, buys: ['laptop'] })).json();
-    expect(r.minted).toBe(35); // taps clamped to 15/s × 2 s
-    expect(r.tiers).toEqual({ laptop: 1 });
-    expect(r.rejected).toEqual([]);
-    expect((await dev(t, a.token, 'POST', '/api/minter/sync', { buys: ['breakroom'] })).json().rejected).toEqual(['breakroom']);
+    expect((await dev(t, a.token, 'POST', '/api/minter/sync', {})).json()).toMatchObject({ minted: 1, credits: 1 });
 
-    await call(t, gm, 'POST', '/api/night/pause');
-    t.clock.advance(1000);
-    const p = (await dev(t, b.token, 'POST', '/api/minter/sync', { taps: 10 })).json();
-    expect(p).toMatchObject({ minted: 20, mult: 2, paused: true }); // first sync: no elapsed time, taps doubled
-    expect(p.shop.find((s: { id: string }) => s.id === 'breakroom').available).toBe(true);
-
-    expect(publicView(t.ctx, state(t)).minter.leaderboard).toEqual([{ playerId: a.id, minted: 35 }, { playerId: b.id, minted: 20 }]);
-    expect(playerView(t.ctx, state(t), a.id)!.me.cashH).toBe(cashBefore);
-
+    // A manager keeps a business going with the app closed; the tick loop keeps the leaderboard current.
+    t.ctx.db.prepare("UPDATE minter_state SET currency = 1000 WHERE player_id = ?").run(a.id);
+    await dev(t, a.token, 'POST', '/api/minter/sync', { buys: ['mgr:laptop'] });
     const rec = recordingBus();
     t.ctx.bus = rec.bus;
-    tickOnce(t.ctx); // starts the crawl clock
+    t.clock.advance(60_000);
+    tickOnce(t.ctx); // also starts the crawl clock
+    expect(publicView(t.ctx, state(t)).minter.leaderboard).toEqual([{ playerId: a.id, minted: 61 }]);
+
+    // Paused: frozen, nothing can be bought.
+    await call(t, gm, 'POST', '/api/night/pause');
+    t.clock.advance(60_000);
+    const p = (await dev(t, a.token, 'POST', '/api/minter/sync', { buys: ['laptop'] })).json();
+    expect(p).toMatchObject({ minted: 61, paused: true, active: false, rejected: ['laptop'] });
+    await call(t, gm, 'POST', '/api/night/resume');
+
+    // Memo reward: ×10 for 5 minutes.
+    const c = (await call(t, gm, 'POST', '/api/challenges', { playerId: b.id, text: 'Do it', reward: { type: 'minter_boost' } })).json();
+    const cid = c.id ?? c.challenge?.id;
+    await dev(t, b.token, 'POST', `/api/me/challenges/${cid}/respond`, { accept: true });
+    await call(t, gm, 'POST', `/api/challenges/${cid}/resolve`, { success: true });
+    const boosted = (await dev(t, b.token, 'POST', '/api/minter/sync', { buys: ['run:laptop'] })).json();
+    expect(boosted.boostLeft).toBe(300);
+    t.clock.advance(1000);
+    expect((await dev(t, b.token, 'POST', '/api/minter/sync', {})).json().credits).toBe(10);
+
+    expect(playerView(t.ctx, state(t), a.id)!.me.cashH).toBe(cashBefore);
     t.clock.advance(10 * 60_000);
     tickOnce(t.ctx);
     const crawl = rec.events.find((e) => e.event === 'tv:crawl');
@@ -240,8 +253,9 @@ describe('NFT minter', () => {
     expect(crawl?.data).toMatchObject({ kind: 'minter' });
 
     await call(t, gm, 'POST', '/api/night/end');
-    const frozen = (await dev(t, a.token, 'POST', '/api/minter/sync', { taps: 10 })).json();
-    expect(frozen).toMatchObject({ minted: 35, active: false });
+    const before = (await dev(t, a.token, 'POST', '/api/minter/sync', {})).json().minted;
+    t.clock.advance(60_000);
+    expect((await dev(t, a.token, 'POST', '/api/minter/sync', {})).json()).toMatchObject({ minted: before, active: false });
   });
 });
 
