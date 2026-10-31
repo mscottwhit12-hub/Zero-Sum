@@ -71,9 +71,8 @@ export function finale(ctx: Ctx, nightId: number): Finale {
       pos.set(k, cur);
     }
     const list = [...pos.values()];
-    const best = list.reduce((a, b) => (b.profitH > a.profitH ? b : a));
+    // "Best investment" dropped (Tate, Oct 29): too close to "Best trade" (top_trade). Worst investment stays.
     const worst = list.reduce((a, b) => (b.profitH < a.profitH ? b : a));
-    if (best.profitH > 0) slides.push({ id: 'best_investment', ...best });
     if (worst.profitH < 0) slides.push({ id: 'worst_investment', ...worst });
   }
 

@@ -16,6 +16,7 @@
   import type { FeedItem, TvState } from '@shared/types';
   import { cueTone } from './tones';
   import Finale from './Finale.svelte';
+  import './tv.css';
   import TickCountdown from '@shared/TickCountdown.svelte';
 
   // ---- boot sequence (terminal touch)
@@ -194,6 +195,7 @@
   });
 </script>
 
+<div class="tvroot">
 <audio bind:this={ambientEl} loop preload="none"></audio>
 
 {#if booting}
@@ -203,7 +205,7 @@
   </div>
 {:else}
   <div class="tv">
-    <header class="spread">
+    <header class="spread hd">
       <div class="row">
         <strong class="brand">{t('brand.tv')}</strong>
         {#if s?.night}<span class="muted">{s.night.name}</span>{/if}
@@ -213,7 +215,7 @@
           <span class="badge" class:live={s.night.status === 'live'} class:warn={s.night.status === 'paused'}>{t(`status.${s.night.status}`)}</span>
           {#if s.night.tradingClosed}<span class="badge warn">{t('tv.trading_closed')}</span>{/if}
           <TickCountdown night={s.night} />
-          {#if s.night.currentQuarter}<span>Q{s.night.currentQuarter}</span>{/if}
+          {#if s.night.currentQuarter}<span class="qb">Q{s.night.currentQuarter}</span>{/if}
           <span class="clock">{clock(nightNow(s.night, now))}</span>
         {/if}
         <span class="dot" style="background:{connected ? 'var(--good)' : 'var(--bad)'}"></span>
@@ -224,19 +226,21 @@
     {#if !s?.night || s.night.status === 'archived'}
       <p class="center muted">Stand by. No night is in session.</p>
     {:else}
-      <div class="headline mono">&gt; {headline}<span class="cursor">█</span></div>
+      <div class="headline mono"><i>&gt;</i> {headline}<span class="cursor">█</span></div>
       {#if s.vote?.open}
         <div class="poll">{t('tv.polls_open', { quarter: s.vote.quarter })}{pollLeft ? ` · ${pollLeft}` : ''}</div>
       {/if}
 
-      <main>
-        <section class="panel standings">
+      <main class:tall={step.kind === 'floor' || step.kind === 'table' || step.kind === 'market'} class:fullh={step.kind === 'floor' || step.kind === 'table' || (step.kind === 'market' && !!s.vote?.open)}>
+        <section class="panel standings n">
           <h2>{t('tv.standings')}</h2>
-          <table>
+          <table style="--n:{Math.max(1, s.standings.length)}">
             <tbody>
               {#each s.standings as r (r.playerId)}
-                <tr>
+                {@const pc = s.players.find((p) => p.id === r.playerId)?.color}
+                <tr class:lead={r.rank === 1}>
                   <td class="rank">{r.rank}</td>
+                  <td class="avc"><span class="av" style="background:{pc ?? 'var(--navy-hi)'}">{name(r.playerId).split(/\s+/).map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase()}</span></td>
                   <td>{name(r.playerId)}</td>
                   <td class="mono muted">{ticker(r.playerId)}</td>
                   <td class="num mono">{goldTv(r.netWorthH)}</td>
@@ -248,10 +252,11 @@
         </section>
 
         <section class="right">
-          <div class="panel">
+          <div class="panel e" class:compact={active.length > 2 || !!s.vote?.open || (step.kind === 'schedule' && next.length > 3)}>
             <h2>{t('tv.now_playing')}</h2>
             {#each active as g (g.id)}
               <div class="game">
+                <i class="gic" style="--c:{g.color ?? '#27507a'}">{g.name.slice(0, 1)}</i>
                 <div class="spread">
                   <strong>{g.name}</strong>
                   <span class="crown">{g.leaderId ? `♛ ${name(g.leaderId)}` : ''}</span>
@@ -268,39 +273,53 @@
               <h2>
                 {step.kind === 'schedule' ? t('tv.up_next') : step.kind === 'floor' || step.kind === 'table' ? t('tv.seating') : t(`tv.${step.kind}`)}{stepTable ? ` · ${stepTable.name}` : ''}
               </h2>
-              <span class="small muted mono">{stepIdx + 1}/{steps.length}</span>
+              <span class="tag small muted mono">{stepIdx + 1}/{steps.length}</span>
             </div>
-            {#if step.kind === 'schedule'}
-              {#each next as g (g.id)}
-                <div class="spread small"><span>{g.name}</span><span class="muted mono">{timeOfDay(g.plannedStart)}</span></div>
-              {:else}
-                <p class="muted small">Nothing scheduled.</p>
-              {/each}
-            {:else if step.kind === 'market'}
-              <table class="small">
-                <tbody>
-                  {#each s.market as m (m.id)}
-                    {@const c = change(m.history, m.price)}
-                    <tr>
-                      <td class="mono">{m.ticker}</td>
-                      <td><Sparkline values={m.history} /></td>
-                      <td class="num mono">{m.price.toFixed(2)}</td>
-                      <td class="num mono" class:up={c > 0} class:down={c < 0}>{c >= 0 ? '+' : ''}{(c * 100).toFixed(1)}%</td>
-                    </tr>
+            {#key stepIdx}
+              {#if step.kind === 'schedule'}
+                <div class="rbody schedule" style="--n:{Math.max(1, next.length)}">
+                  {#each next as g (g.id)}
+                    <div class="spread small"><span>{g.name}</span><span class="muted mono">{timeOfDay(g.plannedStart)}</span></div>
+                  {:else}
+                    <p class="muted small">Nothing scheduled.</p>
                   {/each}
-                </tbody>
-              </table>
-            {:else if step.kind === 'floor'}
-              <FloorPlan tables={s.tv?.seating ?? []} players={s.players} dots {gameName} />
-            {:else if step.kind === 'table'}
-              {#if stepTable}<TableView table={stepTable} players={s.players} game={gameName(stepTable.gameId)} />{/if}
-            {:else}
-              {#each (s.minter?.leaderboard ?? []).slice(0, 5) as r, i (r.playerId)}
-                <div class="spread small"><span>{i + 1}. {name(r.playerId)}</span><span class="mono">{r.minted.toLocaleString()}</span></div>
+                </div>
+              {:else if step.kind === 'market'}
+                {@const cols = s.market.length > 12 ? 2 : 1}
+                <div class="rbody market">
+                  <table class="small" class:two={cols === 2} style="--cols:{cols};--rows:{Math.max(1, Math.ceil(s.market.length / cols))}">
+                    <tbody>
+                      {#each s.market as m (m.id)}
+                        {@const c = change(m.history, m.price)}
+                        <tr class:dead={m.kind === 'dead'}>
+                          <td class="mono"><span class="tk" data-k={m.kind}>{m.ticker}</span></td>
+                          <td><Sparkline values={m.history} /></td>
+                          <td class="num mono">{m.price.toFixed(2)}</td>
+                          <td class="num mono" class:up={c > 0} class:down={c < 0}><span class="chg">{c > 0 ? '▲ +' : c < 0 ? '▼ ' : '■ '}{(c * 100).toFixed(1)}%</span></td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              {:else if step.kind === 'floor'}
+                <div class="rbody floor">
+                  <div class="fit"><FloorPlan tables={s.tv?.seating ?? []} players={s.players} dots /></div>
+                </div>
+              {:else if step.kind === 'table'}
+                <div class="rbody table">
+                  <div class="fit">{#if stepTable}<TableView table={stepTable} players={s.players} game={gameName(stepTable.gameId)} />{/if}</div>
+                </div>
               {:else}
-                <p class="muted small">No NFTs minted yet.</p>
-              {/each}
-            {/if}
+                {@const top = (s.minter?.leaderboard ?? []).slice(0, 5)}
+                <div class="rbody mint" style="--n:{Math.max(1, top.length)}">
+                  {#each top as r, i (r.playerId)}
+                    <div class="spread small"><span><i class="rk">{i + 1}</i>{name(r.playerId)}</span><span class="mono">{r.minted.toLocaleString()}</span></div>
+                  {:else}
+                    <p class="muted small">No NFTs minted yet.</p>
+                  {/each}
+                </div>
+              {/if}
+            {/key}
           </div>
         </section>
       </main>
@@ -337,174 +356,4 @@
     <div class="banner {banner.kind}">{banner.text}</div>
   {/if}
 {/if}
-
-<style>
-  .boot {
-    padding: 3rem;
-    font-size: 1.4rem;
-    line-height: 2;
-  }
-  .cursor {
-    animation: blink 1s steps(1) infinite;
-    margin-left: 0.2em;
-  }
-  @keyframes blink {
-    50% {
-      opacity: 0;
-    }
-  }
-  .tv {
-    min-height: 100vh;
-    padding: 1rem 1.5rem calc(var(--crawl-h) + 0.5rem);
-    font-size: clamp(15px, 1.25vw, 24px);
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-  }
-  .brand {
-    color: var(--accent);
-    letter-spacing: 0.04em;
-  }
-  .clock {
-    font-size: 1.3em;
-  }
-  .headline {
-    padding: 0.4rem 0.8rem;
-    border-left: 4px solid var(--accent);
-    background: var(--panel);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .poll {
-    padding: 0.5rem 0.8rem;
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 700;
-    text-align: center;
-  }
-  main {
-    display: grid;
-    grid-template-columns: 3fr 2fr;
-    gap: 1rem;
-    flex: 1;
-  }
-  .right {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  .standings td {
-    padding: 0.45rem 0.4rem;
-    font-size: 1.1em;
-  }
-  .rank {
-    width: 2.5em;
-    color: var(--muted);
-  }
-  .game {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .game .bar {
-    margin: 0.35rem 0;
-  }
-  .crown {
-    color: var(--accent);
-  }
-  .rotating {
-    min-height: 14em;
-  }
-  .up {
-    color: var(--good);
-  }
-  .down {
-    color: var(--bad);
-  }
-  .tiny {
-    font-size: 0.7em;
-  }
-  /* Stock crawl size, shared by the crawl, the page's bottom padding and the banner that sits above it.
-     Text is about twice the old size (clamp is 2x the .tv base clamp). Scroll speed is unchanged. */
-  :global(:root) {
-    --crawl-fs: clamp(30px, 2.5vw, 48px);
-    --crawl-h: calc(var(--crawl-fs) * 1.25 + 1.2rem);
-  }
-  .crawl {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    padding: 0.6rem 0;
-    font-size: var(--crawl-fs);
-    line-height: 1.25;
-    background: var(--panel);
-    border-top: 1px solid var(--line);
-    overflow: hidden;
-    white-space: nowrap;
-  }
-  .track {
-    display: inline-block;
-    animation: crawl 60s linear infinite;
-  }
-  @keyframes crawl {
-    from {
-      transform: translateX(0);
-    }
-    to {
-      transform: translateX(-50%);
-    }
-  }
-  .intermission {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    background: var(--bg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    font-size: clamp(16px, 1.4vw, 26px);
-  }
-  .intermission h1 {
-    letter-spacing: 0.2em;
-  }
-  .big {
-    font-size: 3em;
-  }
-  .minters {
-    min-width: 24em;
-  }
-  .banner {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: var(--crawl-h);
-    z-index: 50;
-    padding: 1.2rem 2rem;
-    font-size: 2rem;
-    font-weight: 700;
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
-  .banner.exposed {
-    background: var(--bad);
-    color: #fff;
-  }
-  .banner.info {
-    background: var(--panel);
-    color: var(--ink, inherit);
-    border-top: 3px solid var(--accent);
-  }
-  .center {
-    text-align: center;
-    margin-top: 20vh;
-    font-size: 1.4em;
-  }
-  @media (max-width: 800px) {
-    main {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
+</div>

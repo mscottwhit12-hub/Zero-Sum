@@ -63,7 +63,8 @@ describe('finale', () => {
     const pub = publicView(t.ctx, state(t));
     expect(pub.finale!.podium.map((p) => p.playerId)).toEqual([a.id, b.id, c.id]);
     const ids = pub.finale!.slides.map((s) => s.id);
-    expect(ids).toEqual(expect.arrayContaining(['top_trade', 'best_investment', 'mood', 'hours', 'achievements']));
+    expect(ids).toEqual(expect.arrayContaining(['top_trade', 'mood', 'hours', 'achievements']));
+    expect(ids).not.toContain('best_investment');
     for (const k of FORBIDDEN_KEYS) expect(JSON.stringify(pub)).not.toContain(k);
     const ach = pub.finale!.slides.find((x) => x.id === 'achievements') as { items: object[] };
     for (const item of ach.items) expect(Object.keys(item).sort()).toEqual(['playerId', 'type']);

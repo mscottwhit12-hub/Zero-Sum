@@ -51,127 +51,138 @@
 
 <div class="finale">
   {#if phase === 'collapse'}
-    <div class="report mono">{t('tv.special_report')}</div>
-    <div class="board mono">
-      {#each s.market as m (m.id)}
-        <div class="tick"><span>{m.ticker}</span><span>{(m.price * crash).toFixed(2)}</span><span>▼</span></div>
-      {/each}
-    </div>
-    {#if crash < 0.15}<h1 class="headline">{t('tv.collapse')}</h1>{/if}
-  {:else if phase === 'podium' || phase === 'done'}
-    <h2 class="muted">{t('tv.podium')}</h2>
-    <div class="podium">
-      {#each [2, 1, 3] as r (r)}
-        <div class="step r{r}">
-          {#each shown.filter((p) => p.rank === r) as p (p.playerId)}
-            <div class="who">{name(p.playerId)}</div>
-            <div class="mono gold">{goldTv(p.goldH)}</div>
-          {/each}
-          <div class="block mono">{placeLabel(r)}</div>
-        </div>
-      {/each}
-    </div>
-    {#if phase === 'done'}<p class="ready">{t('tv.statements_ready')}</p>{/if}
-  {:else if slide}
-    <div class="slide">
-      <h2>{t(`tv.recap.${slide.id}`)}</h2>
-      {#if slide.id === 'hours'}
-        {#each slide.leaders as l (l.playerId)}<p class="big">{name(l.playerId)} <span class="mono muted">{l.hours} h</span></p>{/each}
-      {:else if slide.id === 'achievements'}
-        <div class="ach">
-          {#each slide.items as a, i (i)}<p>{name(a.playerId)} — <strong>{t(`achievements.${a.type}.name`)}</strong></p>{/each}
-        </div>
-      {:else}
-        <p class="big">{slideBody(slide)}</p>
+    {@const cols = s.market.length <= 6 ? 3 : s.market.length <= 12 ? 4 : 5}
+    <div class="fin collapse" class:thud={crash < 0.15}>
+      <div class="siren"></div>
+      <div class="report mono">{t('tv.special_report')}</div>
+      <div class="board mono" class:gone={crash < 0.15} style="--cols:{cols};--rows:{Math.max(1, Math.ceil(s.market.length / cols))}">
+        {#each s.market as m, i (m.id)}
+          <div class="tick" style="--i:{i}"><span class="tk">{m.ticker}</span><span class="px">{(m.price * crash).toFixed(2)}</span><span class="ar">▼</span></div>
+        {/each}
+      </div>
+      {#if crash < 0.15}
+        <div class="flash"></div>
+        <h1 class="headline">{t('tv.collapse')}<span class="stamp">{t('brand.gm')}</span></h1>
       {/if}
     </div>
+  {:else if phase === 'podium'}
+    {@const ini = (id: number) => name(id).split(/\s+/).map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase()}
+    <div class="pod">
+      <h2 class="muted">{t('tv.podium')}</h2>
+      <div class="podium">
+        {#each [2, 1, 3] as r (r)}
+          {@const here = shown.filter((p) => p.rank === r)}
+          {#if r > 3 - revealed && here.length}
+            <div class="step r{r}" style="--k:{here.length}">
+              {#if r === 1}
+                <div class="glow"></div>
+                {#each [[4, 10], [90, 4], [2, 30], [96, 16], [18, 6], [80, 8], [6, 62], [94, 58]] as pt, k}
+                  <i class="spark" style="left:{pt[0]}%;top:{pt[1]}%;--k:{k}">✦</i>
+                {/each}
+              {/if}
+              <div class="plist">
+                {#if r === 1}<span class="crown">♛</span>{/if}
+                <div class="names">
+                  {#each here as p, i (p.playerId)}
+                    <div class="pl" style="--d:{0.55 + i * 0.15}s">
+                      <span class="av xl" style="background:{s.players.find((q) => q.id === p.playerId)?.color ?? 'var(--navy-hi)'}">{ini(p.playerId)}</span>
+                      <div class="who">{name(p.playerId)}</div>
+                      <div class="mono gold">{goldTv(p.goldH)}</div>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+              <div class="block mono">{placeLabel(r)}</div>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    </div>
+  {:else if phase === 'done'}
+    <div class="closing">
+      <div class="plate2">
+        <span class="stamp">{t('brand.gm')}</span>
+        <div class="phone"><span class="ring"></span><span class="ring r2"></span><i class="scr"></i></div>
+        <p class="ready">{t('tv.statements_ready')}</p>
+        <div class="fchips">
+          {#each [1, 2, 3] as r (r)}
+            {@const here = f.podium.filter((p) => p.rank === r)}
+            {#if here.length}
+              <div class="fchip"><span class="mono">{placeLabel(r)}</span>{here.map((p) => name(p.playerId)).join(' · ')}</div>
+            {/if}
+          {/each}
+        </div>
+      </div>
+      <div class="bfoot"><b>{t('brand.company')}</b><i>{t('brand.tagline')}</i></div>
+    </div>
+  {:else if slide}
+    {@const ini = (id: number) => name(id).split(/\s+/).map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase()}
+    {@const col = (id: number) => s.players.find((q) => q.id === id)?.color ?? 'var(--navy-hi)'}
+    {#key slide.id}
+      <div class="slide s-{slide.id}">
+        <div class="plate"><i class="ic"></i><h2>{t(`tv.recap.${slide.id}`)}</h2><span class="tag mono">{t('brand.tv')}</span></div>
+        <div class="stage">
+          {#if slide.id === 'hours'}
+            {@const mx = Math.max(1, ...slide.leaders.map((l) => l.hours))}
+            <div class="bars">
+              {#each slide.leaders as l, i (l.playerId)}
+                <div class="brow" style="--d:{0.35 + i * 0.18}s;--w:{(l.hours / mx) * 100}%">
+                  <span class="av xl" style="background:{col(l.playerId)}">{ini(l.playerId)}</span>
+                  <p class="big nm">{name(l.playerId)}</p>
+                  <div class="trk"><i></i></div>
+                  <span class="mono hrs">{l.hours} h</span>
+                </div>
+              {/each}
+            </div>
+          {:else if slide.id === 'achievements'}
+            {@const c = slide.items.length > 5 ? 2 : 1}
+            <div class="ach" style="--c:{c};--rows:{Math.max(1, Math.ceil(slide.items.length / c))}">
+              {#each slide.items as a, i (i)}<p style="--d:{0.3 + i * 0.12}s"><span class="av" style="background:{col(a.playerId)}">{ini(a.playerId)}</span><span>{name(a.playerId)} — <strong>{t(`achievements.${a.type}.name`)}</strong></span></p>{/each}
+            </div>
+          {:else if slide.id === 'top_trade' || slide.id === 'best_investment' || slide.id === 'worst_investment'}
+            {@const bad = slide.id === 'worst_investment'}
+            <div class="hero">
+              <span class="av xl" style="background:{col(slide.playerId)}">{ini(slide.playerId)}</span>
+              <p class="big nm">{name(slide.playerId)}</p>
+              <div class="chipt mono">{slide.ticker}</div>
+              <div class="stat mono" class:up={!bad} class:down={bad}><span class="arw">{bad ? '▼' : '▲'}</span>{bad ? '−' : '+'}{goldTv(bad ? -slide.profitH : slide.profitH)}{#if bad}<span class="stamp">{t('brand.gm')}</span>{/if}</div>
+            </div>
+            <p class="big cap">{slideBody(slide)}</p>
+          {:else if slide.id === 'most_predicted'}
+            <div class="hero">
+              <span class="av xl" style="background:{col(slide.playerId)}">{ini(slide.playerId)}</span>
+              <p class="big nm">{name(slide.playerId)}</p>
+              <div class="stat mono">{slide.votes}</div>
+            </div>
+            <p class="big cap">{slideBody(slide)}</p>
+          {:else if slide.id === 'long_reigns'}
+            <div class="hero"><div class="stat mono">{slide.count}</div></div>
+            <p class="big cap">{slideBody(slide)}</p>
+          {:else if slide.id === 'mood'}
+            <div class="duo">
+              <div class="face" style="--d:0.4s"><span class="av xl" style="background:{col(slide.cheeriest)}">{ini(slide.cheeriest)}</span><span class="emo up">▲</span><p class="big nm">{name(slide.cheeriest)}</p></div>
+              <div class="face" style="--d:0.7s"><span class="av xl" style="background:{col(slide.moodiest)}">{ini(slide.moodiest)}</span><span class="emo down">▼</span><p class="big nm">{name(slide.moodiest)}</p></div>
+            </div>
+            <p class="big cap">{slideBody(slide)}</p>
+          {:else if slide.id === 'espionage'}
+            {@const parts = slideBody(slide).split(' · ')}
+            <div class="tiles">
+              {#each parts as part, i (i)}
+                <div class="tile" style="--d:{0.4 + i * 0.2}s"><b>{part.split(' ')[0]}</b><span>{part.split(' ').slice(1).join(' ')}</span></div>
+              {/each}
+            </div>
+          {:else if slide.id === 'minter'}
+            <div class="hero">
+              <span class="av xl" style="background:{col(slide.playerId)}">{ini(slide.playerId)}</span>
+              <p class="big nm">{name(slide.playerId)}</p>
+              <div class="stat mono">{slide.minted.toLocaleString()}</div>
+            </div>
+            <p class="big cap">{slideBody(slide)}</p>
+          {:else}
+            <p class="big cap">{slideBody(slide)}</p>
+          {/if}
+        </div>
+      </div>
+    {/key}
   {/if}
 </div>
-
-<style>
-  .finale {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    background: var(--bg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    padding: 2rem;
-    font-size: clamp(16px, 1.5vw, 28px);
-    text-align: center;
-  }
-  .report {
-    background: var(--bad);
-    color: #fff;
-    padding: 0.4rem 1.2rem;
-    letter-spacing: 0.3em;
-    font-weight: 700;
-  }
-  .board {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(8em, 1fr));
-    gap: 0.4rem 2rem;
-    color: var(--bad);
-  }
-  .tick {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-  .headline {
-    font-size: 2.4em;
-    max-width: 22em;
-  }
-  .podium {
-    display: flex;
-    align-items: flex-end;
-    gap: 1.5rem;
-  }
-  .step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 9em;
-    gap: 0.3rem;
-  }
-  .block {
-    width: 100%;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    padding: 0.5rem;
-  }
-  .r1 .block {
-    height: 9em;
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .r2 .block {
-    height: 6em;
-  }
-  .r3 .block {
-    height: 4em;
-  }
-  .who {
-    font-size: 1.3em;
-    font-weight: 700;
-  }
-  .gold {
-    color: var(--accent);
-  }
-  .slide h2 {
-    letter-spacing: 0.1em;
-  }
-  .big {
-    font-size: 1.6em;
-  }
-  .ach {
-    max-height: 60vh;
-    overflow: hidden;
-  }
-  .ready {
-    margin-top: 1rem;
-  }
-</style>
