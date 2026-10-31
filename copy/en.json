@@ -111,7 +111,6 @@
     "apps": {
       "wallet": "Wallet",
       "market": "Market",
-      "standings": "Standings",
       "messages": "Messages",
       "feed": "Feed",
       "rules": "Rules",
@@ -138,6 +137,7 @@
     "a2hs_dismiss": "Got it",
     "rejoin_title": "Return to my desk",
     "rejoin_body": "Pick your name. The Compliance Office will verify you.",
+    "leaderboard": "Leaderboard",
     "waiting": "Awaiting Compliance approval…",
     "denied": "Request declined by Compliance.",
     "closed": "Onboarding is closed. Ask the GM.",

@@ -12,7 +12,7 @@
   import MessagesHub from './apps/MessagesHub.svelte';
   import Profile from './apps/Profile.svelte';
   import Rules from './apps/Rules.svelte';
-  import Standings from './apps/Standings.svelte';
+  import Leaderboard from './Leaderboard.svelte';
   import Wallet from './apps/Wallet.svelte';
   import Vote from './apps/Vote.svelte';
   import RiskApp from './apps/RiskApp.svelte';
@@ -33,6 +33,45 @@
   let connected = $state(false);
   let unsub: (() => void)[] = [];
   let app = $state<string | null>(null);
+  // Home-screen pages: home, and the leaderboard one swipe to the right (like the Today view on a real phone).
+  let page = $state<'home' | 'board'>('home');
+  let dragX = $state(0);
+  let swipe: { id: number; x: number; y: number; on: boolean } | null = null;
+  let swiped = false;
+  function swDown(e: PointerEvent) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, on: false };
+    // Window listeners instead of pointer capture: they keep working however the drag ends.
+    window.addEventListener('pointermove', swMove);
+    window.addEventListener('pointerup', swUp);
+    window.addEventListener('pointercancel', swUp);
+  }
+  function swMove(e: PointerEvent) {
+    if (!swipe || e.pointerId !== swipe.id) return;
+    const dx = e.clientX - swipe.x;
+    const dy = e.clientY - swipe.y;
+    if (!swipe.on) {
+      if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+      swipe.on = true;
+    }
+    // Home can only be pulled to the right, the leaderboard only back to the left: no overscroll past either page.
+    dragX = page === 'home' ? Math.max(0, dx) : Math.min(0, dx);
+  }
+  function swUp(e: PointerEvent) {
+    if (!swipe || e.pointerId !== swipe.id) return;
+    window.removeEventListener('pointermove', swMove);
+    window.removeEventListener('pointerup', swUp);
+    window.removeEventListener('pointercancel', swUp);
+    if (swipe.on) {
+      if (page === 'home' && dragX > 60) page = 'board';
+      else if (page === 'board' && dragX < -60) page = 'home';
+      // the click that follows a drag must not open whatever was under the finger
+      swiped = true;
+      setTimeout(() => (swiped = false), 0);
+    }
+    swipe = null;
+    dragX = 0;
+  }
   let now = $state(Date.now());
   const clockTimer = setInterval(() => (now = Date.now()), 1000);
   let poll: ReturnType<typeof setInterval> | null = null;
@@ -43,7 +82,6 @@
     { id: 'risk', icon: '⚔' },
     { id: 'wallet', icon: '◎' },
     { id: 'market', icon: '↗' },
-    { id: 'standings', icon: '≡' },
     { id: 'messages', icon: '✉' },
     { id: 'feed', icon: '☰' },
     { id: 'rules', icon: '§' },
@@ -319,7 +357,6 @@
             {:else if app === 'risk'}<RiskApp {s} />
             {:else if app === 'wallet'}<Wallet {s} />
             {:else if app === 'market'}<Market {s} />
-            {:else if app === 'standings'}<Standings {s} />
             {:else if app === 'messages'}<MessagesHub {s} inboxUnread={unreadMessages} {chatUnread} />
             {:else if app === 'feed'}<Feed {s} />
             {:else if app === 'rules'}<Rules {s} />
@@ -331,6 +368,17 @@
           </div>
         </div>
       {:else}
+        <div
+          class="pager"
+          role="presentation"
+          class:drag={dragX !== 0}
+          style:transform={`translateX(calc(${page === 'board' ? '100%' : '0%'} + ${dragX}px))`}
+          onpointerdown={swDown}
+          onclickcapture={(e) => { if (swiped) { e.stopPropagation(); e.preventDefault(); } }}
+        >
+        <div class="view board">
+          <Leaderboard {s} />
+        </div>
         <div class="view home" in:zoom={{ kind: 'home' }} out:zoom={{ kind: 'home' }}>
           <div class="wd bond">
             <span class="stamp">Approved*<small>*subject to audit</small></span>
@@ -348,9 +396,16 @@
           </div>
           <div class="brand"><b>{t('brand.company')}</b>{t('brand.tagline')}</div>
         </div>
-        <div class="dock" in:dockfx out:dockfx>
-          {#each dockApps as a (a.id)}{@render tile(a)}{/each}
         </div>
+        <div class="dots">
+          <button class="dot" class:on={page === 'board'} aria-label={t('phone.leaderboard')} onclick={() => (page = 'board')}></button>
+          <button class="dot" class:on={page === 'home'} aria-label="Home" onclick={() => (page = 'home')}></button>
+        </div>
+        {#if page === 'home'}
+          <div class="dock" in:dockfx out:dockfx>
+            {#each dockApps as a (a.id)}{@render tile(a)}{/each}
+          </div>
+        {/if}
       {/if}
     </div>
   {/if}
