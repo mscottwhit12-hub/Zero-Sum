@@ -37,6 +37,10 @@ describe('login and roles', () => {
     const plain = await call(t, null, 'POST', '/api/gm/login', { name: 'Boss', password: 'correct horse' });
     expect(plain.statusCode).toBe(200);
     expect(plain.json().gm.deviceType).toBe('laptop');
+    // a session cookie: no Max-Age / Expires, so the GM signs in again after closing the browser
+    const sc = String(([] as string[]).concat(plain.headers['set-cookie'] ?? []).find((c) => c.startsWith('gn_gm=')));
+    expect(sc).toMatch(/^gn_gm=/);
+    expect(sc).not.toMatch(/max-age|expires/i);
     expect((await call(t, null, 'POST', '/api/gm/login', { name: 'Boss', password: 'correct horse', deviceType: 'nonsense' })).json().gm.deviceType).toBe('laptop');
     expect((await call(t, null, 'POST', '/api/gm/login', { name: 'Boss', password: 'wrong' })).statusCode).toBe(401);
     expect((await call(t, null, 'POST', '/api/gm/login', { name: 'Boss', password: 'wrong', deviceType: 'phone' })).statusCode).toBe(401);

@@ -82,7 +82,7 @@ const NIGHT_ACTIONS: Record<string, NightAction> = {
 };
 
 export function registerRoutes(app: FastifyInstance, ctx: Ctx) {
-  const cookieOpts = { path: '/', httpOnly: true, sameSite: 'lax' as const, secure: ctx.config.secureCookies, maxAge: 60 * 60 * 24 * 30 };
+  const cookieOpts = { path: '/', httpOnly: true, sameSite: 'lax' as const, secure: ctx.config.secureCookies }; // no maxAge: a session cookie, so the GM signs in again after closing the browser
   const body = (b: unknown) => (b ?? {}) as Body;
 
   app.get('/api/health', async () => ({ ok: true, time: ctx.now() }));
