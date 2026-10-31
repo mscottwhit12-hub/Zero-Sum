@@ -29,6 +29,41 @@ describe('rejoin from the phone the player joined on', () => {
     const pid = (await call(t, gm, 'POST', `/api/requests/${req.id}/approve`)).json().playerId;
     expect((await call(t, null, 'POST', '/api/join/rejoin', { playerId: pid, phoneId: PHONE })).json().approved).toBe(true);
   });
+  it('a phone a GM approved is trusted from then on (also for players who had no home phone, and for a second phone)', async () => {
+    const t = await makeApp();
+    const { gm } = await liveNight(t, 0, { start: false });
+    const j = (await call(t, null, 'POST', '/api/join', { displayName: 'Ann', ticker: 'ANN', phoneId: PHONE })).json();
+    await call(t, gm, 'POST', '/api/night/start');
+    // a player from before this feature: nothing remembered about their phone
+    t.ctx.db.prepare('DELETE FROM player_phone').run();
+    const LAPTOP = 'laptop-cccccccccccccccc';
+    const first = (await call(t, null, 'POST', '/api/join/rejoin', { playerId: j.playerId, phoneId: LAPTOP })).json();
+    expect(first.approved).toBe(false);
+    const req = (await call(t, gm, 'GET', '/api/night')).json().gm.requests[0];
+    expect((await call(t, gm, 'POST', `/api/requests/${req.id}/approve`)).statusCode).toBe(200);
+    // that laptop now gets back in on its own; another phone still needs approval
+    expect((await call(t, null, 'POST', '/api/join/rejoin', { playerId: j.playerId, phoneId: LAPTOP })).json().approved).toBe(true);
+    expect((await call(t, null, 'POST', '/api/join/rejoin', { playerId: j.playerId, phoneId: PHONE })).json().approved).toBe(false);
+    // approve the second phone too: both work (one player, two trusted phones)
+    const req2 = (await call(t, gm, 'GET', '/api/night')).json().gm.requests.at(-1);
+    await call(t, gm, 'POST', `/api/requests/${req2.id}/approve`);
+    expect((await call(t, null, 'POST', '/api/join/rejoin', { playerId: j.playerId, phoneId: PHONE })).json().approved).toBe(true);
+    expect((await call(t, null, 'POST', '/api/join/rejoin', { playerId: j.playerId, phoneId: LAPTOP })).json().approved).toBe(true);
+    // a denied request trusts nothing
+    const k = (await call(t, null, 'POST', '/api/join/rejoin', { playerId: j.playerId, phoneId: 'stranger-dddddddddddddddd' })).json();
+    expect(k.approved).toBe(false);
+    const req3 = (await call(t, gm, 'GET', '/api/night')).json().gm.requests.at(-1);
+    await call(t, gm, 'POST', `/api/requests/${req3.id}/deny`);
+    expect((await call(t, null, 'POST', '/api/join/rejoin', { playerId: j.playerId, phoneId: 'stranger-dddddddddddddddd' })).json().approved).toBe(false);
+  });
+  it('the migration keeps phones remembered before it existed', async () => {
+    const t = await makeApp();
+    const { gm } = await liveNight(t, 0, { start: false });
+    const j = (await call(t, null, 'POST', '/api/join', { displayName: 'Ann', ticker: 'ANN', phoneId: PHONE })).json();
+    await call(t, gm, 'POST', '/api/night/start');
+    const n = (t.ctx.db.prepare('SELECT COUNT(*) c FROM player_phone WHERE player_id = ?').get(j.playerId) as { c: number }).c;
+    expect(n).toBe(1);
+  });
 });
 
 describe('stale rejoin requests leave the GM list', () => {

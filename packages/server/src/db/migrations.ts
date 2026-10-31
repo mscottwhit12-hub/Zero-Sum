@@ -530,4 +530,12 @@ export const MIGRATIONS: string[] = [
   /* 19 — seat positions: where each seat sits around its table, as fractions (0–1) along the table's edge, clockwise from the top-left. NULL = evenly spaced. */ `
   ALTER TABLE game_table ADD COLUMN seat_pos TEXT;
   `,
+  /* 20 — every phone a player is trusted on (hashed permanent phone ids): the one they joined on, plus any phone a GM approved a rejoin from */ `
+  CREATE TABLE player_phone (
+    player_id INTEGER NOT NULL REFERENCES player(id) ON DELETE CASCADE,
+    phone_hash TEXT NOT NULL,
+    PRIMARY KEY (player_id, phone_hash)
+  );
+  INSERT OR IGNORE INTO player_phone (player_id, phone_hash) SELECT id, home_phone_hash FROM player WHERE home_phone_hash IS NOT NULL;
+  `,
 ];

@@ -68,7 +68,9 @@ export function listGms(ctx: Ctx) {
 }
 
 export function login(ctx: Ctx, input: { name: unknown; password: unknown; deviceType: unknown }): { token: string; auth: GmAuth } {
-  if (!validDevice(input.deviceType)) throw bad('bad_device_type', 'Choose phone or laptop.');
+  // Signing in is a name and a password, nothing about the device. The device type only picks the screen layout
+  // (the client sends what it detects; anything else counts as a laptop) and can be changed on the Devices screen.
+  const deviceType: DeviceType = validDevice(input.deviceType) ? input.deviceType : 'laptop';
   const row = ctx.db
     .prepare('SELECT id, name, role, credential_hash FROM game_master WHERE name = ? AND active = 1')
     .get(String(input.name ?? '').trim()) as { id: number; name: string; role: GmRole; credential_hash: string } | undefined;
@@ -79,11 +81,11 @@ export function login(ctx: Ctx, input: { name: unknown; password: unknown; devic
   const t = ctx.now();
   const r = ctx.db
     .prepare('INSERT INTO gm_session (gm_id, token_hash, device_type, created_at, last_seen) VALUES (?,?,?,?,?)')
-    .run(row.id, hash, input.deviceType, t, t);
-  audit(ctx, { nightId: null, gmId: row.id, action: 'gm.login', entity: 'gm_session', entityId: Number(r.lastInsertRowid), after: { deviceType: input.deviceType } });
+    .run(row.id, hash, deviceType, t, t);
+  audit(ctx, { nightId: null, gmId: row.id, action: 'gm.login', entity: 'gm_session', entityId: Number(r.lastInsertRowid), after: { deviceType: deviceType } });
   return {
     token,
-    auth: { gmId: row.id, name: row.name, role: row.role, sessionId: Number(r.lastInsertRowid), deviceType: input.deviceType, paused: false },
+    auth: { gmId: row.id, name: row.name, role: row.role, sessionId: Number(r.lastInsertRowid), deviceType: deviceType, paused: false },
   };
 }
 

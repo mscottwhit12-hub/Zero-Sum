@@ -30,10 +30,15 @@ describe('first run', () => {
 });
 
 describe('login and roles', () => {
-  it('requires the device type and the right password', async () => {
+  it('signs in with a name and password only (the device type is optional); wrong password is refused', async () => {
     const t = await makeApp();
     await setupMaster(t);
-    expect((await call(t, null, 'POST', '/api/gm/login', { name: 'Boss', password: 'correct horse' })).json().error).toBe('bad_device_type');
+    // no device type needed: it counts as a laptop until the client says otherwise
+    const plain = await call(t, null, 'POST', '/api/gm/login', { name: 'Boss', password: 'correct horse' });
+    expect(plain.statusCode).toBe(200);
+    expect(plain.json().gm.deviceType).toBe('laptop');
+    expect((await call(t, null, 'POST', '/api/gm/login', { name: 'Boss', password: 'correct horse', deviceType: 'nonsense' })).json().gm.deviceType).toBe('laptop');
+    expect((await call(t, null, 'POST', '/api/gm/login', { name: 'Boss', password: 'wrong' })).statusCode).toBe(401);
     expect((await call(t, null, 'POST', '/api/gm/login', { name: 'Boss', password: 'wrong', deviceType: 'phone' })).statusCode).toBe(401);
     const c = await loginAs(t, 'Boss', 'correct horse', 'phone');
     expect((await call(t, c, 'GET', '/api/gm/me')).json().gm).toMatchObject({ name: 'Boss', role: 'master', deviceType: 'phone', paused: false });

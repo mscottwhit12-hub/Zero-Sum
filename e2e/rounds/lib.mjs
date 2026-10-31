@@ -178,7 +178,6 @@ export async function gmSetup(b, s, R, { viaUi = true, deviceType = 'laptop' } =
     await page.getByLabel('Password (8+ characters)').fill('test pass 123');
     await page.getByLabel('Confirm password').fill('test pass 123');
     await page.getByLabel(/Unlock PIN/).fill('1234');
-    await page.getByRole('button', { name: deviceType === 'phone' ? 'Phone' : 'Laptop', exact: true }).click();
     await page.getByRole('button', { name: 'Create Master GM' }).click();
     await page.waitForTimeout(1000);
   } else {

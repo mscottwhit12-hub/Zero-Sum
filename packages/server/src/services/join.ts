@@ -61,6 +61,11 @@ export function cancelRequest(ctx: Ctx, token: unknown): { ok: true; status: 'ca
   return { ok: true, status: 'cancelled' };
 }
 
+/** Trust this phone for this player: their later rejoins from it need no GM. A player can have several phones. */
+const trustPhone = (ctx: Ctx, playerId: number, hash: string | null | undefined) => {
+  if (hash) ctx.db.prepare('INSERT OR IGNORE INTO player_phone (player_id, phone_hash) VALUES (?,?)').run(playerId, hash);
+};
+
 /** Joins open → instant player. Night live → a late-join request awaiting GM approval. */
 export function join(ctx: Ctx, input: JoinInput): { deviceToken: string; player?: PlayerRow; pending: boolean } {
   const info = joinInfo(ctx);
@@ -74,7 +79,7 @@ export function join(ctx: Ctx, input: JoinInput): { deviceToken: string; player?
   const home = phoneHash(input.phoneId);
   if (info.mode === 'join') {
     const r = createPlayer(ctx, { displayName: name, ticker, color: input.color, avatarPath });
-    if (home) ctx.db.prepare('UPDATE player SET home_phone_hash = ? WHERE id = ?').run(home, r.player.id);
+    trustPhone(ctx, r.player.id, home);
     return { deviceToken: r.deviceToken, player: r.player, pending: false };
   }
   dropPendingFromPhone(ctx, n.id, home);
@@ -87,17 +92,17 @@ export function join(ctx: Ctx, input: JoinInput): { deviceToken: string; player?
   return { deviceToken: token, pending: true };
 }
 
-/** Rejoin. From the phone the player joined on, it's approved at once; otherwise a GM approves it. */
+/** Rejoin. From a phone the player is trusted on (the one they joined on, or one a GM approved before), it's approved at once; otherwise a GM approves it, and that phone is trusted from then on. */
 export function requestRejoin(ctx: Ctx, playerId: unknown, phoneId?: unknown): { deviceToken: string; approved: boolean } {
   const n = currentNight(ctx);
   if (!n || n.status === 'ended' || n.status === 'archived' || n.status === 'setup') throw conflict('rejoin_closed');
-  const p = ctx.db.prepare('SELECT id, display_name, home_phone_hash FROM player WHERE id = ? AND night_id = ? AND left_at IS NULL').get(Number(playerId), n.id) as
-    | { id: number; display_name: string; home_phone_hash: string | null }
+  const p = ctx.db.prepare('SELECT id, display_name FROM player WHERE id = ? AND night_id = ? AND left_at IS NULL').get(Number(playerId), n.id) as
+    | { id: number; display_name: string }
     | undefined;
   if (!p) throw notFound('player_not_found');
   const { token, hash } = newToken();
   const home = phoneHash(phoneId);
-  if (home && p.home_phone_hash === home) {
+  if (home && ctx.db.prepare('SELECT 1 FROM player_phone WHERE player_id = ? AND phone_hash = ?').get(p.id, home)) {
     ctx.db.transaction(() => {
       dropPendingFromPhone(ctx, n.id, home);
       ctx.db.prepare('INSERT INTO device (player_id, token_hash, approved_by_gm_id, created_at) VALUES (?,?,NULL,?)').run(p.id, hash, ctx.now());
@@ -159,12 +164,14 @@ export function decideRequest(ctx: Ctx, actor: GmAuth, id: number, approve: bool
     if (approve) {
       if (req.kind === 'rejoin') {
         ctx.db.prepare('INSERT INTO device (player_id, token_hash, approved_by_gm_id, created_at) VALUES (?,?,?,?)').run(req.player_id, req.token_hash, actor.gmId, ctx.now());
+        // The GM vouched for this phone: next time it gets back in without asking.
+        trustPhone(ctx, req.player_id!, j.parse<{ home?: string }>(req.payload, {}).home);
       } else {
         if (n.status !== 'live' && n.status !== 'paused') throw conflict('bad_night_state');
         const x = j.parse<{ displayName: string; ticker: string; color: string | null; avatarPath: string | null; home?: string | null }>(req.payload, {} as never);
         const p = createLatePlayer(ctx, n.id, { displayName: x.displayName, ticker: x.ticker, color: x.color, avatarPath: x.avatarPath }, req.token_hash, actor.gmId);
         playerId = p.id;
-        if (x.home) ctx.db.prepare('UPDATE player SET home_phone_hash = ? WHERE id = ?').run(x.home, p.id);
+        trustPhone(ctx, p.id, x.home);
         ctx.db.prepare('UPDATE device_request SET player_id = ? WHERE id = ?').run(p.id, id);
       }
     }

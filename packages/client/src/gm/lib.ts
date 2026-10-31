@@ -74,3 +74,13 @@ export function confirmStart(s: GmState | null, g: GameInfo): boolean {
   const w = startWarnings(s, g);
   return !w.length || confirm(`${w.join('\n')}\n\nStart ${g.name} anyway?`);
 }
+
+/**
+ * Which GM layout this screen gets: the phone layout on a small touch screen, the laptop layout otherwise.
+ * Signing in never asks; the GM can switch on the Devices screen.
+ */
+export function detectDeviceType(): 'phone' | 'laptop' {
+  if (typeof window === 'undefined') return 'laptop';
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  return window.innerWidth < 640 || (touch && Math.min(window.innerWidth, window.innerHeight) < 700) ? 'phone' : 'laptop';
+}
