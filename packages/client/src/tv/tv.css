@@ -35,6 +35,9 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 /* ============ chrome: same components as the phone (tiles, tags, hairline frames, stamp) ============ */
 .tvroot { --crawl-fs: clamp(30px, 2.5vw, 48px); --crawl-h: calc(var(--crawl-fs) * 1.25 + 1.2rem); --rl: 1.6rem; --rm: 1.1rem; --hair: inset 0 0 0 0.14rem var(--pb, var(--panel)), inset 0 0 0 0.2rem var(--bc, #c9a24a30); }
 .tvroot .tv { height: 100vh; overflow: hidden; display: flex; flex-direction: column; gap: 0.9rem; padding: 1rem 1.2rem calc(var(--crawl-h) + 1.4rem); }
+/* a banner on screen reserves its own row above the crawl, so it never covers the panels */
+.tvroot:has(.banner) .tv { padding-bottom: calc(var(--crawl-h) + 1.4rem + 5.2rem); }
+@media (prefers-reduced-motion: no-preference) { .tvroot .tv { transition: padding-bottom 0.25s ease; } }
 .tvroot .hd { display: flex; align-items: center; gap: 1rem; }
 .tvroot .hd > .row { display: flex; align-items: center; gap: 1rem; }
 .tvroot .hd > .row:last-child { margin-left: auto; }

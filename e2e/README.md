@@ -55,3 +55,6 @@ NODE_PATH=$(npm root -g) node e2e/night/run.mjs e2e/.out/night test-data/packs/c
 ```
 Writes `result.json` (plan, results, issues, console errors, hidden-field leak scan of every frame, latency, final state,
 the GM night export, statements), `events.log` and `shots/`. `SEED=` changes the night. Never point it at a real night's data.
+
+## Last runs
+- Nov 1 (TV theme v7): `seating/run.mjs` 21/21, `seating/seats.mjs` 13/13, `features/run.mjs` 22/22, all with 0 console and server errors. Client svelte-check 0 errors (3 known warnings); `npm test --workspaces` 438 + 136 + 128 + 4.
