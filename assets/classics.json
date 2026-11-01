@@ -85,6 +85,54 @@
       "leadMode": "high",
       "leadLabel": "Victory points",
       "board": "catan"
+    },
+    {
+      "name": "Uno",
+      "minPlayers": 2,
+      "maxPlayers": 10,
+      "defaultDuration": 1,
+      "mode": "competitive",
+      "rerollsAllowed": false,
+      "color": "#e03131",
+      "leadMode": "high",
+      "leadLabel": "Points",
+      "board": "uno"
+    },
+    {
+      "name": "Parcheesi",
+      "minPlayers": 2,
+      "maxPlayers": 4,
+      "defaultDuration": 1.5,
+      "mode": "competitive",
+      "rerollsAllowed": true,
+      "color": "#f08c00",
+      "leadMode": "high",
+      "leadLabel": "Home",
+      "board": "parcheesi"
+    },
+    {
+      "name": "Sorry!",
+      "minPlayers": 2,
+      "maxPlayers": 4,
+      "defaultDuration": 1,
+      "mode": "competitive",
+      "rerollsAllowed": false,
+      "color": "#1c7ed6",
+      "leadMode": "high",
+      "leadLabel": "Home",
+      "board": "sorry"
+    },
+    {
+      "name": "Yahtzee",
+      "minPlayers": 2,
+      "maxPlayers": 8,
+      "defaultDuration": 1,
+      "mode": "competitive",
+      "rerollsAllowed": true,
+      "color": "#c92a2a",
+      "leadMode": "high",
+      "leadLabel": "Score",
+      "board": "yahtzee"
     }
   ]
 }

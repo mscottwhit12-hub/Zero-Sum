@@ -282,6 +282,11 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - Phone fixes 1–4 (`play/phone.css`: Carlito digits, `.wd`/`.big` overflow, 44px Minter buttons, toasts over the dock) and `Rules.svelte`. "Best investment" finale slide dropped (`services/recap.ts`, `phase8.test.ts`).
 - Known: on a floor with tables placed side by side near the plan edge, a seat dot can sit behind the neighbouring table (shared `FloorPlan`, placement data, not theme).
 
+### 4i. Uno, Parcheesi, Sorry!, Yahtzee boards (No, Nov 1)
+- Four boards in `gm/boards/{uno,parcheesi,sorry,yahtzee}`, registered in `boards/index.ts`, classics entries in `assets/classics.json` (all `leadMode: "high"`). Client tests 641 (+203). Browser test `e2e/boards/no2.mjs` (17 checks).
+- **Tate reviewed no rule on Uno, Parcheesi or Sorry!** ("default rules for all of the rest"); their rules are No's/Claude's picks (see each pack's NOTES). Uno: rounds to 500 (setting), live crown. Parcheesi / Sorry!: pawn counts per zone, live crown by pawns home then Home path / Safety. No slides, blockades or board positions.
+- Yahtzee (Tate decided): 13-box sheet, optional live tracking, smart entry, upper bonus 35 at 63, Yahtzee bonus 100, no crown until the game ends, 2–8 players. **Open:** player phone app where players fill their own boxes and the GM approves needs a new claim kind in contract v1.3 plus server support; not built.
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.

@@ -15,6 +15,14 @@ import { def as scrabbleDef } from './scrabble/def';
 import ScrabbleBoard from './scrabble/Board.svelte';
 import { def as catanDef } from './catan/def';
 import CatanBoard from './catan/Board.svelte';
+import { def as unoDef } from './uno/def';
+import UnoBoard from './uno/Board.svelte';
+import { def as parcheesiDef } from './parcheesi/def';
+import ParcheesiBoard from './parcheesi/Board.svelte';
+import { def as sorryDef } from './sorry/def';
+import SorryBoard from './sorry/Board.svelte';
+import { def as yahtzeeDef } from './yahtzee/def';
+import YahtzeeBoard from './yahtzee/Board.svelte';
 
 export interface BoardEntry {
   def: BoardDef<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -29,6 +37,10 @@ export const BOARDS: Record<string, BoardEntry> = {
   clue: { def: clueDef, Board: ClueBoard as unknown as BoardEntry['Board'] },
   scrabble: { def: scrabbleDef, Board: ScrabbleBoard as unknown as BoardEntry['Board'] },
   catan: { def: catanDef, Board: CatanBoard as unknown as BoardEntry['Board'] },
+  uno: { def: unoDef, Board: UnoBoard as unknown as BoardEntry['Board'] },
+  parcheesi: { def: parcheesiDef, Board: ParcheesiBoard as unknown as BoardEntry['Board'] },
+  sorry: { def: sorryDef, Board: SorryBoard as unknown as BoardEntry['Board'] },
+  yahtzee: { def: yahtzeeDef, Board: YahtzeeBoard as unknown as BoardEntry['Board'] },
 };
 
 /** Defaults from the board's def, overridden by the Master's saved values. */
