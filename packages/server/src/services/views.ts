@@ -24,6 +24,7 @@ import { gmChallenges, playerChallenges } from './espionage';
 import { seatingView } from './seating';
 import { boardSettings } from './boards';
 import { chatUnread } from './chat';
+import { musicForGm, musicForTv, getAudioSettings } from './music';
 import { ambientOff, currentAmbient, listSounds } from './sounds';
 import { minterLeaderboard } from './minter';
 import { finale, type Finale } from './recap';
@@ -125,7 +126,7 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
 
 /** TV-only extras (sent to the 'tv' room and GMs, never to players): seating map and ambient loop. */
 export function tvView(ctx: Ctx, st: NightState) {
-  return { seating: seatingView(ctx, st.night.id), ambient: currentAmbient(ctx, st.night.id) };
+  return { seating: seatingView(ctx, st.night.id), ambient: currentAmbient(ctx, st.night.id), music: musicForTv(ctx, st) };
 }
 
 export interface PlayerView extends PublicView {
@@ -266,6 +267,8 @@ export interface GmView extends PublicView {
     boardSettings: Record<string, Record<string, number>>;
     sounds: ReturnType<typeof listSounds>;
     ambient: { current: ReturnType<typeof currentAmbient>; off: boolean };
+    music: ReturnType<typeof musicForGm>;
+    audio: ReturnType<typeof getAudioSettings>;
     prompts: ReturnType<typeof promptsView>;
     /** Tips granted tonight (who, which, why). */
     tips: ReturnType<typeof gmHintLog>;
@@ -316,6 +319,8 @@ export function gmView(ctx: Ctx, st: NightState, base?: PublicView): GmView {
       boardSettings: boardSettings(ctx),
       sounds: listSounds(ctx),
       ambient: { current: currentAmbient(ctx, st.night.id), off: ambientOff(ctx, st.night.id) },
+      music: musicForGm(ctx, st),
+      audio: getAudioSettings(ctx),
       prompts: promptsView(ctx, st.night),
       tips: gmHintLog(ctx, st.night.id),
       handicap: handicapGmView(ctx, st.night, st.players.filter((p) => p.left_at == null).map((p) => p.id)),

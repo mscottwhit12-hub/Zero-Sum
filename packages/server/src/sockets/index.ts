@@ -2,6 +2,7 @@ import type { Server as HttpServer } from 'node:http';
 import { Server, type Socket } from 'socket.io';
 import type { Bus, Ctx } from '../context';
 import { authFromToken, type GmAuth } from '../services/gm';
+import { setNowPlaying } from '../services/music';
 import { playerFromDevice } from '../services/players';
 import { computeNightState, currentNight, getNight, nightMs, type NightState } from '../services/state';
 import { priceHistoryPoints } from '../services/market';
@@ -55,6 +56,25 @@ export function attachSockets(ctx: Ctx, server: HttpServer): { io: Server; bus: 
       socket.join(['public', `player:${role.playerId}`]);
     } else {
       socket.join(['public', 'tv']);
+      // The TV tells the server which music track it started, so the GM console can show it. When the last TV
+      // that reported goes away, "now playing" is cleared (a reload keeps the new connection's own report).
+      let reported = false;
+      // Never let this throw: an uncaught error in a socket handler would take the server down.
+      socket.on('music:now', (d: { trackId?: unknown } | null) => {
+        reported = true;
+        try {
+          setNowPlaying(ctx, d?.trackId);
+        } catch {
+          /* now-playing is only a display hint */
+        }
+      });
+      socket.on('disconnect', () => {
+        try {
+          if (reported && !io.sockets.adapter.rooms.get('tv')?.size) setNowPlaying(ctx, null);
+        } catch {
+          /* ignore */
+        }
+      });
     }
     socket.emit('snapshot', views.snapshot(role));
   });

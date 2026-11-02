@@ -187,7 +187,43 @@ export interface SoundInfo {
   name: string;
   kind: 'ambient' | 'cue' | 'soundboard';
   theme: string | null;
+  /** Lowercase tags; music tracks (kind 'ambient') are picked by them. */
+  tags: string[];
+  credit: string | null;
+  sourceUrl: string | null;
+  license: string | null;
   url: string;
+}
+/** What the TV plays (server → TV). */
+export interface TvMusic {
+  key: string;
+  source: 'off' | 'manual' | 'game' | 'rule' | 'none';
+  tag: string | null;
+  tracks: { id: number; name: string; url: string }[];
+  repeat: boolean;
+  skip: number;
+  volume: number;
+  crossfadeMs: number;
+  duckLevel: number;
+  duckReleaseMs: number;
+}
+export type RuleKey = 'setup' | 'joins_open' | 'live' | 'final_round' | 'paused' | 'ended';
+export interface AudioSettings {
+  volume: number;
+  crossfadeSeconds: number;
+  duckPercent: number;
+  duckReleaseSeconds: number;
+  rules: Record<RuleKey, string>;
+}
+/** The GM console's view of the music. */
+export interface GmMusic {
+  mode: 'off' | 'auto' | 'manual';
+  tags: string[];
+  repeat: boolean;
+  source: 'off' | 'manual' | 'game' | 'rule' | 'none';
+  tag: string | null;
+  matching: number;
+  now: { id: number; name: string; tags: string[] } | null;
 }
 export interface Ambient {
   url: string;
@@ -195,7 +231,7 @@ export interface Ambient {
   gameId: number;
 }
 export interface TvState extends PublicState {
-  tv?: { seating: SeatingTable[]; ambient: Ambient | null };
+  tv?: { seating: SeatingTable[]; ambient: Ambient | null; music: TvMusic };
 }
 export interface RuleEntry {
   id: number;
@@ -226,6 +262,8 @@ export interface GmExtras {
   boardSettings: Record<string, Record<string, number>>;
   sounds: SoundInfo[];
   ambient: { current: Ambient | null; off: boolean };
+  music: GmMusic;
+  audio: AudioSettings;
   prompts: { closeTradingAt: number | null; endNight: boolean; overrun: { gameId: number; name: string; extendMinutes: number } | null };
   tips: { id: number; playerId: number; hintId: string; tier: TipTier; source: string; costH: number; nightMs: number; createdAt: number; read: boolean }[];
   /** Every bet tonight. */

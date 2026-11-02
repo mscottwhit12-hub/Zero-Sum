@@ -15,6 +15,7 @@
   import Sparkline from '@shared/Sparkline.svelte';
   import type { FeedItem, TvState } from '@shared/types';
   import { cueTone } from './tones';
+  import { MusicPlayer } from './music';
   import Finale from './Finale.svelte';
   import './tv.css';
   import TickCountdown from '@shared/TickCountdown.svelte';
@@ -48,15 +49,23 @@
   // ---- audio (browsers need one click first)
   let audioOn = $state(false);
   let actx: AudioContext | null = null;
-  let ambientEl = $state<HTMLAudioElement | null>(null);
+  // Music (tag pools, shuffle, crossfade, ducking) lives in ./music.ts; it reports each track it starts so the GM console can show it.
+  const music = new MusicPlayer((trackId) => live.socket.emit('music:now', { trackId }));
   function enableAudio() {
     actx = new AudioContext();
     audioOn = true;
+    music.enable();
   }
   function playSound(d: { cue?: string; url?: string | null }) {
     if (!audioOn) return;
-    if (d.url) void new Audio(d.url).play().catch(() => {});
-    else if (d.cue && actx) cueTone(actx, d.cue);
+    if (d.url) {
+      const a = new Audio(d.url);
+      const endDuck = music.duckWhile(a);
+      void a.play().catch(endDuck); // a sound that never starts must not leave the music ducked
+    } else if (d.cue && actx) {
+      music.duckFor(2500);
+      cueTone(actx, d.cue);
+    }
   }
 
   let s = $state<TvState | null>(null);
@@ -185,19 +194,12 @@
   ]);
   const headline = $derived(s?.feed?.[0] ? feedText(s.feed[0], s.players, { tv: true }) : '');
 
-  // Ambient loop (per-game theme); silent during intermission.
-  $effect(() => {
-    const el = ambientEl;
-    if (!el) return;
-    const url = audioOn && !paused ? (s?.tv?.ambient?.url ?? null) : null;
-    if (!url) return void el.pause();
-    if (!el.src.endsWith(url)) el.src = url;
-    void el.play().catch(() => {});
-  });
+  // Music: the server picks the tag pool; the player shuffles, crossfades and ducks. Silent until "Enable audio".
+  $effect(() => music.update(s?.tv?.music ?? null));
+  $effect(() => () => music.destroy());
 </script>
 
 <div class="tvroot">
-<audio bind:this={ambientEl} loop preload="none"></audio>
 
 {#if booting}
   <div class="boot mono">

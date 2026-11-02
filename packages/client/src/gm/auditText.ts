@@ -166,6 +166,10 @@ export function describeEntry(e: AuditEntry, names: AuditNames = NO_NAMES): { te
     case 'rule.delete': return done(`${w} deleted the rule “${b.title}”`);
     case 'sound.upload': return done(`${w} uploaded the sound “${a.name}”`);
     case 'sound.delete': return done(`${w} deleted the sound “${b.name}”`);
+    case 'sound.update': return done(`${w} edited the sound “${a.name}”`, [`tags: ${val(b.tags, 'tags')} → ${val(a.tags, 'tags')}`]);
+    case 'sound.pack': return done(`${w} imported the sound pack “${a.pack}”: ${a.added} added, ${list(a.skipped, String) ? 'skipped ' + list(a.skipped, String) : 'none skipped'}`);
+    case 'music.set': return done(`${w} changed the music`, [a.off ? 'stopped' : a.tags ? `playing tags: ${val(a.tags, 'tags')}` : 'auto', ...(a.skip ? ['skipped a track'] : []), `repeat: ${val(a.repeat)}`]);
+    case 'audio.settings': return done(`${w} changed the audio settings`);
     default: {
       const m = /^night\.(\w+)$/.exec(e.action);
       if (m && nightVerb[m[1]!]) return done(`${w} ${nightVerb[m[1]!]}`);

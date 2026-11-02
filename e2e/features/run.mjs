@@ -144,7 +144,7 @@ try {
   await gmRoute(gp, 'sounds'); await sleep(800);
   const wav = Buffer.alloc(2 * 1024 * 1024 + 44);
   wav.write('RIFF', 0); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(8000, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
-  await gp.locator('input[type=file]').setInputFiles({ name: 'big.wav', mimeType: 'audio/wav', buffer: wav });
+  await gp.locator('input[type=file]').first().setInputFiles({ name: 'big.wav', mimeType: 'audio/wav', buffer: wav });
   let sawBar = false;
   const watch = (async () => { for (let i = 0; i < 40 && !sawBar; i++) { sawBar = (await gp.locator('.upbar').count()) > 0; await sleep(50); } })();
   await gp.getByRole('button', { name: 'Upload', exact: true }).click();

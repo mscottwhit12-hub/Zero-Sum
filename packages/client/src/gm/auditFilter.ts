@@ -12,7 +12,7 @@ const typeOf = (action: string): (typeof TYPES)[number] => {
   if (['seat', 'table'].includes(p)) return 'Seating';
   if (['player', 'device', 'hint', 'notify', 'mood', 'handicap', 'espionage', 'wiretap', 'gold', 'bet'].includes(p)) return 'Players';
   if (p === 'market') return 'Market';
-  if (['library', 'rule', 'sound'].includes(p)) return 'Library & rules';
+  if (['library', 'rule', 'sound', 'music', 'audio'].includes(p)) return 'Library & rules';
   return 'GM accounts';
 };
 

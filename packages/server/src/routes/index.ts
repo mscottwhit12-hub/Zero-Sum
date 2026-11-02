@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { buyHint, gmSendHint, readHint, tradeRerollForHint } from '../services/hints';
 import { readGift, setHandicapOffset } from '../services/handicap';
-import { readFileSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { join as joinPath } from 'node:path';
 import { HttpError, notFound, type Ctx } from '../context';
 import { cancelRequest, decideRequest, join, joinInfo, requestRejoin, requestStatus } from '../services/join';
@@ -14,7 +14,9 @@ import { createRule, deleteRule, listRules, updateRule } from '../services/rules
 import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '../services/seating';
 import { createClaim, decideClaim, getBoard, saveBoard, setBoardSettings } from '../services/boards';
 import { chatMessages, gmChatMessages, gmChats, markChatRead, myChats, sendChat, startChat, useWiretap } from '../services/chat';
-import { deleteSound, listSounds, playSound, soundFileMime, uploadSound } from '../services/sounds';
+import { musicAction, setAudioSettings } from '../services/music';
+import { deleteSound, listSounds, parseRange, playSound, soundFileMime, updateSound, uploadSound } from '../services/sounds';
+import { PACK_MAX_MB, importSoundPack } from '../services/soundPack';
 import { minterGet, minterSync } from '../services/minter';
 import { answerOverrun, dismissPrompt } from '../services/prompts';
 import { statement } from '../services/recap';
@@ -382,18 +384,38 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/sounds', async (req) => (requireGm(ctx, req), { sounds: listSounds(ctx) }));
   app.post('/api/sounds', { bodyLimit: 42 * 1024 * 1024 }, async (req) => uploadSound(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
   app.delete<Id>('/api/sounds/:id', async (req) => deleteSound(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id)));
+  app.patch<Id>('/api/sounds/:id', async (req) => updateSound(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
+  // Sound pack: the raw zip as the request body (a zip of audio + manifest.json). Master only.
+  app.addContentTypeParser('application/zip', { parseAs: 'buffer', bodyLimit: PACK_MAX_MB * 1024 * 1024 }, (_req, body, done) => done(null, body));
+  app.post('/api/sounds/pack', { bodyLimit: PACK_MAX_MB * 1024 * 1024 }, async (req) => importSoundPack(ctx, requireGm(ctx, req, { master: true }), req.body));
+  // Music (tag-driven background tracks on the TV) and its audio settings: Master only.
+  app.post('/api/music', async (req) => musicAction(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
+  app.put('/api/audio/settings', async (req) => setAudioSettings(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
   app.post('/api/sounds/play', async (req) => playSound(ctx, requireGm(ctx, req), b(req.body)));
+  // Sound files, with HTTP Range support (Safari needs it; it also lets long tracks start, seek and loop without a full download).
   app.get<{ Params: { file: string } }>('/media/sounds/:file', async (req, reply) => {
     const f = req.params.file;
-    if (!/^[a-f0-9]{24}\.(mp3|ogg|wav|m4a)$/.test(f)) return reply.code(404).send();
+    if (!/^[a-f0-9]{24}\.(mp3|ogg|wav|m4a|flac)$/.test(f)) return reply.code(404).send();
     const mime = soundFileMime(ctx, f);
     if (!mime) return reply.code(404).send();
+    const path = joinPath(ctx.config.mediaDir, 'sounds', f);
+    let size: number;
     try {
-      const data = readFileSync(joinPath(ctx.config.mediaDir, 'sounds', f));
-      return reply.header('content-type', mime).header('cache-control', 'public, max-age=31536000, immutable').send(data);
+      size = statSync(path).size;
     } catch {
       return reply.code(404).send();
     }
+    reply.header('content-type', mime).header('cache-control', 'public, max-age=31536000, immutable').header('accept-ranges', 'bytes');
+    const range = parseRange(req.headers.range, size);
+    if (range === 'invalid') return reply.code(416).header('content-range', `bytes */${size}`).send();
+    if (range) {
+      return reply
+        .code(206)
+        .header('content-range', `bytes ${range.start}-${range.end}/${size}`)
+        .header('content-length', range.end - range.start + 1)
+        .send(createReadStream(path, { start: range.start, end: range.end }));
+    }
+    return reply.header('content-length', size).send(createReadStream(path));
   });
 
   // Phase 7 — NFT Minter (player device; fun only)

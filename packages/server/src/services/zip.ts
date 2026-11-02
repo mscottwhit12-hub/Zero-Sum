@@ -1,4 +1,5 @@
-/** Minimal ZIP writer (stored, no compression; no dependency). Enough for the GM's end-of-night package. */
+/** Minimal ZIP writer (stored, no compression) and reader (stored + deflate); no dependency. The writer builds the GM's end-of-night package; the reader opens sound packs. */
+import { inflateRawSync } from 'node:zlib';
 const TABLE = (() => {
   const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -62,4 +63,80 @@ export function zip(files: { name: string; data: Buffer | string }[]): Buffer {
   end.writeUInt32LE(cd.length, 12);
   end.writeUInt32LE(offset, 16);
   return Buffer.concat([...parts, cd, end]);
+}
+
+export interface ZipEntry {
+  name: string;
+  data: Buffer;
+}
+
+export interface ZipFile {
+  name: string;
+  /** Uncompressed size as the zip declares it. */
+  size: number;
+  /** Decompress this one file (nothing else is touched). Throws zip_corrupt / zip_unsupported. */
+  read(): Buffer;
+}
+
+/**
+ * Index a ZIP without decompressing anything (stored + deflate entries; no ZIP64, no encryption). Folders are skipped.
+ * Throws an Error whose message is a short code: not_a_zip, zip_unsupported, zip_too_many_files, zip_entry_too_large,
+ * zip_corrupt. Names are returned as stored: callers must never use them as filesystem paths. `read()` never inflates
+ * more than `maxEntryBytes`, whatever the zip claims, so a crafted zip cannot balloon memory.
+ */
+export function zipIndex(buf: Buffer, opts: { maxEntries?: number; maxEntryBytes?: number } = {}): ZipFile[] {
+  const maxEntries = opts.maxEntries ?? 500;
+  const maxEntry = opts.maxEntryBytes ?? 64 * 1024 * 1024;
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) throw new Error('not_a_zip');
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  if (count === 0xffff || p === 0xffffffff) throw new Error('zip_unsupported');
+  if (count > maxEntries) throw new Error('zip_too_many_files');
+  const out: ZipFile[] = [];
+  for (let n = 0; n < count; n++) {
+    if (p + 46 > buf.length || buf.readUInt32LE(p) !== 0x02014b50) throw new Error('zip_corrupt');
+    const flags = buf.readUInt16LE(p + 8);
+    const method = buf.readUInt16LE(p + 10);
+    const csize = buf.readUInt32LE(p + 20);
+    const usize = buf.readUInt32LE(p + 24);
+    const nlen = buf.readUInt16LE(p + 28);
+    const elen = buf.readUInt16LE(p + 30);
+    const clen = buf.readUInt16LE(p + 32);
+    const lho = buf.readUInt32LE(p + 42);
+    const name = buf.toString('utf8', p + 46, p + 46 + nlen);
+    p += 46 + nlen + elen + clen;
+    if (name.endsWith('/')) continue;
+    if (flags & 1 || csize === 0xffffffff || usize === 0xffffffff || lho === 0xffffffff) throw new Error('zip_unsupported');
+    if (usize > maxEntry) throw new Error('zip_entry_too_large');
+    out.push({
+      name,
+      size: usize,
+      read() {
+        if (lho + 30 > buf.length || buf.readUInt32LE(lho) !== 0x04034b50) throw new Error('zip_corrupt');
+        const start = lho + 30 + buf.readUInt16LE(lho + 26) + buf.readUInt16LE(lho + 28);
+        if (start + csize > buf.length) throw new Error('zip_corrupt');
+        const raw = buf.subarray(start, start + csize);
+        if (method === 0) return Buffer.from(raw);
+        if (method !== 8) throw new Error('zip_unsupported');
+        try {
+          return inflateRawSync(raw, { maxOutputLength: maxEntry });
+        } catch {
+          throw new Error('zip_corrupt');
+        }
+      },
+    });
+  }
+  return out;
+}
+
+/** Read every file of a ZIP into memory (small zips only; sound packs use zipIndex and read one file at a time). */
+export function unzip(buf: Buffer, opts: { maxEntries?: number; maxEntryBytes?: number } = {}): ZipEntry[] {
+  return zipIndex(buf, opts).map((f) => ({ name: f.name, data: f.read() }));
 }

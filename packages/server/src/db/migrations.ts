@@ -584,4 +584,11 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE leader_tap ADD COLUMN kingfall_fired INTEGER NOT NULL DEFAULT 0;
   UPDATE leader_tap SET kingfall_fired = 1;
   `,
+  /* 23 — music tags and credits on sounds (tags = JSON array of lowercase strings; a legacy ambient theme becomes a tag) */ `
+  ALTER TABLE sound ADD COLUMN tags TEXT;
+  ALTER TABLE sound ADD COLUMN credit TEXT;
+  ALTER TABLE sound ADD COLUMN source_url TEXT;
+  ALTER TABLE sound ADD COLUMN license TEXT;
+  UPDATE sound SET tags = json_array(lower(theme)) WHERE kind = 'ambient' AND theme IS NOT NULL AND theme <> '';
+  `,
 ];
