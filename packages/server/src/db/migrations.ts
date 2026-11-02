@@ -579,4 +579,9 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX bet_night ON bet(night_id, status);
   CREATE INDEX bet_game ON bet(game_id, status);
   `,
+  /* 22 — Kingfall waits 15 s (a GM input mistake can be fixed): leader_tap remembers which tap's Kingfall already fired.
+     Every tap that exists now is marked fired, so nothing that already happened can fire again. */ `
+  ALTER TABLE leader_tap ADD COLUMN kingfall_fired INTEGER NOT NULL DEFAULT 0;
+  UPDATE leader_tap SET kingfall_fired = 1;
+  `,
 ];

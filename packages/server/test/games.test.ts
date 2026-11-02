@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
+import { kingfallStep } from '../src/services/games';
 import { seedLibraryOnce } from '../src/services/library';
 import { computeNightState, currentNight } from '../src/services/state';
 import { gmView, publicView } from '../src/services/views';
@@ -155,6 +156,14 @@ describe('leader taps', () => {
 
     t.clock.advance(16 * 60_000);
     await call(t, gm, 'POST', `/api/games/${game.id}/leader`, { playerId: ids[2] });
+    // The long-reigning king is out of 1st, but the Kingfall waits 15 s in case it was an input mistake.
+    expect(t.ctx.db.prepare('SELECT COUNT(*) c FROM impulse').get()).toEqual({ c: 0 });
+    t.clock.advance(14_000);
+    kingfallStep(t.ctx, n);
+    expect(t.ctx.db.prepare('SELECT COUNT(*) c FROM impulse').get()).toEqual({ c: 0 });
+    t.clock.advance(1_000);
+    kingfallStep(t.ctx, n);
+    kingfallStep(t.ctx, n); // fires once only
     expect(t.ctx.db.prepare("SELECT cause, frac FROM impulse").all()).toEqual([{ cause: 'kingfall', frac: 0.1 }]);
     const st = computeNightState(t.ctx, n.id)!;
     const pub = publicView(t.ctx, st);
@@ -164,6 +173,63 @@ describe('leader taps', () => {
     for (const k of FORBIDDEN_KEYS) expect(JSON.stringify(pub)).not.toContain(k);
     // Same leader again: no-op
     expect((await call(t, gm, 'POST', `/api/games/${game.id}/leader`, { playerId: ids[2] })).json().changed).toBe(false);
+  });
+});
+
+describe('kingfall grace period', () => {
+  const setup = async () => {
+    const { t, gm, ids, game } = await nightWithGame(3, { leadMode: 'manual' });
+    await call(t, gm, 'POST', `/api/games/${game.id}/start`);
+    const tap = (p: number) => call(t, gm, 'POST', `/api/games/${game.id}/leader`, { playerId: p });
+    await tap(ids[0]!);
+    t.clock.advance(20 * 60_000); // a long reign
+    return { t, gm, ids, game, tap, n: currentNight(t.ctx)! };
+  };
+  const spikes = (t: Awaited<ReturnType<typeof setup>>['t']) => (t.ctx.db.prepare("SELECT COUNT(*) c FROM impulse WHERE cause = 'kingfall'").get() as { c: number }).c;
+  const kfFeed = (t: Awaited<ReturnType<typeof setup>>['t']) => (t.ctx.db.prepare("SELECT COUNT(*) c FROM feed_event WHERE message = 'feed.kingfall'").get() as { c: number }).c;
+
+  it('an input mistake fixed inside 15 s: no Kingfall, and the king\'s reign carries on', async () => {
+    const { t, ids, tap, n } = await setup();
+    await tap(ids[1]!); // mistaken entry dethrones the king
+    t.clock.advance(10_000);
+    expect((await tap(ids[0]!)).json()).toMatchObject({ changed: true });
+    t.clock.advance(20_000);
+    kingfallStep(t.ctx, n);
+    expect(spikes(t)).toBe(0);
+    expect(kfFeed(t)).toBe(0);
+    // The reign was never broken: a real dethroning now, 20+ min after the first tap, is a Kingfall (after its own 15 s).
+    await tap(ids[1]!);
+    t.clock.advance(15_000);
+    kingfallStep(t.ctx, n);
+    expect(spikes(t)).toBe(1);
+  });
+
+  it('the king still out of 1st after 15 s: Kingfall fires, even if someone else takes the crown in between', async () => {
+    const { t, ids, tap, n } = await setup();
+    await tap(ids[1]!);
+    t.clock.advance(8_000);
+    await tap(ids[2]!);
+    t.clock.advance(7_000);
+    kingfallStep(t.ctx, n);
+    expect(spikes(t)).toBe(1);
+    expect(kfFeed(t)).toBe(1);
+  });
+
+  it('the king returns after the 15 s: the Kingfall counts even if the tick has not run yet', async () => {
+    const { t, ids, tap } = await setup();
+    await tap(ids[1]!);
+    t.clock.advance(16_000);
+    await tap(ids[0]!); // no kingfallStep ran: the tap settles it first
+    expect(spikes(t)).toBe(1);
+  });
+
+  it('submitting the result does not lose a Kingfall that is still waiting', async () => {
+    const { t, gm, ids, game, tap } = await setup();
+    await tap(ids[1]!);
+    t.clock.advance(3_000);
+    const res = await call(t, gm, 'POST', `/api/games/${game.id}/result`, { actualHours: 1, participants: ids.map((id: number, i: number) => ({ playerId: id, placement: i + 1 })) });
+    expect(res.statusCode).toBe(200);
+    expect(spikes(t)).toBe(1);
   });
 });
 
@@ -191,6 +257,9 @@ describe('score entry', () => {
     expect((await call(t, gm, 'POST', `/api/games/${game.id}/scores`, { scores: [{ playerId: ids[1], score: 3 }] })).json()).toMatchObject({ leaderId: ids[0], changed: false });
     // Overtaken after 20 min: dethroned + hidden kingfall
     expect((await call(t, gm, 'POST', `/api/games/${game.id}/scores`, { scores: [{ playerId: ids[1], score: 5 }] })).json()).toMatchObject({ leaderId: ids[1], changed: true, dethroned: true });
+    expect(t.ctx.db.prepare('SELECT COUNT(*) c FROM impulse').get()).toEqual({ c: 0 }); // waits out the 15 s
+    t.clock.advance(15_000);
+    kingfallStep(t.ctx, n);
     expect(t.ctx.db.prepare('SELECT cause FROM impulse').all()).toEqual([{ cause: 'kingfall' }]);
     expect(t.ctx.db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action = 'game.scores'").get()).toEqual({ c: 3 });
     // Unchanged scores don't write

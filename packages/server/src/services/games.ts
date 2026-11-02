@@ -4,6 +4,8 @@
  */
 import { awardAchievements } from './achievements';
 import {
+  clearPending,
+  dueKingfall,
   EMPTY_CROWN,
   kingfallImpulse,
   leaderFromScores,
@@ -308,6 +310,7 @@ export function submitResult(ctx: Ctx, actor: GmAuth, id: number, input: ResultI
   const now = ctx.now();
   const pausedMs = g.started_at ? pauseOverlapMs(ctx, n.id, g.started_at, now) : 0;
   let recapTo: number[] = [];
+  if (g.status === 'active') settleKingfall(ctx, n, g, true); // the result confirms the final standings: no more waiting
   ctx.db.transaction(() => {
     writeResult(ctx, g, result);
     ctx.db
@@ -370,14 +373,57 @@ function snapshotStandings(ctx: Ctx, nightId: number) {
 
 // ---------------------------------------------------------------- crowns
 
-/** Replays a game's leader taps through the engine to get the current crown. */
-export function crownOf(ctx: Ctx, gameId: number): CrownState {
+/**
+ * Replays a game's leader taps through the engine to get the current crown. Also returns the id of the tap whose Kingfall
+ * is still waiting out its grace period (`pendingTapId`), if any. Taps whose Kingfall already fired are settled.
+ */
+export function crownReplay(ctx: Ctx, gameId: number): { crown: CrownState; pendingTapId: number | null } {
   const settings = nightSettings(currentNight(ctx) ?? (ctx.db.prepare('SELECT n.* FROM night n JOIN game g ON g.night_id = n.id WHERE g.id = ?').get(gameId) as NightRow));
   let crown = EMPTY_CROWN;
-  for (const t of ctx.db.prepare('SELECT player_id, night_ms FROM leader_tap WHERE game_id = ? ORDER BY id').all(gameId) as { player_id: number; night_ms: number }[]) {
+  let pendingTapId: number | null = null;
+  for (const t of ctx.db.prepare('SELECT id, player_id, night_ms, kingfall_fired FROM leader_tap WHERE game_id = ? ORDER BY id').all(gameId) as { id: number; player_id: number; night_ms: number; kingfall_fired: number }[]) {
+    const had = !!crown.pending;
     crown = tapLeader(crown, pid(t.player_id), t.night_ms, settings).state;
+    if (!had && crown.pending) pendingTapId = t.id;
+    if (!crown.pending) pendingTapId = null;
+    if (t.kingfall_fired && crown.pending) {
+      crown = clearPending(crown);
+      pendingTapId = null;
+    }
   }
-  return crown;
+  return { crown, pendingTapId };
+}
+
+export function crownOf(ctx: Ctx, gameId: number): CrownState {
+  return crownReplay(ctx, gameId).crown;
+}
+
+/**
+ * Fires a game's pending Kingfall (hidden crypto spike + GM-only feed item) once the king has stayed out of 1st for the grace
+ * period (`force`: right now, e.g. when the game's result is submitted). Safe to call any time; fires at most once per tap.
+ */
+export function settleKingfall(ctx: Ctx, n: NightRow, g: GameRow, force = false): boolean {
+  const { crown, pendingTapId } = crownReplay(ctx, g.id);
+  if (!crown.pending || pendingTapId === null) return false;
+  const settings = nightSettings(n);
+  if (!force && !dueKingfall(crown, nightMs(ctx, n), settings)) return false;
+  const from = Number(crown.pending.from);
+  const fired = ctx.db.transaction(() => {
+    const r = ctx.db.prepare('UPDATE leader_tap SET kingfall_fired = 1 WHERE id = ? AND kingfall_fired = 0').run(pendingTapId);
+    if (!r.changes) return false;
+    const imp = kingfallImpulse(loadSecurities(ctx, n.id), settings);
+    if (imp) queueImpulse(ctx, n.id, imp);
+    return true;
+  })();
+  if (!fired) return false;
+  pushFeed(ctx, n.id, 'kingfall', 'feed.kingfall', { gameId: g.id, name: g.name, from }, true);
+  ctx.bus.refresh(n.id);
+  return true;
+}
+
+/** Tick-loop step: fires every running game's Kingfall whose grace period is over. */
+export function kingfallStep(ctx: Ctx, n: NightRow): void {
+  for (const g of ctx.db.prepare("SELECT * FROM game WHERE night_id = ? AND status = 'active'").all(n.id) as GameRow[]) settleKingfall(ctx, n, g);
 }
 
 function activeGameFor(ctx: Ctx, gameId: number) {
@@ -390,8 +436,12 @@ function activeGameFor(ctx: Ctx, gameId: number) {
   return { n, g, eligible };
 }
 
-/** Moves the crown (manual tap or score-derived). Dethroning is public; kingfall (a long reign ending) is hidden. */
+/**
+ * Moves the crown (manual tap or score-derived). Dethroning is public. Kingfall (a long reign ending) is hidden and waits out
+ * a grace period first (`settleKingfall`), so a GM's input mistake that is fixed in time costs the king nothing.
+ */
 function setCrown(ctx: Ctx, actor: GmAuth, n: NightRow, g: GameRow, p: number) {
+  settleKingfall(ctx, n, g); // a Kingfall that is already due fires before this tap can change anything
   const before = crownOf(ctx, g.id);
   const at = nightMs(ctx, n);
   const t = tapLeader(before, pid(p), at, nightSettings(n));
@@ -399,13 +449,8 @@ function setCrown(ctx: Ctx, actor: GmAuth, n: NightRow, g: GameRow, p: number) {
   ctx.db.transaction(() => {
     ctx.db.prepare('INSERT INTO leader_tap (game_id, player_id, gm_id, night_ms, created_at) VALUES (?,?,?,?,?)').run(g.id, p, actor.gmId, at, ctx.now());
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.leader', entity: 'game', entityId: g.id, before: { leaderId: before.leaderId }, after: { leaderId: p } });
-    if (t.kingfall) {
-      const imp = kingfallImpulse(loadSecurities(ctx, n.id), nightSettings(n));
-      if (imp) queueImpulse(ctx, n.id, imp);
-    }
   })();
   if (t.dethroned) pushFeed(ctx, n.id, 'dethroned', 'feed.dethroned', { gameId: g.id, name: g.name, from: Number(t.dethroned.from), to: p });
-  if (t.kingfall) pushFeed(ctx, n.id, 'kingfall', 'feed.kingfall', { gameId: g.id, name: g.name, from: Number(t.dethroned!.from) }, true);
   ctx.bus.all('leader:update', { gameId: g.id, leaderId: p });
   return { leaderId: p, changed: true, dethroned: !!t.dethroned };
 }

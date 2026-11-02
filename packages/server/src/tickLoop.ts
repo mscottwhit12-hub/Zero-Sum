@@ -5,6 +5,7 @@ import { runTick, tradingOpen } from './services/market';
 import { computeNightState, currentNight } from './services/state';
 import { voteStep } from './services/votes';
 import { espionageStep } from './services/espionage';
+import { kingfallStep } from './services/games';
 import { minterAdvanceStep, minterCrawlStep } from './services/minter';
 import { recapStep } from './services/recap';
 
@@ -41,6 +42,7 @@ export function tickOnce(ctx: Ctx): boolean {
   voteStep(ctx, n);
   espionageStep(ctx, n);
   handicapStep(ctx, n);
+  kingfallStep(ctx, n);
   if (!tradingOpen(n.status, n.trading_closed)) return false;
   const due = (n.last_tick_at ?? n.started_at) + st.settings.market.tickSeconds * 1000;
   if (ctx.now() < due) return false;
