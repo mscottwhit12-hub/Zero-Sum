@@ -291,6 +291,10 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - Any GM can **Halt** a stock from GM Market (any kind, incl. index/crypto/event). One transaction (`field.ts` `haltSecurity`): every open position (long and short) is closed at the current price with no fee, no impact, no lockout (forced trades, `liquidateAll` with fee 0); the price freezes (`SecurityState.halted`; `tickMarket` keeps it still); nobody can trade it (engine error `halted`, HTTP 409). Holders get a private Compliance message; feed item `feed.stock_halted` becomes a BREAKING banner on the TV and appears on phones (copy in `copy/en.json`). **Relist** (`/api/securities/:id/relist`) resumes it; closed positions stay closed. Both are in the audit log (`market.halt`, `market.relist`).
 - Phone Market shows "· HALTED" and a notice and disables Buy/Short/Sell. Harness `e2e/features/halt.mjs`.
 
+### 4k. Kingfall grace period (QoL, Nov 1)
+- A Kingfall (hidden crypto spike + GM-only feed item) now waits `market.crypto.kingfallGraceSeconds` (15 s) with the king still out of 1st, so a GM input mistake fixed in time costs the king nothing. Engine: `CrownState.pending`, `tapLeader` (no more `kingfall` flag), `dueKingfall`, `clearPending`. If the king retakes 1st inside the window the Kingfall is cancelled and their reign (`since`) is restored.
+- Server: `crownReplay` / `settleKingfall` / `kingfallStep` (tick loop, 1 s) in `games.ts`; `leader_tap.kingfall_fired` (migration 22, all existing taps marked fired). A tap after the window settles first; submitting the game's result fires a waiting Kingfall immediately. The public "dethroned" item is still immediate.
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
