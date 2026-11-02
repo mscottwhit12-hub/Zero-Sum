@@ -59,3 +59,4 @@ the GM night export, statements), `events.log` and `shots/`. `SEED=` changes the
 ## Last runs
 - Nov 1 (TV theme v7): `seating/run.mjs` 21/21, `seating/seats.mjs` 13/13, `features/run.mjs` 22/22, all with 0 console and server errors. Client svelte-check 0 errors (3 known warnings); `npm test --workspaces` 438 + 136 + 128 + 4.
 - Nov 1 (Uno, Parcheesi, Sorry!, Yahtzee): `boards/no2.mjs` 17/17; `boards/clue.mjs` 10/10 and `boards/scrabble.mjs` 8/8 still green. svelte-check 0 errors (3 known warnings); `npm test --workspaces` 641 + 136 + 128 + 4.
+- Nov 1 (stock halt): `features/halt.mjs` 8/8; `features/run.mjs` 22/22. Tests: engine 139, server 130, client 641, 4.
