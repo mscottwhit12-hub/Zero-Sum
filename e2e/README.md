@@ -61,3 +61,5 @@ the GM night export, statements), `events.log` and `shots/`. `SEED=` changes the
 - Nov 1 (Uno, Parcheesi, Sorry!, Yahtzee): `boards/no2.mjs` 17/17; `boards/clue.mjs` 10/10 and `boards/scrabble.mjs` 8/8 still green. svelte-check 0 errors (3 known warnings); `npm test --workspaces` 641 + 136 + 128 + 4.
 - Nov 1 (stock halt): `features/halt.mjs` 8/8; `features/run.mjs` 22/22. Tests: engine 139, server 130, client 641, 4.
 - Nov 1 (Kingfall grace): `features/run.mjs` 22/22, `rounds/r05-gmgames.mjs` 28 checks (known false positive only). Tests: engine 141, server 134, client 641, 4. Headless sim still runs.
+- Nov 1 (GM restyle + 360 fix): `features/run.mjs` 22/22, `boards/clue.mjs` 10/10; every GM screen and board 360 px wide. Tests: client 641, engine 139, server 130, 4.
+- Nov 2 (Soundboard 1): `features/run.mjs` 22/22; scratch check: pack import 2 added / re-import 0, TV plays and reports now playing, Sounds 360 px fits, 0 errors. Tests: client 658, engine 141, server 168, 4.
