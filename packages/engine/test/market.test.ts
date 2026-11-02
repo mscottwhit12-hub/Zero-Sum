@@ -219,3 +219,26 @@ describe('tickMarket', () => {
     expect(tickDead(d, [], S).sec.price).toBeCloseTo(2.95);
   });
 });
+
+describe('halted stock', () => {
+  it('keeps its price through a tick (player stocks, so the index sees the frozen price) while others move', () => {
+    const secs = createSecurities(
+      { players: [{ id: 'a', ticker: 'AAA' }, { id: 'b', ticker: 'BBB' }, { id: 'c', ticker: 'CCC' }] },
+      S,
+    );
+    secs[0] = { ...secs[0]!, halted: true };
+    const ctx = {
+      earned: [{ playerId: 'a', earnedH: 3000 }, { playerId: 'b', earnedH: 2000 }, { playerId: 'c', earnedH: 1000 }],
+      drift: new Map(),
+      mood: new Map(),
+      impulses: [],
+    };
+    let cur = secs;
+    for (let i = 0; i < 3; i++) cur = tickMarket(cur, ctx, S, createRng(1)).securities;
+    expect(cur[0]!.price).toBe(secs[0]!.price);
+    expect(cur[0]!.halted).toBe(true);
+    expect(cur[2]!.price).not.toBe(secs[2]!.price);
+    const rec = tickMarket(cur, ctx, S, createRng(1)).records[0]!;
+    expect(rec.price).toBe(secs[0]!.price);
+  });
+});

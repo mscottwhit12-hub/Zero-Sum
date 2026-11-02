@@ -9,7 +9,7 @@ import { markLeft, overrideTicker, playerFromDevice } from '../services/players'
 import { priceSeries } from '../services/market';
 import { playerBuy, playerCover, playerSell, playerShort } from '../services/trading';
 import { castBallot, openVoteEarly } from '../services/votes';
-import { logReroll, recordMood, sendNotification, setOffset } from '../services/field';
+import { haltSecurity, logReroll, recordMood, relistSecurity, sendNotification, setOffset } from '../services/field';
 import { createRule, deleteRule, listRules, updateRule } from '../services/rules';
 import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '../services/seating';
 import { createClaim, decideClaim, getBoard, saveBoard, setBoardSettings } from '../services/boards';
@@ -349,6 +349,8 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/mood', async (req) => recordMood(ctx, requireGm(ctx, req), b(req.body) as never));
   app.post('/api/rerolls', async (req) => logReroll(ctx, requireGm(ctx, req), b(req.body) as never));
   app.post('/api/notifications', async (req) => sendNotification(ctx, requireGm(ctx, req), b(req.body) as never));
+  app.post<Id>('/api/securities/:id/halt', async (req) => haltSecurity(ctx, requireGm(ctx, req), decodeURIComponent(req.params.id)));
+  app.post<Id>('/api/securities/:id/relist', async (req) => relistSecurity(ctx, requireGm(ctx, req), decodeURIComponent(req.params.id)));
   app.patch<Id>('/api/securities/:id/offset', async (req) => setOffset(ctx, requireGm(ctx, req, { master: true }), decodeURIComponent(req.params.id), b(req.body).offset));
   app.post('/api/challenges', async (req) => createChallenge(ctx, requireGm(ctx, req), b(req.body) as never));
   app.post('/api/tips', async (req) => gmSendHint(ctx, requireGm(ctx, req), b(req.body)));

@@ -25,6 +25,8 @@
   const order = { player: 0, index: 1, crypto: 2, event: 3, dead: 4 } as const;
   const list = $derived([...s.market].sort((a, b) => order[a.kind] - order[b.kind] || securityName(s, a).localeCompare(securityName(s, b))));
   const sec = $derived(s.market.find((m) => m.id === selected) ?? null);
+  // A halted stock can't be traded by anyone (the GM stopped it); the rest of the market is unaffected.
+  const tradable = $derived(open && !sec?.halted);
   const holding = $derived(me.holdings.find((h) => h.securityId === selected && !h.short) ?? null);
   const shortPos = $derived(me.holdings.find((h) => h.securityId === selected && h.short) ?? null);
   const shortUnlocked = $derived(shortPos ? shortPos.lots.filter((l) => l.unlockNms <= nms).reduce((a, l) => a + l.sharesH, 0) : 0);
@@ -126,7 +128,7 @@
         <span class="mono-t">{m.ticker.slice(0, 2)}</span>
         <b>{securityName(s, m)}</b>
         <span class="pr">{price(m.price)}</span>
-        <span class="t">{m.ticker}{m.playerId === me.id ? ' · you' : ''}{h ? ` · ${(h.sharesH / 100).toFixed(2)} sh` : ''}{hs ? ' · short' : ''}</span>
+        <span class="t">{m.ticker}{m.halted ? ' · HALTED' : ''}{m.playerId === me.id ? ' · you' : ''}{h ? ` · ${(h.sharesH / 100).toFixed(2)} sh` : ''}{hs ? ' · short' : ''}</span>
         <span class="ch" class:up={c > 0} class:dn={c < 0} class:flat={c === 0}>{c > 0 ? `▲ +${change(m)}` : c < 0 ? `▼ −${change(m).replace('-', '')}` : '■ 0.0'}%</span>
       </button>
     {/each}
@@ -138,6 +140,7 @@
       <div><h2>{securityName(s, sec)}</h2><span class="muted mono small">{sec.ticker}</span></div>
       <b class="px">{price(sec.price)}</b>
     </div>
+    {#if sec.halted}<p class="notice small">{t('phone.stock_halted')}</p>{/if}
     <Sparkline values={chartValues} width={300} height={70} />
     <div class="ranges" role="group" aria-label={t('phone.chart.aria')}>
       {#each RANGES as r (r.k)}
@@ -166,7 +169,7 @@
       <button class="chip" onclick={() => (amount = maxBuy)}>Max</button>
     </div>
     <p>Fee {Math.round(rules.feeFrac * 100)}% · shares lock for {rules.lockoutMinutes} min · you can invest {gold(me.capRemainingH)} more</p>
-    <button class="primary big" disabled={!open || busy || !amount} onclick={doBuy}>Buy</button>
+    <button class="primary big" disabled={!tradable || busy || !amount} onclick={doBuy}>Buy</button>
   </div>
 
   {#if shortPos}
@@ -176,7 +179,7 @@
       {#each shortPos.lots as l, i (i)}
         <div class="kv"><span>Short {i + 1}: from {price(l.entry ?? 0)}</span><b>{l.unlockNms > nms ? `locked ${mmss(l.unlockNms - nms)}` : 'unlocked'}</b></div>
       {/each}
-      <button class="primary" disabled={!open || busy || shortUnlocked === 0} onclick={doCover}>Close short (unlocked)</button>
+      <button class="primary" disabled={!tradable || busy || shortUnlocked === 0} onclick={doCover}>Close short (unlocked)</button>
     </div>
   {/if}
 
@@ -189,7 +192,7 @@
         {#each [1, 5, 10] as q}<button class="chip" onclick={() => (shortAmount = q)}>{q}</button>{/each}
         <button class="chip" onclick={() => (shortAmount = maxBuy)}>Max</button>
       </div>
-      <button class="big" disabled={!open || busy || !shortAmount} onclick={doShort}>Short</button>
+      <button class="big" disabled={!tradable || busy || !shortAmount} onclick={doShort}>Short</button>
     </div>
   {/if}
 
@@ -198,8 +201,8 @@
       <h3>Sell</h3>
       <div class="row">
         <input type="number" step="any" min="0.01" placeholder="Shares" bind:value={sellShares} style="width:110px" />
-        <button disabled={!open || busy || !sellShares} onclick={() => doSell(false)}>Sell</button>
-        <button class="primary" disabled={!open || busy || unlocked === 0} onclick={() => doSell(true)}>Sell all unlocked ({(unlocked / 100).toFixed(2)})</button>
+        <button disabled={!tradable || busy || !sellShares} onclick={() => doSell(false)}>Sell</button>
+        <button class="primary" disabled={!tradable || busy || unlocked === 0} onclick={() => doSell(true)}>Sell all unlocked ({(unlocked / 100).toFixed(2)})</button>
       </div>
     </div>
   {/if}

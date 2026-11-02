@@ -55,7 +55,7 @@ export interface PublicView {
   };
   players: { id: number; displayName: string; ticker: string; color: string | null; avatarPath: string | null; left: boolean }[];
   standings: { playerId: number; netWorthH: GoldH; rank: number }[];
-  market: { id: string; kind: string; ticker: string; playerId: number | null; price: number; history: number[] }[];
+  market: { id: string; kind: string; ticker: string; playerId: number | null; price: number; history: number[]; halted?: boolean }[];
   games: GameView[];
   /** Market tick the price histories run up to (clients append later ticks from update tails). */
   marketTick: number;
@@ -112,6 +112,7 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
       playerId: s.playerId == null ? null : Number(s.playerId),
       price: s.price,
       history: hist.get(s.id) ?? [s.price],
+      ...(s.halted ? { halted: true } : {}),
     })),
     games: gameViews(ctx, n.id),
     marketTick: n.tick_count,

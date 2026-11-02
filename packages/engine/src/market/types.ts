@@ -21,6 +21,8 @@ export interface SecurityState {
   lastFair?: number;
   /** Player has left the night. Stock stays listed. */
   left?: boolean;
+  /** GM halted trading in this stock (abuse): nobody can trade it, its price is frozen, positions were closed at full value. */
+  halted?: boolean;
   /** Decaying fair for a leaver. */
   leaverFair?: number;
 }

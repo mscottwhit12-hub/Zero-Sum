@@ -111,6 +111,7 @@
     const feed: FeedItem[] = s?.feed ?? [];
     const top = feed[0]?.id ?? 0;
     if (lastFeedId >= 0) for (const f of [...feed].reverse()) if (f.id > lastFeedId && f.message === 'feed.dethroned') pushBanner(feedText(f, s!.players, { tv: true }), 'info');
+      else if (f.id > lastFeedId && (f.message === 'feed.stock_halted' || f.message === 'feed.stock_relisted')) pushBanner(feedText(f, s!.players, { tv: true }), f.message === 'feed.stock_halted' ? 'breaking' : 'info');
     lastFeedId = Math.max(lastFeedId, top);
   });
 

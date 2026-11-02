@@ -37,6 +37,8 @@ export interface Security {
   playerId: number | null;
   price: number;
   history: number[];
+  /** GM halted trading in this stock: it can't be traded and its price is frozen. */
+  halted?: boolean;
 }
 export interface GameInfo {
   id: number;

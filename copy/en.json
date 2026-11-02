@@ -62,6 +62,8 @@
     "game_started": "{name} has opened for business.",
     "game_result": "{name} concluded. {winners} reports a strong quarter.",
     "dethroned": "{to} has dethroned {from} at {name}.",
+    "stock_halted": "BREAKING: {ticker} has been suspended pending a Compliance investigation. Trading is halted and every open position was closed at full value.",
+    "stock_relisted": "{ticker} has been cleared by Compliance and is trading again.",
     "kingfall": "Kingfall: {from}'s long reign at {name} has ended.",
     "correction": "Result restated for {name} by {by}.",
     "joined": "{player} has joined the firm.",
@@ -106,6 +108,7 @@
     "soon": "Opens in a later build."
   },
   "phone": {
+    "stock_halted": "Compliance has halted trading in this stock. It can't be bought, sold or shorted, and its price is frozen.",
     "boot": [
       "BURNER OS v0.9 (unlicensed)",
       "Checking for wiretaps… none found.",
@@ -236,6 +239,7 @@
   },
   "trade_errors": {
     "market_closed": "Trading is closed right now.",
+    "halted": "Trading in this stock has been halted.",
     "rate_limited": "One trade per stock per tick. Try again in a few seconds.",
     "below_minimum": "Minimum trade is 1 gold.",
     "insufficient_gold": "Not enough gold.",

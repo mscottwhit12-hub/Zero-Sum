@@ -44,6 +44,7 @@ export interface TradeRecord {
 
 export type TradeError =
   | 'market_closed'
+  | 'halted'
   | 'rate_limited'
   | 'below_minimum'
   | 'insufficient_gold'
@@ -72,7 +73,8 @@ export function fillPrice(security: SecurityState, side: 'buy' | 'sell', setting
   return security.price * (side === 'buy' ? 1 + slip : 1 - slip);
 }
 
-function gateCheck(g: TradeGate): Fail | null {
+function gateCheck(g: TradeGate, security?: SecurityState): Fail | null {
+  if (security?.halted) return { ok: false, error: 'halted' };
   if (!g.marketOpen) return { ok: false, error: 'market_closed' };
   if (g.lastTradeTick != null && g.lastTradeTick === g.tick) return { ok: false, error: 'rate_limited' };
   return null;
@@ -106,7 +108,7 @@ export type BuyResult = { ok: true; lot: Lot; trade: TradeRecord; impulse: Impul
  * so the charge is ≤ the requested amount. Cost basis includes the fee.
  */
 export function buy(input: BuyInput, settings: Settings): BuyResult {
-  const g = gateCheck(input.gate);
+  const g = gateCheck(input.gate, input.security);
   if (g) return g;
   const m = settings.market;
   if (input.goldH < toH(m.minTrade)) return { ok: false, error: 'below_minimum' };
@@ -155,7 +157,7 @@ export function unlockedSharesH(lots: Lot[], now: number): SharesH {
 
 /** Sell FIFO across unlocked lots. Cost basis is removed pro rata per lot. Returns updated lots (emptied lots removed). */
 export function sell(input: SellInput, settings: Settings): SellResult {
-  const g = gateCheck(input.gate);
+  const g = gateCheck(input.gate, input.security);
   if (g) return g;
   const now = input.gate.now;
   const mine = input.lots.filter((l) => l.playerId === input.playerId && l.securityId === input.security.id && l.sharesH > 0 && !l.short);
@@ -268,7 +270,7 @@ export interface ShortInput {
  */
 export function openShort(input: ShortInput, settings: Settings): BuyResult {
   if (input.security.kind === 'player' && input.security.playerId === input.playerId) return { ok: false, error: 'own_stock' };
-  const g = gateCheck(input.gate);
+  const g = gateCheck(input.gate, input.security);
   if (g) return g;
   const m = settings.market;
   if (input.goldH < toH(m.minTrade)) return { ok: false, error: 'below_minimum' };
@@ -303,7 +305,7 @@ export function openShort(input: ShortInput, settings: Settings): BuyResult {
 
 /** Close (cover) a short FIFO across unlocked short lots: paid out at each lot's inverse value minus the fee. */
 export function coverShort(input: SellInput, settings: Settings): SellResult {
-  const g = gateCheck(input.gate);
+  const g = gateCheck(input.gate, input.security);
   if (g) return g;
   const now = input.gate.now;
   const mine = input.lots.filter((l) => l.playerId === input.playerId && l.securityId === input.security.id && l.sharesH > 0 && l.short);

@@ -166,12 +166,13 @@ export function loadSecurities(ctx: Ctx, nightId: number): SecurityState[] {
       lastFair: st.lastFair,
       left: st.left,
       leaverFair: st.leaverFair,
+      ...(st.halted ? { halted: true } : {}),
     };
   });
 }
 
 export function securityStateJson(s: SecurityState): string {
-  return j.str({ driver: s.driver ?? null, baseline: s.baseline, noise: s.noise, lastFair: s.lastFair, left: s.left, leaverFair: s.leaverFair });
+  return j.str({ driver: s.driver ?? null, baseline: s.baseline, noise: s.noise, lastFair: s.lastFair, left: s.left, leaverFair: s.leaverFair, halted: s.halted ? true : undefined });
 }
 
 export function upsertSecurities(ctx: Ctx, nightId: number, secs: SecurityState[]): void {

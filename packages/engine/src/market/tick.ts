@@ -29,6 +29,9 @@ export interface TickResult {
   records: PriceRecord[];
 }
 
+/** A halted stock stays where the GM halted it: no model, drift or impulse moves it any more. */
+const frozen = (sec: SecurityState, r: { sec: SecurityState; record: PriceRecord }) => ({ sec: { ...sec }, record: { ...r.record, price: sec.price } });
+
 /** One market tick for every security. Pure apart from the passed RNG. */
 export function tickMarket(securities: SecurityState[], ctx: TickContext, settings: Settings, rng: Rng): TickResult {
   const s = settings.market;
@@ -46,20 +49,18 @@ export function tickMarket(securities: SecurityState[], ctx: TickContext, settin
   for (const sec of securities) {
     if (sec.kind !== 'player') continue;
     const pid = sec.playerId!;
-    out.set(
-      sec.id,
-      tickPlayer(
-        sec,
-        {
-          fair: fair.get(pid),
-          drift: sec.left ? 0 : ctx.drift.get(pid) ?? 0,
-          mood: sec.left ? 0 : ctx.mood.get(pid) ?? 0,
-          live: sec.left ? 0 : ctx.live?.get(pid) ?? 0,
-          impulses: imp(sec.id),
-        },
-        settings,
-      ),
+    const r = tickPlayer(
+      sec,
+      {
+        fair: fair.get(pid),
+        drift: sec.left ? 0 : ctx.drift.get(pid) ?? 0,
+        mood: sec.left ? 0 : ctx.mood.get(pid) ?? 0,
+        live: sec.left ? 0 : ctx.live?.get(pid) ?? 0,
+        impulses: imp(sec.id),
+      },
+      settings,
     );
+    out.set(sec.id, sec.halted ? frozen(sec, r) : r);
   }
   const playerPrices = [...out.values()].map((r) => r.sec.price);
   for (const sec of securities) {
@@ -68,6 +69,7 @@ export function tickMarket(securities: SecurityState[], ctx: TickContext, settin
     else if (sec.kind === 'event') out.set(sec.id, tickEvent(sec, imp(sec.id), settings));
     else if (sec.kind === 'dead') out.set(sec.id, tickDead(sec, imp(sec.id), settings));
   }
+  for (const sec of securities) if (sec.halted) out.set(sec.id, frozen(sec, out.get(sec.id)!));
   // Preserve input order.
   const res = securities.map((sec) => out.get(sec.id)!);
   return { securities: res.map((r) => r.sec), records: res.map((r) => r.record) };

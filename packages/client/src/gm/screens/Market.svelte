@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { patch } from '@shared/api';
+  import { patch, post } from '@shared/api';
   import { feedText } from '@shared/feedText';
   import Sparkline from '@shared/Sparkline.svelte';
   import TickCountdown from '@shared/TickCountdown.svelte';
@@ -11,6 +11,11 @@
   const stock = $derived(new Map((gs?.gm?.stocks ?? []).map((s) => [s.securityId, s])));
   let draft = $state<Record<string, number | ''>>({});
   const setOffset = (id: string, v: number) => run(() => patch(`/api/securities/${encodeURIComponent(id)}/offset`, { offset: v }), 'Offset saved');
+  const halt = (m: { id: string; ticker: string }) =>
+    confirm(`Halt trading in ${m.ticker}?\n\nEvery open position in it (shares and shorts) is closed now at the current price with no fee, the price freezes, and nobody can trade it. An alert goes to the TV and phones. Holders are told.`) &&
+    run(() => post(`/api/securities/${encodeURIComponent(m.id)}/halt`), `${m.ticker} halted`);
+  const relist = (m: { id: string; ticker: string }) =>
+    confirm(`Relist ${m.ticker}? Trading and price moves resume. Positions closed by the halt stay closed.`) && run(() => post(`/api/securities/${encodeURIComponent(m.id)}/relist`), `${m.ticker} relisted`);
   const kingfalls = $derived((gs?.gm?.feed ?? []).filter((f) => f.message === 'feed.kingfall'));
   const pct = (b: number) => `${b >= 0 ? '+' : '−'}${Math.abs(b * 100).toFixed(1)}%`;
 </script>
@@ -20,7 +25,7 @@
   <p class="small muted">Offsets (Master, player stocks only) shift fair value in band units (±0.50 max) until cleared. Players never see them.</p>
   <div class="scroll-x">
     <table>
-      <thead><tr><th>Ticker</th><th>Kind</th><th>Price</th><th></th><th>Mood</th><th>Offset</th></tr></thead>
+      <thead><tr><th>Ticker</th><th>Kind</th><th>Price</th><th></th><th>Mood</th><th>Offset</th><th>Trading</th></tr></thead>
       <tbody>
         {#each gs?.market ?? [] as m (m.id)}
           {@const x = stock.get(m.id)}
@@ -41,6 +46,13 @@
                 {:else}
                   <span class="mono small">{x.gmOffset.toFixed(2)}</span>
                 {/if}
+              {/if}
+            </td>
+            <td>
+              {#if m.halted}
+                <span class="small bad">Halted</span> <button onclick={() => relist(m)}>Relist</button>
+              {:else}
+                <button class="danger" onclick={() => halt(m)}>Halt…</button>
               {/if}
             </td>
           </tr>

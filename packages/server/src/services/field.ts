@@ -1,12 +1,12 @@
 /** Field actions (Master or Sub): mood rounds, re-roll logging, notifications. Plus Master-only GM price offsets. */
-import { centeredMood, moodBiasMap, rerollImpulse } from '@gn/engine';
+import { centeredMood, liquidateAll, moodBiasMap, rerollImpulse } from '@gn/engine';
 import { j } from '../db';
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit } from './audit';
 import { pushFeed } from './feed';
 import type { GmAuth } from './gm';
 import { moodReadings, queueImpulse } from './market';
-import { currentNight, loadSecurities, nightSettings, pid, type NightRow } from './state';
+import { currentNight, loadLots, loadSecurities, nightSettings, pid, securityStateJson, type NightRow } from './state';
 
 function liveNight(ctx: Ctx): NightRow {
   const n = currentNight(ctx);
@@ -152,3 +152,69 @@ export function setOffset(ctx: Ctx, actor: GmAuth, securityId: string, offset: u
 
 export const securityIdOf = (playerId: number) => `p:${playerId}`;
 export { pid };
+
+// ---------------------------------------------------------------- halting a stock (any GM)
+
+const goldText = (h: number) => (h / 100).toFixed(2);
+
+/**
+ * Halts trading in one stock (players found a way to abuse it). In one transaction: every open position in it
+ * (shares and shorts) is closed at the current price with no fee, no impact and no lockout ("100% value"; recorded as
+ * forced trades), its price is frozen and nobody can trade it. Holders get a private message, and a public feed item
+ * ("feed.stock_halted") carries the story to the TV and phones. `relistSecurity` undoes the halt (positions stay closed).
+ */
+export function haltSecurity(ctx: Ctx, actor: GmAuth, securityId: string) {
+  const n = currentNight(ctx);
+  if (!n) throw notFound('no_night');
+  if (n.status !== 'live' && n.status !== 'paused') throw conflict('bad_state', 'A stock can only be halted while the night is running.');
+  const sec = loadSecurities(ctx, n.id).find((s) => s.id === securityId);
+  if (!sec) throw notFound('security_not_found');
+  if (sec.halted) throw conflict('already_halted', `${sec.ticker} is already halted.`);
+  const lots = loadLots(ctx, n.id).filter((l) => l.securityId === securityId);
+  const closed = liquidateAll(lots, new Map([[securityId, sec.price]]), 0);
+  const now = ctx.now();
+  ctx.db.transaction(() => {
+    const ins = ctx.db.prepare(
+      'INSERT INTO trade (night_id, player_id, security_id, side, shares_h, price, cash_h, fee_h, basis_h, forced, tick, created_at, short) VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?)',
+    );
+    for (const c of closed) ins.run(n.id, Number(c.playerId), c.securityId, c.side, c.sharesH, c.price, c.cashH, c.feeH, c.basisH ?? null, n.tick_count, now, c.short ? 1 : 0);
+    ctx.db.prepare('DELETE FROM lot WHERE night_id = ? AND security_id = ?').run(n.id, securityId);
+    ctx.db.prepare('UPDATE security SET state = ? WHERE night_id = ? AND id = ?').run(securityStateJson({ ...sec, halted: true }), n.id, securityId);
+    audit(ctx, {
+      nightId: n.id,
+      gmId: actor.gmId,
+      action: 'market.halt',
+      entity: 'security',
+      entityId: securityId,
+      before: { halted: false },
+      after: { halted: true, ticker: sec.ticker, price: sec.price, positions: closed.length, paidH: closed.reduce((a, c) => a + c.cashH, 0) },
+    });
+    const msg = ctx.db.prepare("INSERT INTO notification (night_id, target, message, sent_by_gm_id, read_by, created_at) VALUES (?,?,?,?, '[]', ?)");
+    for (const c of closed) {
+      const what = c.short ? 'short position' : 'shares';
+      msg.run(n.id, `player:${Number(c.playerId)}`, `Compliance has halted trading in ${sec.ticker}. Your ${what} were closed at full value (${goldText(c.cashH)} gold, no fee).`, actor.gmId, now);
+    }
+  })();
+  pushFeed(ctx, n.id, 'market', 'feed.stock_halted', { ticker: sec.ticker, securityId });
+  for (const c of closed) ctx.bus.player(Number(c.playerId), 'notify:player', {});
+  ctx.bus.refresh(n.id);
+  return { securityId, ticker: sec.ticker, positionsClosed: closed.length };
+}
+
+/** Lifts a halt (a misclick, or the problem is fixed). Positions closed by the halt stay closed; the price starts moving again. */
+export function relistSecurity(ctx: Ctx, actor: GmAuth, securityId: string) {
+  const n = currentNight(ctx);
+  if (!n) throw notFound('no_night');
+  if (n.status !== 'live' && n.status !== 'paused') throw conflict('bad_state', 'A stock can only be relisted while the night is running.');
+  const sec = loadSecurities(ctx, n.id).find((s) => s.id === securityId);
+  if (!sec) throw notFound('security_not_found');
+  if (!sec.halted) throw conflict('not_halted', `${sec.ticker} is not halted.`);
+  ctx.db.transaction(() => {
+    const { halted: _h, ...rest } = sec;
+    ctx.db.prepare('UPDATE security SET state = ? WHERE night_id = ? AND id = ?').run(securityStateJson(rest), n.id, securityId);
+    audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'market.relist', entity: 'security', entityId: securityId, before: { halted: true }, after: { halted: false } });
+  })();
+  pushFeed(ctx, n.id, 'market', 'feed.stock_relisted', { ticker: sec.ticker, securityId });
+  ctx.bus.refresh(n.id);
+  return { securityId, ticker: sec.ticker };
+}

@@ -10,6 +10,7 @@ import { computeNightState, currentNight, nightMs, pid, type PlayerRow } from '.
 
 const MESSAGES: Record<TradeError, string> = {
   market_closed: 'Trading is closed right now.',
+  halted: 'Trading in this stock has been halted.',
   rate_limited: 'One trade per stock per market tick. Try again in a few seconds.',
   below_minimum: 'Minimum trade is 1 gold.',
   insufficient_gold: 'Not enough gold.',
@@ -20,7 +21,7 @@ const MESSAGES: Record<TradeError, string> = {
   own_stock: "You can't short your own stock.",
 };
 
-const tradeError = (e: TradeError) => new HttpError(e === 'market_closed' ? 409 : 400, e, MESSAGES[e]);
+const tradeError = (e: TradeError) => new HttpError(e === 'market_closed' || e === 'halted' ? 409 : 400, e, MESSAGES[e]);
 
 function context(ctx: Ctx, player: PlayerRow, securityId: unknown) {
   const n = currentNight(ctx);

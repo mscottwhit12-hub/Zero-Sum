@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buy, capRemainingH, liquidateAll, sell, type Lot, type SecurityState, type TradeGate } from '../src';
+import { buy, capRemainingH, coverShort, liquidateAll, openShort, sell, type Lot, type SecurityState, type TradeGate } from '../src';
 import { spec } from './fixtures';
 
 const S = spec();
@@ -130,5 +130,21 @@ describe('liquidateAll', () => {
     // A bought at 50, B at 40; at 45: A −1.00, B +1.00 → net 0 → no fee
     const t = liquidateAll(lots, new Map([['x', 45]]), 0.1);
     expect(t[0]).toMatchObject({ cashH: 1800, feeH: 0 });
+  });
+});
+
+describe('halted stock', () => {
+  const halted = { ...sec(50), halted: true };
+  it('refuses buy, sell, short and cover, even with the market open and nothing else wrong', () => {
+    const lots = [lot('o', 20, 1000, 0)];
+    expect(buy({ playerId: 'a', security: halted, goldH: 1000, cashH: 2000, lots: [], gate, lotId: 'l' }, S)).toEqual({ ok: false, error: 'halted' });
+    expect(sell({ playerId: 'a', security: halted, sharesH: 'all', lots, gate: { ...gate, now: 10 * MIN } }, S)).toEqual({ ok: false, error: 'halted' });
+    expect(openShort({ playerId: 'a', security: halted, goldH: 1000, cashH: 2000, lots: [], gate, lotId: 'l' }, S)).toEqual({ ok: false, error: 'halted' });
+    expect(coverShort({ playerId: 'a', security: halted, sharesH: 'all', lots: [], gate }, S)).toEqual({ ok: false, error: 'halted' });
+  });
+  it('closing at full value: liquidateAll with no fee pays shares × price and ignores the lockout', () => {
+    const r = liquidateAll([lot('o', 20, 1000, 0)], new Map([['x', 80]]), 0);
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ side: 'sell', sharesH: 20, cashH: 1600, feeH: 0, forced: true });
   });
 });

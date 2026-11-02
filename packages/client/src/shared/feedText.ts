@@ -13,6 +13,7 @@ export function feedText(f: FeedItem, players: PlayerInfo[], opts: { tv?: boolea
     by: String(d.by ?? ''),
     player: name(d.playerId),
     gold: typeof d.goldH === 'number' ? (opts.tv ? signedGoldTv(d.goldH) : signedGold(d.goldH)) : '',
+    ticker: String(d.ticker ?? ''),
     reason: String(d.reason ?? ''),
     quarter: String(d.quarter ?? ''),
     correct: String(d.correct ?? 0),
