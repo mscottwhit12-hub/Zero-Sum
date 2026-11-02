@@ -18,6 +18,8 @@ import {
   rankBy,
   resolveQuarter,
   resolveSettings,
+  clearPending,
+  dueKingfall,
   tapLeader,
   tradingClosePromptAt,
   validateSettings,
@@ -162,15 +164,37 @@ describe('mood', () => {
 });
 
 describe('kingfall', () => {
-  it('dethrone after <15 min = no kingfall; after ≥15 min = kingfall', () => {
+  const GRACE = S.market.crypto.kingfallGraceSeconds * 1000;
+  it('a reign under the hold time never makes a Kingfall; a long one waits out the grace period', () => {
     let t = tapLeader(EMPTY_CROWN, 'a', 0, S);
-    expect(t).toMatchObject({ dethroned: null, kingfall: false });
+    expect(t).toMatchObject({ dethroned: null });
+    expect(t.state.pending).toBeUndefined();
     t = tapLeader(t.state, 'b', 10 * MIN, S);
-    expect(t).toMatchObject({ dethroned: { from: 'a', to: 'b' }, kingfall: false });
+    expect(t).toMatchObject({ dethroned: { from: 'a', to: 'b' } });
+    expect(t.state.pending).toBeUndefined(); // held 10 min < 15
     const same = tapLeader(t.state, 'b', 20 * MIN, S);
     expect(same.state.since).toBe(10 * MIN);
-    t = tapLeader(t.state, 'c', 25 * MIN, S);
-    expect(t).toMatchObject({ dethroned: { from: 'b', to: 'c' }, kingfall: true });
+    t = tapLeader(t.state, 'c', 25 * MIN, S); // b held 15 min
+    expect(t).toMatchObject({ dethroned: { from: 'b', to: 'c' } });
+    expect(t.state.pending).toEqual({ from: 'b', since: 10 * MIN, at: 25 * MIN });
+    expect(dueKingfall(t.state, 25 * MIN + GRACE - 1, S)).toBeNull();
+    expect(dueKingfall(t.state, 25 * MIN + GRACE, S)).toEqual({ from: 'b', at: 25 * MIN });
+    expect(dueKingfall(clearPending(t.state), 25 * MIN + GRACE, S)).toBeNull();
+  });
+  it('the king back inside the grace period cancels it and keeps their reign; back too late does not', () => {
+    let t = tapLeader(EMPTY_CROWN, 'a', 0, S);
+    t = tapLeader(t.state, 'b', 20 * MIN, S);
+    const back = tapLeader(t.state, 'a', 20 * MIN + GRACE - 1, S);
+    expect(back.state).toEqual({ leaderId: 'a', since: 0 });
+    expect(back.dethroned).toEqual({ from: 'b', to: 'a' });
+    const late = tapLeader(t.state, 'a', 20 * MIN + GRACE, S);
+    expect(late.state.since).toBe(20 * MIN + GRACE);
+  });
+  it('the king stays out while others swap the crown: still pending', () => {
+    let t = tapLeader(EMPTY_CROWN, 'a', 0, S);
+    t = tapLeader(t.state, 'b', 20 * MIN, S);
+    t = tapLeader(t.state, 'c', 20 * MIN + 5000, S);
+    expect(t.state.pending).toEqual({ from: 'a', since: 0, at: 20 * MIN });
   });
 });
 

@@ -107,6 +107,8 @@ export interface Settings {
       startFrac: number;
       kingfallFrac: number;
       kingfallHoldMinutes: number;
+      /** The dethroned king must stay out of 1st this long before the Kingfall counts (a GM's input mistake can be fixed in time). */
+      kingfallGraceSeconds: number;
     };
     event: {
       startFrac: number;
@@ -273,6 +275,7 @@ export const DEFAULT_SETTINGS: Settings = {
       startFrac: 0.25,
       kingfallFrac: 0.1,
       kingfallHoldMinutes: 15,
+      kingfallGraceSeconds: 15,
     },
     event: { startFrac: 0.35, floorFrac: 0.1, decay: 0.005, bump: 0.08, reversion: 0.1 },
     dead: { baselineFrac: 0.05, reversion: 0.02 },
@@ -397,6 +400,7 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   frac(m.crypto.startFrac, 'market.crypto.startFrac');
   frac(m.crypto.kingfallFrac, 'market.crypto.kingfallFrac');
   nonNeg(m.crypto.kingfallHoldMinutes, 'market.crypto.kingfallHoldMinutes');
+  nonNeg(m.crypto.kingfallGraceSeconds, 'market.crypto.kingfallGraceSeconds');
   frac(m.event.startFrac, 'market.event.startFrac');
   frac(m.event.floorFrac, 'market.event.floorFrac');
   frac(m.event.decay, 'market.event.decay');

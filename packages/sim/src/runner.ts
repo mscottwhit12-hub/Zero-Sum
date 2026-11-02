@@ -19,6 +19,8 @@ import {
   scoreGame,
   indexExtra,
   type IndexGame,
+  clearPending,
+  dueKingfall,
   tapLeader,
   tickMarket,
   toH,
@@ -315,12 +317,13 @@ export function runNight(opts: NightOptions, settings: Settings): NightMetrics {
         const t = tapLeader(g.crown, pick, w.tick * tickMs, settings);
         g.crown = t.state;
         if (t.dethroned) w.dethroned.push({ tick: w.tick, playerId: t.dethroned.from });
-        if (t.kingfall) {
-          kingfalls++;
-          const imp = kingfallImpulse(w.securities, settings);
-          if (imp) w.impulses.push(imp);
-        }
         g.nextTapTick = w.tick + minToTick(rng.int(8, 20));
+      }
+      if (dueKingfall(g.crown, w.tick * tickMs, settings)) {
+        g.crown = clearPending(g.crown);
+        kingfalls++;
+        const imp = kingfallImpulse(w.securities, settings);
+        if (imp) w.impulses.push(imp);
       }
       if (g.rerollTick === w.tick) {
         for (const pp of g.result.participants) {

@@ -1,31 +1,50 @@
 import type { Settings } from './settings';
 
-/** Per active game. `since` is night-clock ms. */
+/**
+ * Per active game. `since` is night-clock ms.
+ * `pending`: a king who held the crown long enough for a Kingfall was just displaced (`at`, night-clock ms). The Kingfall only
+ * counts if they are still out of 1st after the grace period; if they get the crown back inside it, the take-over is treated as
+ * an input mistake: no Kingfall, and their reign carries on from `since` as if nothing happened.
+ */
 export interface CrownState {
   leaderId: string | null;
   since: number;
+  pending?: { from: string; since: number; at: number };
 }
 
 export interface TapResult {
   state: CrownState;
   /** Public: "dethroned" feed event when the leader changes. */
   dethroned: { from: string; to: string } | null;
-  /** Hidden: previous leader held ≥ hold time and was displaced → crypto spike. */
-  kingfall: boolean;
 }
 
 export const EMPTY_CROWN: CrownState = { leaderId: null, since: 0 };
 
+const graceMs = (settings: Settings) => settings.market.crypto.kingfallGraceSeconds * 1000;
+
 export function tapLeader(state: CrownState, playerId: string, now: number, settings: Settings): TapResult {
-  if (state.leaderId === playerId) return { state, dethroned: null, kingfall: false };
-  const next: CrownState = { leaderId: playerId, since: now };
-  if (state.leaderId === null) return { state: next, dethroned: null, kingfall: false };
-  const heldMs = now - state.since;
-  return {
-    state: next,
-    dethroned: { from: state.leaderId, to: playerId },
-    kingfall: heldMs >= settings.market.crypto.kingfallHoldMinutes * 60_000,
-  };
+  if (state.leaderId === playerId) return { state, dethroned: null };
+  if (state.leaderId === null) return { state: { leaderId: playerId, since: now }, dethroned: null };
+  const dethroned = { from: state.leaderId, to: playerId };
+  const p = state.pending;
+  // The displaced king is back inside the grace period: undo the Kingfall and give them their reign back.
+  if (p && p.from === playerId && now - p.at < graceMs(settings)) return { state: { leaderId: playerId, since: p.since }, dethroned };
+  const held = now - state.since >= settings.market.crypto.kingfallHoldMinutes * 60_000;
+  const pending = p ?? (held ? { from: state.leaderId, since: state.since, at: now } : undefined);
+  return { state: { leaderId: playerId, since: now, ...(pending ? { pending } : {}) }, dethroned };
+}
+
+/** The pending Kingfall once the grace period is over (null while it can still be cancelled, or when there is none). */
+export function dueKingfall(state: CrownState, now: number, settings: Settings): { from: string; at: number } | null {
+  const p = state.pending;
+  return p && now - p.at >= graceMs(settings) ? { from: p.from, at: p.at } : null;
+}
+
+/** The crown with its pending Kingfall dropped (it fired, or was handled). */
+export function clearPending(state: CrownState): CrownState {
+  if (!state.pending) return state;
+  const { pending: _p, ...rest } = state;
+  return rest;
 }
 
 /** How a game's crown is decided: by entered scores (higher or lower wins) or by manual GM taps. */
