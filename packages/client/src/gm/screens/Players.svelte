@@ -45,8 +45,8 @@
       <tbody>
         {#each rows as { p, l, s, h } (p.id)}
           <tr class:muted={p.left}>
-            <td>{s?.rank ?? '—'}</td>
-            <td>{p.displayName}{p.left ? ' (left)' : ''}</td>
+            <td><span class="rk">{s?.rank ?? '—'}</span></td>
+            <td><span class="pname">{p.displayName}</span>{p.left ? ' (left)' : ''}</td>
             <td class="mono">{p.ticker}</td>
             <td class="num">{gold(s?.netWorthH)}</td>
             <td class="num">{gold(l?.cashH)}</td>

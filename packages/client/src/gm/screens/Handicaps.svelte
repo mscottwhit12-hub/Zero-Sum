@@ -57,9 +57,9 @@
               <td class="mono">{p.auto}</td>
               <td>
                 <span class="row">
-                  <button aria-label="lower" disabled={busy || p.offset <= -4} onclick={() => setOffset(p.playerId, p.offset - 1)}>−</button>
+                  <button class="pm" aria-label="lower" disabled={busy || p.offset <= -4} onclick={() => setOffset(p.playerId, p.offset - 1)}>−</button>
                   <span class="mono">{p.offset > 0 ? '+' : ''}{p.offset}</span>
-                  <button aria-label="raise" disabled={busy || p.offset >= 4} onclick={() => setOffset(p.playerId, p.offset + 1)}>+</button>
+                  <button class="pm" aria-label="raise" disabled={busy || p.offset >= 4} onclick={() => setOffset(p.playerId, p.offset + 1)}>+</button>
                 </span>
               </td>
               <td class="mono"><strong>{p.effective}</strong></td>

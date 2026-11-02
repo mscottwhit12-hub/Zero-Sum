@@ -27,7 +27,7 @@
       <thead><tr><th>#</th><th>Player</th><th class="num">Net worth</th></tr></thead>
       <tbody>
         {#each gs?.standings ?? [] as s (s.playerId)}
-          <tr><td>{s.rank}</td><td>{playerName(gs, s.playerId)}</td><td class="num">{gold(s.netWorthH)}</td></tr>
+          <tr><td><span class="rk">{s.rank}</span></td><td><span class="pname">{playerName(gs, s.playerId)}</span></td><td class="num">{gold(s.netWorthH)}</td></tr>
         {/each}
       </tbody>
     </table>

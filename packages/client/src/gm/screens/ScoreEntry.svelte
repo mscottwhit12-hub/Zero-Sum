@@ -38,6 +38,6 @@
   .scores { display: grid; gap: 0.3rem; }
   .srow { display: grid; grid-template-columns: 1fr auto 4.5rem auto; gap: 0.3rem; align-items: center; }
   .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .step { min-width: 2.4rem; }
+  .step { min-width: 2.75rem; }
   input { width: 100%; text-align: center; }
 </style>

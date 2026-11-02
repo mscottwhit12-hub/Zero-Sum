@@ -100,21 +100,21 @@
 <style>
   .setting {
     display: grid;
-    grid-template-columns: 1fr 110px 32px;
+    grid-template-columns: 1fr 110px 44px;
     gap: 0.4rem;
     align-items: center;
     margin-bottom: 0.3rem;
   }
   .setting label {
-    font-size: 0.88rem;
+    font-size: 0.95rem;
   }
   .setting input:not([type='checkbox']),
   .setting select {
     width: 110px;
   }
   .setting button {
-    min-height: 30px;
-    padding: 0 0.4rem;
+    min-height: var(--ctl-h);
+    padding: 0;
   }
   .sticky {
     position: sticky;

@@ -76,7 +76,7 @@
     {/if}
   </section>
 {:else}
-  <section class="panel">
+  <section class="panel tint-e">
     <div class="spread">
       <div>
         <h2>{night.name}</h2>
@@ -191,7 +191,7 @@
       {#each active as g (g.id)}
         <div class="panel">
           <div class="spread">
-            <span><strong>{g.name}</strong>{#if gameTag(g, now) === 'filibuster'} <span class="badge warn">Filibuster</span>{/if}</span>
+            <span><strong class="gname">{g.name}</strong>{#if gameTag(g, now) === 'filibuster'} <span class="badge warn">Filibuster</span>{/if}</span>
             <span class="muted small mono">{hours(g.hours)}{g.plannedDurationHours ? ` / ${hours(g.plannedDurationHours)}` : ''}</span>
           </div>
           <p class="small muted clockline">{gameClock(g, now)}</p>
@@ -220,14 +220,14 @@
     </div>
   </section>
 
-  <section class="panel">
+  <section class="panel upnext">
     <h2>Up next</h2>
     {#if !upcoming.length}<p class="muted">Nothing scheduled.</p>{/if}
     <table>
       <tbody>
         {#each upcoming as g (g.id)}
           <tr>
-            <td>{g.name} {#if gameTag(g, now) === 'tardy'}<span class="badge bad">Tardy</span>{/if}</td>
+            <td><span class="pname">{g.name}</span> {#if gameTag(g, now) === 'tardy'}<span class="badge bad">Tardy</span>{/if}</td>
             <td class="muted small">{gameClock(g, now)}</td>
             <td class="muted small">{g.participants.map((p) => playerName(gs, p.playerId)).join(', ') || 'No players yet'}</td>
             <td class="actions">
@@ -246,7 +246,7 @@
       <thead><tr><th>#</th><th>Player</th><th class="num">Net worth</th></tr></thead>
       <tbody>
         {#each (gs?.standings ?? []).slice(0, 8) as s (s.playerId)}
-          <tr><td>{s.rank}</td><td>{playerName(gs, s.playerId)}</td><td class="num">{gold(s.netWorthH)}</td></tr>
+          <tr><td><span class="rk">{s.rank}</span></td><td><span class="pname">{playerName(gs, s.playerId)}</span></td><td class="num">{gold(s.netWorthH)}</td></tr>
         {/each}
       </tbody>
     </table>

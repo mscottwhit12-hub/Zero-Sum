@@ -233,40 +233,80 @@
   }
   .top {
     grid-column: 1 / -1;
-    padding: 0.6rem 1rem;
+    padding: 0.65rem 1.1rem;
     border-bottom: 1px solid var(--line);
-    background: var(--panel);
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    box-shadow: inset 0 -1px 0 var(--ring);
+  }
+  .top strong {
+    font: 400 1.08rem var(--serif);
+    letter-spacing: 0.12em;
+    font-variant-caps: all-small-caps;
+    background: var(--tag-bg);
+    color: var(--tag-ink);
+    padding: 0.2rem 0.85rem;
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+  }
+  .top .dot {
+    width: 10px;
+    height: 10px;
+    /* neutral halo: the dot's own colour (green / red) is set inline, so the halo must not hard-code green */
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 16%, transparent);
   }
   .side {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 2px;
     padding: 0.8rem;
     border-right: 1px solid var(--line);
   }
-  .side button.board::before {
-    content: '▸ ';
-    color: var(--accent);
-  }
   .side button {
     text-align: left;
+    min-height: 38px;
+    padding: 0 0.8rem;
     border-color: transparent;
     background: transparent;
   }
+  @media (hover: hover) {
+    .side button:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--text) 7%, transparent);
+      border-color: transparent;
+    }
+    .bottom button:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--text) 7%, transparent);
+      border-color: transparent;
+    }
+  }
+  .side button.board::before {
+    content: '◆ ';
+    font-size: 0.65rem;
+    vertical-align: 1px;
+    color: var(--gold);
+  }
   .side button.on,
-  .bottom button.on {
-    background: var(--accent);
+  .bottom button.on,
+  .side button.on:hover:not(:disabled),
+  .bottom button.on:hover:not(:disabled) {
+    background: linear-gradient(180deg, var(--accent-hi), var(--accent));
+    border-color: transparent;
+    color: var(--accent-ink);
+    font-weight: 650;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 1px 3px rgb(0 0 0 / 0.22);
+  }
+  .side button.on.board::before {
     color: var(--accent-ink);
   }
   /* Laptop: content fills a centred 4:3 area of the screen (never narrower than 1100px); margins only beyond it. */
   .content {
-    padding: 1rem;
+    padding: 1.1rem;
     max-width: max(1100px, calc(100vh * 4 / 3));
     width: 100%;
     margin-inline: auto;
   }
   .shell.phone .content {
-    padding: 0.75rem 0.75rem 84px;
+    /* clears the fixed bottom nav (48px + its padding + the iPhone home-indicator inset) */
+    padding: 0.75rem 0.75rem calc(48px + 0.25rem + max(0.25rem, env(safe-area-inset-bottom, 0px)) + 1rem);
   }
   .bottom {
     position: fixed;
@@ -275,28 +315,39 @@
     right: 0;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    background: var(--panel);
+    background: color-mix(in srgb, var(--panel) 96%, transparent);
     border-top: 1px solid var(--line);
-    padding: 0.4rem;
-    gap: 0.3rem;
-    padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
+    box-shadow: inset 0 1px 0 var(--ring);
+    padding: 0.25rem;
+    gap: 0.15rem;
+    padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
   }
   .bottom button {
     min-height: 48px;
     min-width: 0;
     border-color: transparent;
+    background: transparent;
+    color: var(--muted);
+    border-radius: 999px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding-inline: 0.3rem;
+    padding-inline: 0.1rem;
+    /* sized so "Dashboard" fits whole at 360px and up (the label itself is unchanged) */
+    font-size: clamp(0.8rem, 3.6vw, 0.9rem);
+  }
+  .bottom button.on {
+    color: var(--accent-ink);
   }
   .more {
     position: fixed;
-    bottom: 70px;
+    bottom: calc(48px + 0.25rem + max(0.25rem, env(safe-area-inset-bottom, 0px)) + 0.5rem);
     right: 0.5rem;
     left: 0.5rem;
     display: grid;
     gap: 0.4rem;
     z-index: 20;
+    max-height: calc(100dvh - 130px - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
   }
 </style>

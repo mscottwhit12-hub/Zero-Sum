@@ -259,7 +259,7 @@
   .tick {
     position: absolute;
     transform: translateX(-50%);
-    font-size: 0.7rem;
+    font-size: 0.82rem;
     color: var(--muted);
     white-space: nowrap;
   }
@@ -273,7 +273,7 @@
     display: inline-block;
     padding: 0 0.4rem;
     line-height: 40px;
-    font-size: 0.85rem;
+    font-size: 0.92rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -306,7 +306,7 @@
     flex-direction: column;
     justify-content: center;
     padding: 0 6px;
-    border-radius: 5px;
+    border-radius: 6px;
     overflow: hidden;
     background: color-mix(in srgb, var(--c, var(--accent)) 28%, var(--panel));
     border: 1px solid var(--c, var(--accent));

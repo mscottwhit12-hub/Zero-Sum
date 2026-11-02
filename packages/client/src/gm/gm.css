@@ -1,0 +1,543 @@
+/*
+ * GM console theme: "members' club, calm". Loaded only on the GM page (after base.css), so it may redefine tokens
+ * and override base rules. Same family as the phone/TV (forest + navy tints, gold hairline frames, serif headings)
+ * but quieter: readable first. Light = ledger paper, dark = forest night. Both follow the device (same selectors as base.css).
+ * Contrast: body text >= 6:1 in both modes, muted >= 5:1, primary button text >= 4.9:1, control borders >= 3:1.
+ */
+:root {
+  --bg: #ebe5d3;
+  --bar: rgba(31, 38, 31, 0.045);
+  --panel: #faf6ea;
+  --sunk: #f1ecdb;
+  --text: #1f261f;
+  --muted: #555c52;
+  --line: #d9d0b6;
+  --ctl: #7d7b67;
+  --accent: #7a5c07;
+  --accent-hi: #8a6a0b;
+  --accent-ink: #fffdf5;
+  --gold: #b08d1a;
+  --ring: #cdbf8f;
+  --tint-e: #e3ede5;
+  --ring-e: #8fb3a3;
+  --tint-n: #e2e9f0;
+  --ring-n: #92a9c2;
+  --tag-bg: #1f3a33;
+  --tag-ink: #f1ead4;
+  --good: #1b6b5d;
+  --bad: #a8231b;
+  --on-bad: #ffffff;
+  --warn: #7a5200;
+  --focus: #0b5bd3;
+  --shadow: 0 1px 2px rgba(31, 38, 31, 0.08), 0 6px 16px rgba(31, 38, 31, 0.07);
+  --radius: 8px;
+  --r-panel: 12px;
+  --ctl-h: 40px;
+  --serif: 'Baskerville', 'Baskerville Old Face', 'Hoefler Text', Georgia, 'Times New Roman', serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0b0f0e;
+    --bar: rgba(255, 255, 255, 0.03);
+    --panel: #131a18;
+    --sunk: #0e1311;
+    --text: #ece8da;
+    --muted: #a6b0a8;
+    --line: #2a3631;
+    --ctl: #62736b;
+    --accent: #d4b03c;
+    --accent-hi: #e0bf55;
+    --accent-ink: #14110a;
+    --gold: #c9a24a;
+    --ring: #4d4326;
+    --tint-e: #0e2a25;
+    --ring-e: #1b6b5d;
+    --tint-n: #0e1b2a;
+    --ring-n: #27507a;
+    --tag-bg: #e8e0cb;
+    --tag-ink: #1f261f;
+    --good: #4fcdb8;
+    --bad: #f08462;
+    --on-bad: #14110a;
+    --warn: #f0b84a;
+    --focus: #8ec5ff;
+    --shadow: 0 0 0 0 transparent;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #0b0f0e;
+  --bar: rgba(255, 255, 255, 0.03);
+  --panel: #131a18;
+  --sunk: #0e1311;
+  --text: #ece8da;
+  --muted: #a6b0a8;
+  --line: #2a3631;
+  --ctl: #62736b;
+  --accent: #d4b03c;
+  --accent-hi: #e0bf55;
+  --accent-ink: #14110a;
+  --gold: #c9a24a;
+  --ring: #4d4326;
+  --tint-e: #0e2a25;
+  --ring-e: #1b6b5d;
+  --tint-n: #0e1b2a;
+  --ring-n: #27507a;
+  --tag-bg: #e8e0cb;
+  --tag-ink: #1f261f;
+  --good: #4fcdb8;
+  --bad: #f08462;
+  --on-bad: #14110a;
+  --warn: #f0b84a;
+  --focus: #8ec5ff;
+  --shadow: 0 0 0 0 transparent;
+  color-scheme: dark;
+}
+html {
+  font: 15px/1.5 var(--font);
+  background: var(--bg);
+  scrollbar-color: var(--ctl) transparent;
+}
+/* phones / touch: one step up in text and 44px controls (the GM "phone" layout is a setting, so key off it too) */
+@media (max-width: 700px), (pointer: coarse) {
+  :root {
+    --ctl-h: 44px;
+  }
+  html {
+    font-size: 16px;
+  }
+}
+html:has(.shell.phone) {
+  --ctl-h: 44px;
+  font-size: 16px;
+}
+
+/* ---------- page ---------- */
+body {
+  font: inherit;
+  min-height: 100vh;
+  background: transparent;
+}
+/* soft forest glow + faint bar lines. position:fixed pseudo-elements (not background-attachment:fixed, which iOS ignores) */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+body::before {
+  background: radial-gradient(130% 50% at 50% 0, color-mix(in srgb, var(--tint-e) 70%, var(--bg)), var(--bg) 70%);
+}
+body::after {
+  background: repeating-linear-gradient(90deg, var(--bar) 0 1px, transparent 1px 16px);
+  -webkit-mask-image: linear-gradient(#000, transparent 45vh);
+  mask-image: linear-gradient(#000, transparent 45vh);
+}
+@media print {
+  body::before,
+  body::after {
+    display: none;
+  }
+}
+::selection {
+  background: color-mix(in srgb, var(--gold) 35%, transparent);
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---------- type ---------- */
+h1,
+h2,
+h3 {
+  font-family: var(--serif);
+  font-variant-numeric: lining-nums;
+  line-height: 1.25;
+}
+h1 {
+  font-size: 1.55rem;
+}
+h2 {
+  font-size: 1.2rem;
+  margin-bottom: 0.6rem;
+}
+h2::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 0.55rem;
+  vertical-align: 0.1em;
+  background: var(--gold);
+  transform: rotate(45deg);
+  border-radius: 1px;
+}
+h3 {
+  font-size: 1.05rem;
+}
+h3::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 0.5rem;
+  vertical-align: 0.12em;
+  background: var(--gold);
+  transform: rotate(45deg);
+  border-radius: 1px;
+}
+.small {
+  font-size: 0.9rem;
+}
+.mono,
+.num {
+  font-variant-numeric: tabular-nums;
+}
+td.num {
+  font-weight: 500;
+}
+
+/* ---------- panels ---------- */
+.panel {
+  --pb: var(--panel);
+  --bc: var(--ring);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 40%), var(--pb);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  padding: 1rem 1.15rem;
+  margin-bottom: 0.95rem;
+  box-shadow: inset 0 0 0 3px var(--pb), inset 0 0 0 4px var(--bc), var(--shadow);
+}
+.panel.tint-e {
+  --pb: var(--tint-e);
+  --bc: var(--ring-e);
+  border-color: color-mix(in srgb, var(--ring-e) 55%, var(--line));
+}
+.panel.tint-n {
+  --pb: var(--tint-n);
+  --bc: var(--ring-n);
+  border-color: color-mix(in srgb, var(--ring-n) 55%, var(--line));
+}
+/* a panel inside a panel (the board screens) is a quiet inset card: one hairline, no gloss, no ring, no shadow */
+.panel .panel {
+  --pb: color-mix(in srgb, var(--sunk) 50%, var(--panel));
+  background: var(--pb);
+  border-radius: 10px;
+  box-shadow: none;
+}
+.shell.phone .panel {
+  padding: 0.95rem;
+}
+.card {
+  background: color-mix(in srgb, var(--sunk) 60%, transparent);
+}
+
+/* ---------- buttons ---------- */
+button,
+.btn {
+  font: inherit;
+  font-weight: 500;
+  min-height: var(--ctl-h);
+  padding: 0.3rem 0.85rem;
+  border: 1px solid var(--ctl);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  color: var(--text);
+  transition: background-color 0.12s, border-color 0.12s, filter 0.12s;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+/* hover looks only where a real hover exists (no sticky hover after a tap on touch screens) */
+@media (hover: hover) {
+  button:hover:not(:disabled),
+  .btn:hover {
+    background: color-mix(in srgb, var(--text) 7%, var(--panel));
+    border-color: var(--gold);
+  }
+  /* never give seats / link-buttons / drag handles a button hover look */
+  button:is(.seat, .link, .x, .body):hover:not(:disabled) {
+    background: transparent;
+    border-color: transparent;
+  }
+}
+/* `translate` (not `transform`) so board seats, which are centred with transform, don't jump when pressed */
+button:active:not(:disabled) {
+  translate: 0 1px;
+}
+button.primary,
+.btn.primary {
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
+  border-color: color-mix(in srgb, var(--accent) 55%, #000);
+  color: var(--accent-ink);
+  font-weight: 650;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 3px rgba(0, 0, 0, 0.22);
+}
+@media (hover: hover) {
+  button.primary:hover:not(:disabled),
+  .btn.primary:hover {
+    background: linear-gradient(180deg, var(--accent-hi), var(--accent));
+    border-color: color-mix(in srgb, var(--accent) 55%, #000);
+    filter: brightness(1.08);
+  }
+}
+button.danger {
+  color: var(--bad);
+  border-color: var(--bad);
+  font-weight: 600;
+}
+@media (hover: hover) {
+  button.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--bad) 12%, var(--panel));
+    border-color: var(--bad);
+  }
+}
+button.big {
+  min-height: 50px;
+  padding: 0.5rem 1.3rem;
+  font-size: 1.02rem;
+  border-radius: 12px;
+}
+button.chip {
+  min-height: calc(var(--ctl-h) + 2px);
+  border-radius: 999px;
+  padding: 0.2rem 1rem;
+}
+button.chip.on {
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
+  border-color: color-mix(in srgb, var(--accent) 55%, #000);
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+@media (hover: hover) {
+  button.chip.on:hover:not(:disabled) {
+    filter: brightness(1.08);
+    border-color: color-mix(in srgb, var(--accent) 55%, #000);
+  }
+}
+/* selected = colour AND a check mark (never colour alone) */
+button.chip.on::before {
+  content: '✓';
+  font-weight: 700;
+  margin-inline-end: 0.35em;
+}
+.rate .chip {
+  padding-inline: 0.2rem;
+}
+button:disabled,
+button.primary:disabled {
+  opacity: 1;
+  color: var(--muted);
+  background: var(--sunk);
+  border: 1px dashed var(--ctl);
+  box-shadow: none;
+  filter: none;
+  cursor: not-allowed;
+}
+.srow .step,
+.stepper button,
+button.pm {
+  /* all +/- buttons are round */
+  border-radius: 999px;
+}
+.srow .step,
+button.pm {
+  padding: 0;
+  min-width: var(--ctl-h);
+  font-size: 1.15rem;
+}
+/* score rows: serif names, dashed dividers */
+.srow .who {
+  font: 600 1.02rem var(--serif);
+}
+.srow {
+  padding: 0.2rem 0;
+}
+.srow + .srow {
+  border-top: 1px dashed var(--line);
+}
+.pname {
+  font: 600 1.02rem var(--serif);
+}
+button.link {
+  color: var(--text);
+  text-decoration-color: var(--gold);
+  text-underline-offset: 3px;
+}
+
+/* ---------- inputs ---------- */
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--sunk);
+  border: 1px solid var(--ctl);
+  border-radius: var(--radius);
+  min-height: var(--ctl-h);
+  padding: 0.3rem 0.65rem;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--gold);
+}
+input:disabled,
+select:disabled,
+textarea:disabled {
+  color: var(--muted);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+input[type='checkbox'],
+input[type='radio'] {
+  min-height: 0;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  accent-color: var(--accent);
+  box-shadow: none;
+}
+input[type='color'] {
+  padding: 3px;
+  min-width: 3rem;
+  cursor: pointer;
+}
+input[type='file'] {
+  padding: 0.35rem;
+}
+label > span {
+  font-size: 0.88rem;
+  margin-bottom: 0.2rem;
+}
+.field {
+  margin-bottom: 0.7rem;
+}
+.shell.phone .field > :is(input:not([type='checkbox'], [type='radio'], [type='color'], [type='file']), select, textarea) {
+  width: 100%;
+}
+.error {
+  color: var(--bad);
+  font-weight: 500;
+}
+.scroll-x {
+  margin: -5px;
+  padding: 5px;
+}
+summary {
+  cursor: pointer;
+  padding: 0.35rem 0;
+  min-height: var(--ctl-h);
+}
+
+/* ---------- tables ---------- */
+th,
+td {
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+@media (hover: hover) {
+  tbody tr:hover td {
+    background: color-mix(in srgb, var(--gold) 7%, transparent);
+  }
+}
+th {
+  font: 600 0.78rem var(--mono);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  border-bottom-color: var(--ring);
+}
+.rk {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  font: 600 0.85rem var(--mono);
+}
+.gname {
+  font: 600 1.15rem var(--serif);
+}
+/* phone: keep the real table (screen readers), just give the wrapped cells room */
+.shell.phone .upnext td {
+  padding: 0.5rem 0.3rem;
+  vertical-align: top;
+}
+.shell.phone .upnext td.muted {
+  min-width: 5.5rem;
+}
+
+/* ---------- tags / badges ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.7rem;
+  font: 600 0.8rem var(--mono);
+  letter-spacing: 0.02em;
+  border: 1px solid var(--ctl);
+  color: var(--muted);
+}
+.badge.live {
+  background: var(--tag-bg);
+  color: var(--tag-ink);
+  border-color: transparent;
+}
+.badge.live::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2fb089;
+  box-shadow: 0 0 0 2px rgba(47, 176, 137, 0.3);
+}
+.badge.warn {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+.badge.bad {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
+/* ---------- misc ---------- */
+body .toasts .toast.error {
+  color: var(--on-bad);
+}
+html:has(.shell.phone) body .toasts.toasts {
+  bottom: calc(48px + 1.5rem + env(safe-area-inset-bottom, 0px));
+}
+.toast {
+  border: 1px solid var(--ring);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+.qr {
+  border-radius: var(--radius);
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

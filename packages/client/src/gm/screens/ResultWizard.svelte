@@ -216,7 +216,7 @@
   .backdrop {
     position: fixed;
     inset: 0;
-    background: rgb(0 0 0 / 0.4);
+    background: rgb(8 12 10 / 0.6);
     z-index: 50;
   }
   .sheet {

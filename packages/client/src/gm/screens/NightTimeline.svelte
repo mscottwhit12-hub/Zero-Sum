@@ -47,7 +47,7 @@
 </script>
 
 {#if night}
-  <section class="panel">
+  <section class="panel tint-n">
     <div class="spread"><h3>Tonight</h3><span class="small muted mono">{hhmm(nowMin)} / {hhmm(night.lengthMinutes)}</span></div>
     <div class="tl" style="height:{22 + lanes * 22}px">
       {#each night.quarters as q (q.n)}
@@ -77,39 +77,41 @@
 <style>
   .tl {
     position: relative;
-    margin-top: 0.4rem;
+    margin-top: 0.5rem;
     overflow: hidden;
   }
   .q {
     position: absolute;
     top: 0;
-    height: 18px;
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    font-size: 0.7rem;
+    height: 20px;
+    border: 1px solid var(--ring);
+    border-radius: 6px;
+    font: 0.82rem/18px var(--mono);
     color: var(--muted);
     overflow: hidden;
+    background: color-mix(in srgb, var(--gold) 9%, var(--panel));
   }
   .q span {
     position: relative;
-    padding-left: 3px;
+    padding-left: 6px;
   }
   .win {
     position: absolute;
     inset: 0 auto 0 0;
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
   }
   .bar {
     position: absolute;
-    height: 18px;
-    border-radius: 3px;
-    padding: 0 4px;
-    font-size: 0.72rem;
+    height: 20px;
+    border-radius: 6px;
+    padding: 0 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
     line-height: 18px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    background: color-mix(in srgb, var(--c, var(--accent)) 30%, var(--panel));
+    background: color-mix(in srgb, var(--c, var(--accent)) 32%, var(--panel));
     border: 1px solid var(--c, var(--accent));
     color: var(--text);
   }
@@ -118,7 +120,7 @@
     border-style: dashed;
   }
   .bar.final {
-    opacity: 0.55;
+    opacity: 0.6;
   }
   .bar.filibuster {
     border-color: var(--warn);
