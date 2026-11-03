@@ -20,6 +20,7 @@ import {
 import { j } from '../db';
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { closeBetsForGame, settleBetsForGame } from './betting';
+import { refundBoardGold, settleBoardGold } from './boardGold';
 import { audit } from './audit';
 import { sendBoardRecap, voidClaims } from './boards';
 import { pushFeed } from './feed';
@@ -205,6 +206,7 @@ export function cancelGame(ctx: Ctx, actor: GmAuth, id: number): void {
     audit(ctx, { nightId: g.night_id, gmId: actor.gmId, action: 'game.cancel', entity: 'game', entityId: id, before: { status: g.status } });
   })();
   closeBetsForGame(ctx, g.night_id, id);
+  refundBoardGold(ctx, id, actor.gmId);
   ctx.bus.all('game:update', { id, status: 'cancelled' });
   ctx.bus.refresh(g.night_id);
 }
@@ -322,6 +324,7 @@ export function submitResult(ctx: Ctx, actor: GmAuth, id: number, input: ResultI
   })();
   for (const p of recapTo) ctx.bus.player(p, 'notify:player', { gameId: id });
   settleBetsForGame(ctx, n, id, result);
+  settleBoardGold(ctx, id, actor.gmId);
   snapshotStandings(ctx, n.id);
   awardAchievements(ctx, n.id);
   hintsForResult(ctx, n, { ...result, id: String(id) });

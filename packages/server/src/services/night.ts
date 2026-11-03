@@ -1,5 +1,6 @@
 import { awardAchievements } from './achievements';
 import { closeBetsForGame } from './betting';
+import { refundBoardGold } from './boardGold';
 import { finale, finaleSeconds, markRecapDone } from './recap';
 import { playCue } from './sounds';
 import {
@@ -172,6 +173,7 @@ export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction, o
             ctx.db.prepare("UPDATE game SET status = 'cancelled', ended_at = COALESCE(ended_at, ?) WHERE id = ?").run(now, g.id);
             // Held bet stakes go back with the cancelled game, so nobody's final standing is short.
             closeBetsForGame(ctx, n.id, g.id);
+            refundBoardGold(ctx, g.id, actor.gmId);
           }
           if (open.length) audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.cancel_at_end', entity: 'night', entityId: n.id, after: { games: open } });
         }

@@ -591,4 +591,35 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE sound ADD COLUMN license TEXT;
   UPDATE sound SET tags = json_array(lower(theme)) WHERE kind = 'ambient' AND theme IS NOT NULL AND theme <> '';
   `,
+  /* 24 — gold held by a board for a game (poker played for gold): held at buy-in through the gold adjustments
+     (new kind 'game_stake'), paid out at the result, refunded if the game is cancelled. game_board.gold keeps the
+     board's latest cash-out table. */ `
+  CREATE TABLE adjustment_v24 (
+    id INTEGER PRIMARY KEY,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    gold_h INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'manual' CHECK (kind IN ('manual','late_join','espionage','gift','bet','game_stake')),
+    gm_id INTEGER REFERENCES game_master(id),
+    created_at INTEGER NOT NULL,
+    read_at INTEGER
+  );
+  INSERT INTO adjustment_v24 (id, night_id, player_id, gold_h, reason, kind, gm_id, created_at, read_at)
+    SELECT id, night_id, player_id, gold_h, reason, kind, gm_id, created_at, read_at FROM adjustment;
+  DROP TABLE adjustment;
+  ALTER TABLE adjustment_v24 RENAME TO adjustment;
+  CREATE TABLE board_gold (
+    game_id INTEGER NOT NULL REFERENCES game(id),
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    player_id INTEGER NOT NULL REFERENCES player(id),
+    held_h INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'held' CHECK (status IN ('held','settled','refunded')),
+    paid_h INTEGER,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (game_id, player_id)
+  );
+  CREATE INDEX board_gold_night ON board_gold(night_id, status);
+  ALTER TABLE game_board ADD COLUMN gold TEXT;
+  `,
 ];

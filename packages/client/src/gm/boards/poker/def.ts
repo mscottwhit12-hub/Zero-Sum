@@ -12,7 +12,8 @@
  *               above everyone already out.
  *   Cash game:  fixed time; "Call time and finish" ranks everyone by chips (equal chips tie).
  * Crown (score): the chip leader. The GM can pin the crown on someone else (`pin`); clearing the pin goes back to chips.
- * Chips vs dollars: the buy-in is tracked in dollars, but nothing here touches gold. Rebuys cost the buy-in and give
+ * Chips vs money: real money (dollars, tracked only) or gold (`goldReport`: the server holds each player's gold when
+ *               it's marked in and pays the pot out by chip value at the result). Rebuys cost the buy-in and give
  *               `rebuyChips`; the table's chips are checked against all chips bought in (a warning, never a block).
  *
  * Blind clock: the current level is DERIVED from an anchor time (so it keeps running with no one tapping and the TV
@@ -991,7 +992,24 @@ export const def: BoardDef<PokerState> = {
   score,
   placements,
   recap: (s, ctx) => recap(s, ctx).map((r) => ({ playerId: r.playerId, text: recapText(r, isCash(ctx.settings), settingsOf(s, ctx)) })),
+  gold: (s, ctx) => goldReport(s, ctx),
 };
+
+/**
+ * Played for gold: the gold each player has handed over ("gold held" taps) and what their chips are worth now.
+ * The server holds the gold and pays the pot out by these cash-outs at the result. Null when played for real money.
+ */
+export function goldReport(s: PokerState, ctx: BoardContext): { held: Record<number, number>; payouts: Record<number, number> } | null {
+  if (!isGold(settingsOf(s, ctx))) return null;
+  const held: Record<number, number> = {};
+  const payouts: Record<number, number> = {};
+  for (const p of ctx.players) {
+    const rec = s.pay?.[p.id];
+    if (rec?.how === 'gold' && rec.got > 0) held[p.id] = Math.min(rec.got, paidDollars(pl(s, p.id, ctx)));
+  }
+  for (const r of payoutTable(s, ctx).rows) if (r.cashOut > 0) payouts[r.playerId] = r.cashOut;
+  return { held, payouts };
+}
 
 // ------------------------------------------------------------------ money collected
 

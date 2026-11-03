@@ -875,7 +875,7 @@
         {/if}
         {#if game.button === null}
           <p class="small muted">
-            {#if gold}Gold game: each player’s gold has to be liquid in their account and held until the game ends. Tap “Gold held” once it is held.
+            {#if gold}Gold game: tapping “Gold held” takes the buy-in out of that player’s cash and holds it (it still counts in their net worth). At the result the pot is paid out by chip value; cancelling the game gives it all back.
             {:else}Take each player’s {unit(buyInNow)} in cash or Venmo before the first hand. Tap when it is in.{/if}
           </p>
         {/if}

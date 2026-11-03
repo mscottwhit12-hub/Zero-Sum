@@ -21,6 +21,7 @@ import {
   type StandingRow,
 } from '@gn/engine';
 import { j } from '../db';
+import { heldGoldByPlayer } from './boardGold';
 import type { Ctx } from '../context';
 
 export type NightStatus = 'setup' | 'joins_open' | 'live' | 'paused' | 'ended' | 'archived';
@@ -234,6 +235,8 @@ export function computeNightState(ctx: Ctx, nightId: number): NightState | null 
     locked.set(pid(r.offerer_id), (locked.get(pid(r.offerer_id)) ?? 0) + r.stake_h);
     locked.set(pid(r.taker_id), (locked.get(pid(r.taker_id)) ?? 0) + r.win_h);
   }
+  // Gold held by a board for a running game (poker for gold) is the same: out of cash, still net worth.
+  for (const [p, h] of heldGoldByPlayer(ctx, nightId)) locked.set(pid(p), (locked.get(pid(p)) ?? 0) + h);
   const standings = securities.length
     ? computeStandings(ledger, lots.map((l) => ({ playerId: l.playerId, securityId: l.securityId, sharesH: l.sharesH, short: l.short, entry: l.entry })), prices, settings, locked)
     : computeStandings(ledger, [], prices, settings, locked);

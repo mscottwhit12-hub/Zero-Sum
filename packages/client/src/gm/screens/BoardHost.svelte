@@ -96,7 +96,9 @@
     const state = $state.snapshot(board);
     try {
       const recap = entry.def.recap?.(state, ctx);
-      const r = await api<{ version: number }>('PUT', `/api/games/${game.id}/board`, { state, version, recap });
+      // Boards that hold real gold report it with every save (undefined = this board never touches gold).
+      const gold = entry.def.gold ? (entry.def.gold(state, ctx) ?? null) : undefined;
+      const r = await api<{ version: number }>('PUT', `/api/games/${game.id}/board`, { state, version, recap, gold });
       version = r.version;
       if (game.leadMode !== 'manual') {
         const scores = entry.def.score(state, ctx);

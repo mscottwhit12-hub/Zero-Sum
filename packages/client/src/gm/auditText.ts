@@ -124,6 +124,8 @@ export function describeEntry(e: AuditEntry, names: AuditNames = NO_NAMES): { te
       return done(`${w} entered scores in ${game(e.entityId)}`, ids.map((id) => `${player(id)}: ${val(b[id])} → ${val(a[id])}`));
     }
     case 'board.edit': return done(`${w} edited the board in ${game(e.entityId)}`, diff(b, a));
+    case 'board.gold_hold': return done(`${game(e.entityId)}: ${player(a.playerId)} has ${gold(a.heldH)} gold held (was ${gold(b.heldH)})`);
+    case 'board.gold_settle': return done(`${game(e.entityId)}: ${gold(a.potH)} gold paid out by chip value`);
     case 'board.settings': return done(`${w} changed the ${a.board} board settings`, Object.entries((a.values ?? {}) as Obj).map(([k, v]) => `${words(k)}: ${val(v)}`));
     case 'claim.approve':
     case 'claim.reject': return done(`${w} ${e.action === 'claim.approve' ? 'approved' : 'rejected'} a battle: ${player(a.attackerId)} took ${a.territories} territories from ${player(a.defenderId)}`);

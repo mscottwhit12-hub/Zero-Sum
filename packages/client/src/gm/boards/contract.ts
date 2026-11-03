@@ -2,6 +2,7 @@
  * GAME BOARD CONTRACT v1.1 — binding for every board engineer. Changes go through the manager.
  * v1.1 (additive): BoardDef.recap, BoardProps.onfinish.
  * v1.3 (additive): BoardContext.claims + decideClaim (player-submitted entries a GM approves; Risk battles first).
+ * v1.4 (additive): BoardDef.gold (a board that holds real gold for its game; poker played for gold).
  * Svelte note: don't keep the `state` prop under that name (it clashes with the $state rune); destructure it as
  * `let { ctx, state: game, onchange, onfinish }: BoardProps<S> = $props();`
  *
@@ -77,6 +78,14 @@ export interface BoardDef<S> {
   placements?(state: S, ctx: BoardContext): number[][];
   /** End-of-game recap, one private phone message per player; sent once when the result is submitted. */
   recap?(state: S, ctx: BoardContext): { playerId: number; text: string }[];
+  /**
+   * Only for a game played for real gold (poker in gold mode). Sent with every save; the server does the money:
+   * `held` = gold each player has put in so far (taken out of their cash now, still counted in net worth),
+   * `payouts` = what each player's stake is worth right now. At the result the server pays the pot (everything
+   * held) out in proportion to `payouts`, so the total never changes; a cancelled game refunds everyone.
+   * Return null when the game isn't played for gold (any gold already held is returned). Amounts in gold.
+   */
+  gold?(state: S, ctx: BoardContext): { held: Record<number, number>; payouts: Record<number, number> } | null;
 }
 
 export interface BoardProps<S> {

@@ -6,6 +6,7 @@
  */
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit, boardDiff } from './audit';
+import { reconcileBoardGold } from './boardGold';
 import type { GmAuth } from './gm';
 import { currentNight, type PlayerRow } from './state';
 
@@ -26,8 +27,8 @@ function boardGame(ctx: Ctx, gameId: number) {
   const n = currentNight(ctx);
   if (!n) throw notFound('no_night');
   const g = ctx.db
-    .prepare('SELECT g.id, g.night_id, g.status, l.board FROM game g LEFT JOIN library_game l ON l.id = g.library_game_id WHERE g.id = ? AND g.night_id = ?')
-    .get(gameId, n.id) as { id: number; night_id: number; status: string; board: string | null } | undefined;
+    .prepare('SELECT g.id, g.night_id, g.status, g.name, l.board FROM game g LEFT JOIN library_game l ON l.id = g.library_game_id WHERE g.id = ? AND g.night_id = ?')
+    .get(gameId, n.id) as { id: number; night_id: number; status: string; name: string; board: string | null } | undefined;
   if (!g) throw notFound('game_not_found');
   if (!g.board) throw conflict('no_board', 'This game has no board.');
   return g;
@@ -167,7 +168,7 @@ function cleanRecap(v: unknown): { playerId: number; text: string }[] | null {
  * Saves a board. `version` must be the version the client last saw; a stale write is refused (409 board_stale)
  * and the client reloads. Saving the exact same state at the same version again is a no-op success.
  */
-export function saveBoard(ctx: Ctx, actor: GmAuth, gameId: number, input: { state?: unknown; version?: unknown; recap?: unknown }): { version: number } {
+export function saveBoard(ctx: Ctx, actor: GmAuth, gameId: number, input: { state?: unknown; version?: unknown; recap?: unknown; gold?: unknown }): { version: number } {
   const g = boardGame(ctx, gameId);
   if (g.status !== 'active') throw conflict('board_closed', 'This game is not running.');
   if (input.state === undefined || input.state === null || typeof input.state !== 'object') throw bad('bad_board_state');
@@ -177,12 +178,16 @@ export function saveBoard(ctx: Ctx, actor: GmAuth, gameId: number, input: { stat
   const version = Number(input.version ?? 0);
   const row = ctx.db.prepare('SELECT * FROM game_board WHERE game_id = ?').get(gameId) as BoardRow | undefined;
   const current = row?.version ?? 0;
-  if (row && row.state === json && version === current - 1) return { version: current }; // same save twice
+  if (row && row.state === json && version === current - 1) {
+    reconcileBoardGold(ctx, g, input.gold, actor.gmId); // a retried save still settles any gold change
+    return { version: current }; // same save twice
+  }
   if (version !== current) throw conflict('board_stale', 'Someone else changed this board. It has been reloaded.');
   const next = current + 1;
   const recapJson = recap ? JSON.stringify(recap) : (row?.recap ?? null);
   if (row) ctx.db.prepare('UPDATE game_board SET state = ?, version = ?, recap = ?, updated_at = ? WHERE game_id = ?').run(json, next, recapJson, ctx.now(), gameId);
   else ctx.db.prepare('INSERT INTO game_board (game_id, night_id, state, version, recap, updated_at) VALUES (?,?,?,?,?,?)').run(gameId, g.night_id, json, next, recapJson, ctx.now());
+  reconcileBoardGold(ctx, g, input.gold, actor.gmId);
   // The audit log keeps what the GM changed (not the whole board): "players.12.territories 12 → 15".
   const d = boardDiff(row ? JSON.parse(row.state) : null, input.state);
   if (Object.keys(d.after).length)
