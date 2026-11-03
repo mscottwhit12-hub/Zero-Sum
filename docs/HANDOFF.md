@@ -304,6 +304,11 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - **Big music files:** music (kind `ambient`) can be up to 1 GB (`AMBIENT_MAX_MB`); cues and soundboard buttons stay at 30 MB. The Soundboard upload form now sends the raw file to `POST /api/sounds/file?name=&kind=&tags=...` (content-type audio/*, Master only), streamed to disk (temp file, bytes checked, renamed on success; refused uploads leave nothing behind). The old base64 `POST /api/sounds` still exists (30 MB). Sound **packs** are still capped at 200 MB in total (buffered in memory). A reverse proxy in front of the server must allow big bodies (nginx `client_max_body_size`).
 - **Mood:** `mood.moodMax` 0.06 → 0.10 (mood bias up to ±10%).
 
+### 4m. Texas Hold'em board (Jim) + poker for gold (Nov 3)
+- Board `gm/boards/poker/` (key `poker`, classics: 2–10 players, 3 h, re-rolls off, crown = chips). Tournament or cash game; chip calculator (`chips.ts`: up to 8 colours, values from real ladders, bank share 10–100% to players, default 1/3); buy-ins marked in (cash/Venmo or gold) before the first hand (`requirePayment`); everyone cashes out at chip value; one-tap bust moves chips to the winner.
+- **Board contract v1.4:** optional `BoardDef.gold(state, ctx)` → `{ held, payouts }` in gold, sent by `BoardHost` with every save (undefined = board never touches gold; null = nothing held).
+- Server `services/boardGold.ts`, migration 24 (adjustment kind `game_stake`, `board_gold`, `game_board.gold`): holds reconciled on each save (cash down, net worth unchanged, like bet stakes); at the result the pot is paid in proportion to the latest payouts, scaled to the pot (zero-sum, largest remainder); cancel / End night refund. Holds aren't capped by cash (cash can go negative while held).
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
