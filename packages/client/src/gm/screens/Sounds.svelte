@@ -57,6 +57,20 @@
     });
   };
 
+  /** Rename a sound after it was uploaded (soundboard buttons, cues and music alike). An empty or refused name puts the old one back. */
+  const saveName = (e: Event, x: SoundInfo) => {
+    const el = e.currentTarget as HTMLInputElement;
+    const v = el.value.trim();
+    if (v === x.name) return el.value = x.name;
+    if (!v) {
+      toast('A sound needs a name.', 'error');
+      return el.value = x.name;
+    }
+    return run(() => patch(`/api/sounds/${x.id}`, { name: v }), 'Renamed').then((ok) => {
+      if (!ok) el.value = x.name;
+    });
+  };
+
   // ---- upload
   let name = $state('');
   let kind = $state<'soundboard' | 'cue' | 'ambient'>('soundboard');
@@ -91,7 +105,10 @@
       x.send(body);
     });
   }
+  /** Same limits as the server: music (ambient) can be up to 1 GB, cues and soundboard buttons 30 MB. */
   const MAX_MB = 30;
+  const MUSIC_MAX_MB = 1024;
+  const sizeText = (bytes: number) => (bytes >= 1073741824 ? `${(bytes / 1073741824).toFixed(2)} GB` : `${(bytes / 1048576).toFixed(1)} MB`);
   /** Same limit as the server's PACK_MAX_MB. */
   const PACK_MAX_MB = 200;
   const MIME: Record<string, string> = { mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', mp4: 'audio/mp4', flac: 'audio/flac' };
@@ -101,24 +118,15 @@
     const ext = (file.name.split('.').pop() ?? '').toLowerCase();
     const mime = MIME[ext];
     if (!mime) return toast('Upload an MP3, OGG, WAV, M4A or FLAC file.', 'error');
-    if (file.size > MAX_MB * 1024 * 1024) return toast(`That file is ${(file.size / 1048576).toFixed(1)} MB. Sound files must be under ${MAX_MB} MB.`, 'error');
-    progress = 0;
-    let data: string;
-    try {
-      data = await new Promise<string>((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(String(r.result));
-        r.onerror = () => rej(r.error);
-        r.readAsDataURL(file!);
-      });
-    } catch {
-      progress = null;
-      return toast('Could not read that file. Try again or pick another.', 'error');
+    const limitMb = kind === 'ambient' ? MUSIC_MAX_MB : MAX_MB;
+    if (file.size > limitMb * 1024 * 1024) {
+      return toast(`That file is ${sizeText(file.size)}. ${kind === 'ambient' ? 'Music' : 'Sound'} files must be under ${limitMb >= 1024 ? `${limitMb / 1024} GB` : `${limitMb} MB`}.`, 'error');
     }
-    // Browsers report odd or empty types for some audio (FLAC especially): label it by its extension.
-    data = `data:${mime};base64,${data.slice(data.indexOf(',') + 1)}`;
-    const body = JSON.stringify({ name: name || file!.name.replace(/\.\w+$/, ''), kind, theme, tags: tagsText, credit, sourceUrl, license, data });
-    const ok = await run(() => sendWithProgress('/api/sounds', body, 'application/json', (f) => (progress = f)), 'Uploaded');
+    progress = 0;
+    // The file goes up as it is (no base64, nothing held in memory), the details in the address. Browsers report odd or empty
+    // types for some audio (FLAC especially): label it by its extension.
+    const q = new URLSearchParams({ name: name || file.name.replace(/\.\w+$/, ''), kind, theme, tags: tagsText, credit, sourceUrl, license });
+    const ok = await run(() => sendWithProgress(`/api/sounds/file?${q}`, file!, mime, (f) => (progress = f)), 'Uploaded');
     progress = null;
     if (ok) {
       name = theme = tagsText = credit = sourceUrl = license = '';
@@ -211,7 +219,7 @@
 {#if master}
   <form class="panel" onsubmit={upload}>
     <h2>Upload a sound</h2>
-    <p class="small muted">Local files only (MP3, OGG, WAV, M4A, FLAC; up to 30 MB). Stored on this server.</p>
+    <p class="small muted">Local files only (MP3, OGG, WAV, M4A, FLAC). Music up to 1 GB; cues and soundboard buttons up to 30 MB. Stored on this server.</p>
     <div class="grid2">
       <label class="field"><span>File</span><input type="file" accept="audio/*" onchange={(e) => (file = (e.currentTarget as HTMLInputElement).files?.[0] ?? null)} required /></label>
       <label class="field"><span>Name</span><input bind:value={name} maxlength="60" /></label>
@@ -281,7 +289,10 @@
     <h2>Library</h2>
     {#each sounds as x (x.id)}
       <div class="spread line">
-        <span>{x.name} <span class="muted small">{x.kind === 'ambient' ? t('gm.music.kind_music') : x.kind}{x.kind === 'cue' && x.theme ? ` · ${x.theme}` : ''}</span></span>
+        <span class="row">
+          <input class="namein" aria-label="Name" value={x.name} maxlength="60" onchange={(e) => saveName(e, x)} />
+          <span class="muted small">{x.kind === 'ambient' ? t('gm.music.kind_music') : x.kind}{x.kind === 'cue' && x.theme ? ` · ${x.theme}` : ''}</span>
+        </span>
         <span class="row">
           {#if x.kind !== 'cue'}
             <input class="tagsin" aria-label={t('gm.music.tags_label')} value={x.tags.join(', ')} onchange={(e) => saveTags(e, x)} />
@@ -316,6 +327,7 @@
   button.big.on { box-shadow: inset 0 0 0 2px var(--accent); }
   /* the track count inside a picked tag chip must stay readable on the accent colour */
   button.chip.on :global(.muted) { color: inherit; opacity: 0.85; }
+  .namein { width: 13rem; max-width: 100%; }
   .tagsin { width: 14rem; max-width: 100%; }
   .cr { white-space: pre-line; }
 </style>

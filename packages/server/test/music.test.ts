@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { recordingBus } from '../src/context';
 import { AUDIO_DEFAULTS, matchTracks, musicForGm, musicForTv, ruleKeyFor, setNowPlaying } from '../src/services/music';
-import { normTags, parseRange, sniffAudio } from '../src/services/sounds';
+import { AMBIENT_MAX_MB, SOUND_MAX_MB, normTags, parseRange, sniffAudio } from '../src/services/sounds';
 import { computeNightState, currentNight } from '../src/services/state';
 import { gmView, publicView, tvView } from '../src/services/views';
 import { deflateRawSync } from 'node:zlib';
@@ -459,5 +459,66 @@ describe('zip reader', () => {
     expect(() => unzip(Buffer.from('nope'))).toThrow('not_a_zip');
     expect(() => unzip(zip([{ name: 'big', data: Buffer.alloc(5000) }]), { maxEntryBytes: 1000 })).toThrow('zip_entry_too_large');
     expect(() => unzip(zip([{ name: 'a', data: 'x' }, { name: 'b', data: 'y' }]), { maxEntries: 1 })).toThrow('zip_too_many_files');
+  });
+});
+
+describe('streamed sound upload (big music files)', () => {
+  const raw = (t: TestApp, gm: string, q: string, body: Buffer, type = 'audio/wav') =>
+    t.app.inject({ method: 'POST', url: `/api/sounds/file?${q}`, payload: body, headers: { cookie: gm, 'content-type': type } });
+  const mb = (n: number) => Buffer.concat([WAV, Buffer.alloc(n * 1024 * 1024)]);
+
+  it('music up to a gigabyte is allowed; cues and buttons stay at 30 MB', () => {
+    expect(AMBIENT_MAX_MB).toBe(1024);
+    expect(SOUND_MAX_MB).toBe(30);
+  });
+
+  it('streams a raw file to disk, checks its bytes, and keeps nothing half-written', { timeout: 60000 }, async () => {
+    const t = await makeApp();
+    const { gm } = await liveNight(t, 1, { start: false });
+    // A 31 MB music file: over the 30 MB base64 limit, fine as music.
+    const ok = await raw(t, gm, 'name=Long%20mix&kind=ambient&tags=lobby%2C%20calm', mb(31));
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ name: 'Long mix', kind: 'ambient', tags: ['lobby', 'calm'] });
+    const url = ok.json().url as string;
+    const served = await t.app.inject({ method: 'GET', url, headers: { range: 'bytes=0-3' } });
+    expect(served.statusCode).toBe(206);
+    expect(served.rawPayload.toString('latin1')).toBe('RIFF');
+    // The same size as a soundboard button is refused, and no temp file is left behind.
+    const { readdirSync } = await import('node:fs');
+    const dir = `${t.ctx.config.mediaDir}/sounds`;
+    const tmpBefore = readdirSync(dir).filter((f) => f.startsWith('.upload-'));
+    const big = await raw(t, gm, 'name=Boom&kind=soundboard', mb(31));
+    expect(big.statusCode).toBe(400);
+    expect(big.json().error).toBe('audio_too_large');
+    expect(readdirSync(dir).filter((f) => f.startsWith('.upload-'))).toEqual(tmpBefore);
+    // Bytes are checked, not the label; unknown types and empty files are refused.
+    expect((await raw(t, gm, 'name=Fake&kind=soundboard', Buffer.from('not audio at all'))).json().error).toBe('bad_audio');
+    expect((await raw(t, gm, 'name=Empty&kind=soundboard', Buffer.alloc(0))).statusCode).toBe(400);
+    expect((await raw(t, gm, 'name=Doc&kind=soundboard', WAV, 'audio/x-unknown')).json().error).toBe('bad_audio');
+    expect((await raw(t, gm, 'name=X&kind=cue&theme=nope', WAV)).json().error).toBe('bad_cue');
+    expect((await raw(t, gm, 'name=NoTags&kind=ambient', WAV)).json().error).toBe('bad_tags');
+    expect((await call(t, gm, 'GET', '/api/sounds')).json().sounds).toHaveLength(1);
+  });
+
+  it('Master only', async () => {
+    const t = await makeApp();
+    const { gm } = await liveNight(t, 1, { start: false });
+    const r = await t.app.inject({ method: 'POST', url: '/api/sounds/file?name=A&kind=soundboard', payload: WAV, headers: { 'content-type': 'audio/wav' } });
+    expect(r.statusCode).toBeGreaterThanOrEqual(401);
+    void gm;
+  });
+});
+
+describe('renaming a sound after upload', () => {
+  it('Master can change a soundboard title; it keeps its tags and the file', async () => {
+    const t = await makeApp();
+    const { gm } = await liveNight(t, 1, { start: false });
+    const s = (await call(t, gm, 'POST', '/api/sounds', { name: 'Airhorn', kind: 'soundboard', data: wavData })).json();
+    const r = await call(t, gm, 'PATCH', `/api/sounds/${s.id}`, { name: '  Big Airhorn  ' });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ id: s.id, name: 'Big Airhorn', url: s.url });
+    expect((await call(t, gm, 'GET', '/api/sounds')).json().sounds[0].name).toBe('Big Airhorn');
+    expect((await call(t, gm, 'PATCH', `/api/sounds/${s.id}`, { name: '   ' })).json().error).toBe('bad_name');
+    expect((await call(t, gm, 'PATCH', `/api/sounds/${s.id}`, { name: 'x'.repeat(100) })).json().name).toHaveLength(60);
   });
 });

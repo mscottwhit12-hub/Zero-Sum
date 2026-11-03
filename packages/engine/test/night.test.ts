@@ -144,10 +144,10 @@ describe('mood', () => {
     expect(centeredMood(4, 2)).toBe(0);
     expect(centeredMood(5, 3)).toBe(0.5);
   });
-  it('bias = 0.06 × centered, decays 1%/tick', () => {
+  it('bias = 0.10 × centered, decays 1%/tick', () => {
     const r = { playerId: 'a', mood: 5, selfAssessment: 5, tick: 0 };
-    expect(moodBias(r, 0, S)).toBeCloseTo(0.06);
-    expect(moodBias(r, 10, S)).toBeCloseTo(0.06 * 0.99 ** 10);
+    expect(moodBias(r, 0, S)).toBeCloseTo(0.1);
+    expect(moodBias(r, 10, S)).toBeCloseTo(0.1 * 0.99 ** 10);
     expect(moodBias(undefined, 10, S)).toBe(0);
   });
   it('latest reading wins', () => {
@@ -159,7 +159,7 @@ describe('mood', () => {
       5,
       S,
     );
-    expect(m.get('a')).toBeCloseTo(-0.06);
+    expect(m.get('a')).toBeCloseTo(-0.1);
   });
 });
 

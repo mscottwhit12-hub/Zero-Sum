@@ -289,7 +289,7 @@ export const DEFAULT_SETTINGS: Settings = {
     topTwoMinPlayers: 16,
     driftMax: 0.15,
   },
-  mood: { moodMax: 0.06, decayPerTick: 0.01 },
+  mood: { moodMax: 0.1, decayPerTick: 0.01 },
   rerolls: { perPlayer: 3 },
   espionage: { goldReward: 3, revealDelayMinSec: 15, revealDelayMaxSec: 45 },
   betting: { enabled: true, maxStake: 5, ticketMaxStake: 10, maxOpenOffers: 5 },

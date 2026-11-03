@@ -299,6 +299,11 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - GM console: `gm/gm.css` (GM page only; `shared/base.css` untouched) redefines tokens: light = ledger paper, dark = forest night; radius 8 px controls / 12 px panels; 44 px controls + 16 px text on phones/touch or GM phone layout. Scripts unchanged. Claude's fix: "Up next" rows stack below 560 px; inputs/selects `min-width: 0; max-width: 100%`. Every GM screen and board fits 360 px.
 - Soundboard 1: tag-driven TV music. Server `services/music.ts` (Auto rules: night state → tag, a running game's library sound theme wins; manual override; Master-only), `services/soundPack.ts` (zip + `manifest.json`, 200 MB cap, lazy zip reader), migration 23 (sound tags/credit/source_url/license), `/api/music`, `/api/audio/settings`, `/api/sounds/pack`, PATCH sound; `/media/sounds` serves FLAC and HTTP Range (Safari). TV `tv/music.ts` (shuffle without repeats, lone track loops, crossfade, ducking under cues; silent until "Enable audio"; reports `music:now`). GM Sounds screen rebuilt (Music, Play by tag, Credits). Audio files are never in the repo: Tate's two LonePeakMusic tracks are an importable pack (licence: use with credit; redistribution unclear).
 
+### 4n. Three QoL fixes (Nov 3)
+- **Rename sounds:** the Master's Soundboard > Library list has an editable name for every sound (soundboard buttons, cues, music). Uses the existing `PATCH /api/sounds/:id`; the board button follows.
+- **Big music files:** music (kind `ambient`) can be up to 1 GB (`AMBIENT_MAX_MB`); cues and soundboard buttons stay at 30 MB. The Soundboard upload form now sends the raw file to `POST /api/sounds/file?name=&kind=&tags=...` (content-type audio/*, Master only), streamed to disk (temp file, bytes checked, renamed on success; refused uploads leave nothing behind). The old base64 `POST /api/sounds` still exists (30 MB). Sound **packs** are still capped at 200 MB in total (buffered in memory). A reverse proxy in front of the server must allow big bodies (nginx `client_max_body_size`).
+- **Mood:** `mood.moodMax` 0.06 → 0.10 (mood bias up to ±10%).
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
@@ -426,7 +431,7 @@ All functions are pure; the server and sim both call them. 112 tests. `test/fixt
 - Weighting `equal` (default) or `netWorth`. Self-votes are allowed and intended.
 
 ### Mood (`mood.ts`)
-- Two 1–5 ratings (mood, perceived self-assessment), **entered by the GM** → `centeredMood` → bias `moodMax × centered` (6% max) in band units, decaying `decayPerTick` 1% per tick.
+- Two 1–5 ratings (mood, perceived self-assessment), **entered by the GM** → `centeredMood` → bias `moodMax × centered` (10% max; was 6% until Nov 3) in band units, decaying `decayPerTick` 1% per tick.
 
 ### Kingfall and crowns (`kingfall.ts`)
 - `leaderFromScores(scores, 'high'|'low', current)` picks the leader from entered scores (ties keep the holder; with no holder in the tie, the crown stays where it is).
@@ -518,7 +523,7 @@ Fun only, **zero link to gold**. Tiers (placeholder numbers):
 
 **votes, mood, rerolls, espionage, achievements, prompts, finale, minter**
 - votes: quarterCount 4, bufferFrac 0.1, windowMinutes 5, weighting equal, bountyGold 2, topTwoMinPlayers 16, driftMax 0.15
-- mood: moodMax 0.06, decayPerTick 0.01
+- mood: moodMax 0.10 (was 0.06 until Nov 3), decayPerTick 0.01
 - rerolls: perPlayer 3
 - espionage: goldReward 3, revealDelayMinSec 15, revealDelayMaxSec 45
 - achievements.gold: first_blood 2, hat_trick 5, regular 2, oracle 1

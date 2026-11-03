@@ -5,7 +5,8 @@
  * Missing cue files fall back to a synthesized placeholder tone on the TV.
  */
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createWriteStream, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
 import { join } from 'node:path';
 import { bad, notFound, type Ctx } from '../context';
 import { audit } from './audit';
@@ -19,6 +20,9 @@ export type SoundKind = 'ambient' | 'cue' | 'soundboard';
 /** Upload cap (uncompressed WAV and FLAC are big). The route's body limit allows for base64 (+37%). */
 export const SOUND_MAX_MB = 30;
 const MAX_BYTES = SOUND_MAX_MB * 1024 * 1024;
+/** Music (ambient loops) can be far bigger: long mixes and lossless files. They are uploaded as a raw stream (`uploadSoundStream`), never as base64. */
+export const AMBIENT_MAX_MB = 1024;
+export const AMBIENT_MAX_BYTES = AMBIENT_MAX_MB * 1024 * 1024;
 const TYPES: Record<string, { ext: string; sig: (b: Buffer) => boolean }> = {
   'audio/mpeg': { ext: 'mp3', sig: (b) => b.subarray(0, 3).toString('latin1') === 'ID3' || (b[0] === 0xff && (b[1]! & 0xe0) === 0xe0) },
   'audio/ogg': { ext: 'ogg', sig: (b) => b.subarray(0, 4).toString('latin1') === 'OggS' },
@@ -182,6 +186,88 @@ export function uploadSound(
   audit(ctx, { nightId: null, gmId: actor.gmId, action: 'sound.upload', entity: 'sound', entityId: info.id, after: { name: meta.name, kind: meta.kind, theme: meta.theme, tags: meta.tags } });
   refresh(ctx);
   return info;
+}
+
+/** How many bytes from the start of a file the format check looks at (a FLAC can sit behind a big ID3 tag). */
+const SNIFF_BYTES = 256 * 1024;
+
+/**
+ * Upload one sound as a raw request body (the file itself, content-type audio/*), written straight to disk as it arrives:
+ * nothing is held in memory, so a long ambient loop can be up to AMBIENT_MAX_MB. Cues and soundboard buttons stay at
+ * SOUND_MAX_MB. The details (name, kind, tags, ...) come in the query string. The file is checked by its bytes, not its name.
+ */
+export async function uploadSoundStream(
+  ctx: Ctx,
+  actor: GmAuth,
+  query: Record<string, unknown>,
+  contentType: string | undefined,
+  body: NodeJS.ReadableStream,
+): Promise<SoundInfo> {
+  masterOnly(actor);
+  const drain = () => void body.resume();
+  let meta: NewSound;
+  let type: (typeof TYPES)[string] | undefined;
+  let mime: string;
+  try {
+    meta = cleanSound(query);
+    const ct = (contentType ?? '').split(';')[0]!.trim().toLowerCase();
+    mime = ALIASES[ct] ?? ct;
+    type = TYPES[mime];
+    if (!type) throw bad('bad_audio', 'Upload an MP3, OGG, WAV, M4A or FLAC file.');
+  } catch (e) {
+    drain();
+    throw e;
+  }
+  const maxBytes = meta.kind === 'ambient' ? AMBIENT_MAX_BYTES : MAX_BYTES;
+  const maxMb = meta.kind === 'ambient' ? AMBIENT_MAX_MB : SOUND_MAX_MB;
+  const dir = join(ctx.config.mediaDir, 'sounds');
+  mkdirSync(dir, { recursive: true });
+  const file = `${randomBytes(12).toString('hex')}.${type.ext}`;
+  const tmp = join(dir, `.upload-${file}`);
+  const head: Buffer[] = [];
+  let headLen = 0;
+  let total = 0;
+  let tooBig = false;
+  let writeError: Error | null = null;
+  const out = createWriteStream(tmp);
+  out.on('error', (e) => (writeError = e));
+  try {
+    // Read the whole request even when refusing it, so the client gets the real error instead of a dropped connection.
+    for await (const chunk of body as AsyncIterable<Buffer>) {
+      total += chunk.length;
+      if (total > maxBytes) tooBig = true;
+      if (tooBig || writeError) continue;
+      if (headLen < SNIFF_BYTES) {
+        const part = chunk.subarray(0, SNIFF_BYTES - headLen);
+        head.push(part);
+        headLen += part.length;
+      }
+      if (!out.write(chunk)) await Promise.race([once(out, 'drain'), once(out, 'error')]).catch(() => undefined);
+    }
+    out.end();
+    await once(out, 'close');
+    if (writeError) throw bad('write_failed', 'Could not save the file on the server. Is the disk full?');
+    if (tooBig) throw bad('audio_too_large', `${meta.kind === 'ambient' ? 'Music' : 'Sound'} files must be under ${maxMb} MB.`);
+    if (!total) throw bad('bad_audio', 'That file is empty.');
+    if (!type.sig(Buffer.concat(head))) throw bad('bad_audio', 'That file is not valid audio.');
+    renameSync(tmp, join(dir, file));
+  } catch (e) {
+    out.destroy();
+    try {
+      unlinkSync(tmp);
+    } catch {
+      /* never written */
+    }
+    throw e;
+  }
+  const id = Number(
+    ctx.db
+      .prepare('INSERT INTO sound (name, file_path, kind, theme, mime, created_at, tags, credit, source_url, license) VALUES (?,?,?,?,?,?,?,?,?,?)')
+      .run(meta.name, file, meta.kind, meta.theme, mime, ctx.now(), meta.tags.length ? JSON.stringify(meta.tags) : null, meta.credit, meta.sourceUrl, meta.license).lastInsertRowid,
+  );
+  audit(ctx, { nightId: null, gmId: actor.gmId, action: 'sound.upload', entity: 'sound', entityId: id, after: { name: meta.name, kind: meta.kind, theme: meta.theme, tags: meta.tags, bytes: total } });
+  refresh(ctx);
+  return toInfo({ id, name: meta.name, file_path: file, kind: meta.kind, theme: meta.theme, tags: meta.tags.length ? JSON.stringify(meta.tags) : null, credit: meta.credit, source_url: meta.sourceUrl, license: meta.license });
 }
 
 /** Master edits a sound's name, tags and credit after the fact (the audio file itself never changes). */

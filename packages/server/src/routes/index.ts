@@ -15,7 +15,7 @@ import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '.
 import { createClaim, decideClaim, getBoard, saveBoard, setBoardSettings } from '../services/boards';
 import { chatMessages, gmChatMessages, gmChats, markChatRead, myChats, sendChat, startChat, useWiretap } from '../services/chat';
 import { musicAction, setAudioSettings } from '../services/music';
-import { deleteSound, listSounds, parseRange, playSound, soundFileMime, updateSound, uploadSound } from '../services/sounds';
+import { AMBIENT_MAX_MB, deleteSound, listSounds, parseRange, playSound, soundFileMime, updateSound, uploadSound, uploadSoundStream } from '../services/sounds';
 import { PACK_MAX_MB, importSoundPack } from '../services/soundPack';
 import { minterGet, minterSync } from '../services/minter';
 import { answerOverrun, dismissPrompt } from '../services/prompts';
@@ -383,6 +383,11 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   // Phase 7 — sounds (upload: Master; soundboard: any GM). Files are local (MEDIA_DIR/sounds).
   app.get('/api/sounds', async (req) => (requireGm(ctx, req), { sounds: listSounds(ctx) }));
   app.post('/api/sounds', { bodyLimit: 42 * 1024 * 1024 }, async (req) => uploadSound(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
+  // Big files (music up to AMBIENT_MAX_MB): the raw audio as the request body, details in the query string, streamed to disk.
+  app.addContentTypeParser(/^audio\/[\w.+-]+/, (_req, payload, done) => done(null, payload));
+  app.post('/api/sounds/file', { bodyLimit: (AMBIENT_MAX_MB + 8) * 1024 * 1024 }, async (req) =>
+    uploadSoundStream(ctx, requireGm(ctx, req, { master: true }), (req.query ?? {}) as Record<string, unknown>, req.headers['content-type'], req.body as NodeJS.ReadableStream),
+  );
   app.delete<Id>('/api/sounds/:id', async (req) => deleteSound(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id)));
   app.patch<Id>('/api/sounds/:id', async (req) => updateSound(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
   // Sound pack: the raw zip as the request body (a zip of audio + manifest.json). Master only.
