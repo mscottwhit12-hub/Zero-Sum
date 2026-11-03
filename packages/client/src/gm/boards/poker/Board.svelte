@@ -33,7 +33,6 @@
     levelCount,
     levelMs,
     mergeBust,
-    money,
     nextHand,
     ordinal,
     paidDollars,
@@ -62,11 +61,35 @@
     syncPlayers,
     undoRebuy,
     zeroChipAlive,
+    isGold,
+    applyBlock,
+    applyPlan,
+    bankInfo,
+    clearPayment,
+    computePlan,
+    dealBlock,
+    effectiveCtx,
+    planOutcome,
+    syncStart,
+    isPristine,
+    payInfo,
+    payMethods,
+    payoutTable,
+    planResolved,
+    recordAllPayments,
+    recordPayment,
+    setPlan,
+    units,
+    worth,
+    type PlanDraft,
     type PokerState,
   } from './def';
+  import { COLOUR_NAMES, MAX_COLOURS, ladder, type ChipColour } from './chips';
   import { clamp, seatPoints } from './seating';
 
-  let { ctx, state: game, onchange, onfinish }: BoardProps<PokerState> = $props();
+  let { ctx: baseCtx, state: game, onchange, onfinish }: BoardProps<PokerState> = $props();
+  /** The context with this game's money settings (an accepted chip plan replaces the settings screen's). */
+  const ctx = $derived(effectiveCtx(game, baseCtx));
 
   let picked = $state<number | null>(null);
   let rebuyAsk = $state<number | null>(null);
@@ -76,6 +99,11 @@
   let showRecap = $state(false);
   let showNumbers = $state(false);
   let removeAsk = $state<number | null>(null);
+  /** Players being marked out who still have chips: asks who won them. */
+  let winnerAsk = $state<{ pids: number[]; from: 'panel' | 'together' } | null>(null);
+  let planAsk = $state(false);
+  let planMsg = $state('');
+  let showPay = $state(false);
   let counting = $state(false);
   /** Only the numbers the GM typed in the count form; every other box shows (and counts) the live stack. */
   let draft = $state<Record<number, string>>({});
@@ -126,7 +154,7 @@
   /** Keeps the saved state in step with the table: late joiners, a changed level length, a shorter blind schedule. */
   $effect(() => {
     const t = Date.now();
-    apply(syncClock(syncPlayers(cur(), ctx, t), ctx, t));
+    apply(syncStart(syncClock(syncPlayers(cur(), ctx, t), ctx, t), ctx));
   });
 
   const now = () => Date.now();
@@ -154,6 +182,43 @@
   const rebuysOpen = $derived(rebuysOn && clock.level <= rebuyUntil);
   const rebuyText = $derived(!rebuysOn ? 'Rebuys off' : !rebuysOpen ? 'Rebuys closed' : cash ? 'Rebuys open' : `Rebuys open through level ${rebuyUntil}`);
   const trackButton = $derived(cfg(ctx.settings, 'trackButton') >= 1);
+  // money: collecting buy-ins, the chip plan, the bank and what everyone receives
+  const gold = $derived(isGold(ctx.settings));
+  const ppu = $derived(Math.max(1, cfg(ctx.settings, 'pointsPerUnit')));
+  const unit = (n: number) => units(n, ctx.settings);
+  const pts = (n: number) => worth(n, ctx.settings);
+  const buyInNow = $derived(cfg(ctx.settings, 'buyIn'));
+  const payNeeded = $derived(cfg(ctx.settings, 'requirePayment') >= 1);
+  const pay = $derived(payInfo(game, ctx));
+  const payBy = $derived(Object.fromEntries(pay.rows.map((r) => [r.playerId, r])));
+  const payRowsShown = $derived(game.button === null || showPay ? pay.rows : pay.rows.filter((r) => r.short > 0));
+  const dealWhy = $derived(dealBlock(game, ctx));
+  const methods = $derived(payMethods(ctx.settings));
+  const pristine = $derived(isPristine(game));
+  const plan = $derived(computePlan(game, ctx));
+  const planIn = $derived(planResolved(game, ctx));
+  const planWhy = $derived(applyBlock(game, ctx));
+  const planSettings = $derived({ ...ctx.settings, currency: planIn.currency });
+  const planWorth = (n: number) => worth(n, planSettings);
+  const planUnit = (n: number) => units(n, planSettings);
+  const planCols = $derived(game.plan?.colours ?? []);
+  const suggested = $derived(ladder(Math.max(1, planCols.filter((c) => c.count > 0).length), Math.max(1, Math.round(planIn.buyIn * ppu))));
+  const bank = $derived(bankInfo(game, ctx));
+  const cashOut = $derived(payoutTable(game, ctx));
+  const stackPts = $derived(cfg(ctx.settings, 'startStack'));
+  const stackMismatch = $derived(!game.applied && Math.abs(stackPts / ppu - buyInNow) > 1e-9);
+  /** What accepting the plan would set (null = it can't be accepted yet). */
+  const outcome = $derived(planOutcome(game, ctx));
+  const planBuyIn = $derived(outcome?.buyIn ?? planIn.buyIn);
+  const chipsTyped = $derived(planCols.some((c) => c.count > 0));
+  const planMatches = $derived(!!game.applied && !!outcome && game.applied.startStack === outcome.stack && game.applied.buyIn === outcome.buyIn && game.applied.currency === outcome.currency);
+  /** True while the GM has typed a plan (chips, a buy-in or a currency) that isn't accepted yet: money shouldn't be collected on a plan that may still change. */
+  const planPending = $derived(
+    pristine &&
+      !planMatches &&
+      !!game.plan &&
+      (chipsTyped || (game.plan.currency != null && game.plan.currency !== cfg(ctx.settings, 'currency')) || (game.plan.buyIn != null && game.plan.buyIn !== buyInNow)),
+  );
   const btn = $derived(trackButton ? buttonInfo(game, ctx) : null);
   const active = $derived(ctx.players.filter((o) => !pl(game, o.id, ctx).out));
   const outPlayers = $derived(ctx.players.filter((o) => pl(game, o.id, ctx).out));
@@ -382,6 +447,7 @@
     bustNotice = '';
     bustSel = bustSel.includes(id) ? bustSel.filter((x) => x !== id) : [...bustSel, id];
   };
+  const chipsOf = (ids: number[]) => ids.reduce((n, id) => n + pl(cur(), id, ctx).stack, 0);
   function doBustSelected() {
     const s = cur();
     const why = bustBlock(s, ctx, bustPick);
@@ -389,17 +455,141 @@
       bustNotice = why;
       return;
     }
+    if (chipsOf(bustPick) > 0) {
+      winnerAsk = { pids: [...bustPick], from: 'together' };
+      return;
+    }
     apply(bust(s, ctx, bustPick, now()));
     bustSel = [];
   }
-  /** One tap marks a player out; "Undo bust-out" on their panel takes it back. */
+  /** One tap marks a player with no chips out; a player with chips asks who won them, then one more tap finishes it. */
   function doBust(pid: number) {
     const s = cur();
     const why = bustBlock(s, ctx, [pid]);
     if (why) return say(pid, why);
+    if (pl(s, pid, ctx).stack > 0) {
+      winnerAsk = { pids: [pid], from: 'panel' };
+      return;
+    }
     bustSel = bustSel.filter((x) => x !== pid);
     apply(bust(s, ctx, [pid], now()));
   }
+  /** Finishes a bust-out: the chips go to `winnerId`, or nowhere (null) when the GM will update the stacks by hand. */
+  function chooseWinner(winnerId: number | null) {
+    const a = winnerAsk;
+    if (!a) return;
+    const s = cur();
+    const why = bustBlock(s, ctx, a.pids, winnerId);
+    if (why) {
+      if (a.from === 'panel') say(a.pids[0]!, why);
+      else bustNotice = why;
+      return;
+    }
+    winnerAsk = null;
+    bustSel = bustSel.filter((x) => !a.pids.includes(x));
+    apply(bust(s, ctx, a.pids, now(), winnerId));
+  }
+
+  // ---- money
+  const payWith = (pid: number, how: 'cash' | 'venmo' | 'gold') => apply(recordPayment(cur(), ctx, pid, how, now()));
+  const payAll = (how: 'cash' | 'venmo' | 'gold') => apply(recordAllPayments(cur(), ctx, how, now()));
+  const unpay = (pid: number) => apply(clearPayment(cur(), ctx, pid, now()));
+  const howLabel = (how: string | null) => (how === 'gold' ? 'Gold held' : how === 'venmo' ? 'Venmo' : how === 'cash' ? 'Cash' : '');
+  const inLabel = (how: string) => (how === 'gold' ? 'Gold held' : how === 'venmo' ? 'Venmo in' : 'Cash in');
+
+  /** "20", "$20", "12.50", "20 gold" -> a number of dollars or gold; anything else null. */
+  const parseUnits = (txt: string): number | null => {
+    const n = Number(txt.trim().toLowerCase().replace(/gold|\$|,|\s/g, ''));
+    return txt.trim() !== '' && Number.isFinite(n) && n > 0 ? n : null;
+  };
+  function planPatch(patch: Partial<PlanDraft>) {
+    planMsg = '';
+    planAsk = false;
+    apply(setPlan(cur(), ctx, patch));
+  }
+  const colours = (): ChipColour[] => [...(cur().plan?.colours ?? [])];
+  function setColour(i: number, patch: Partial<ChipColour>) {
+    const cols = colours();
+    cols[i] = { ...cols[i]!, ...patch };
+    planPatch({ colours: cols });
+  }
+  function addColour() {
+    const cols = colours();
+    if (cols.length >= MAX_COLOURS) return;
+    const used = new Set(cols.map((c) => c.name.toLowerCase()));
+    cols.push({ name: COLOUR_NAMES.find((n) => !used.has(n)) ?? `colour ${cols.length + 1}`, count: 0, value: null });
+    planPatch({ colours: cols });
+  }
+  function dropColour(i: number) {
+    planPatch({ colours: colours().filter((_, j) => j !== i) });
+  }
+  function moveColour(i: number, d: number) {
+    const cols = colours();
+    const j = i + d;
+    if (j < 0 || j >= cols.length) return;
+    [cols[i], cols[j]] = [cols[j]!, cols[i]!];
+    planPatch({ colours: cols });
+  }
+  /** Reads a typed number of chips for a colour; says so when it can't. */
+  function commitCount(e: Event, i: number) {
+    const input = e.currentTarget as HTMLInputElement;
+    const raw = input.value.trim();
+    const v = raw === '' ? 0 : parseChips(raw);
+    if (v === null) {
+      planMsg = `Couldn\u2019t read \u201c${raw.slice(0, 20)}\u201d as a number of chips.`;
+      input.value = String(colours()[i]?.count || '');
+      return;
+    }
+    setColour(i, { count: v });
+  }
+  function commitValue(e: Event, i: number) {
+    const input = e.currentTarget as HTMLInputElement;
+    const raw = input.value.trim();
+    if (raw === '') return setColour(i, { value: null });
+    const v = parseUnits(raw);
+    if (v === null) {
+      planMsg = `Couldn\u2019t read \u201c${raw.slice(0, 20)}\u201d as a chip value. Type it in ${planIn.currency ? 'gold' : 'dollars'}, like 0.25.`;
+      const cur0 = colours()[i]?.value;
+      input.value = cur0 ? String(Math.round((cur0 / ppu) * 100) / 100) : '';
+      return;
+    }
+    setColour(i, { value: Math.round(v * ppu) });
+  }
+  function commitBuyIn(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const v = parseUnits(input.value);
+    if (v === null) {
+      planMsg = `Couldn\u2019t read \u201c${input.value.slice(0, 20)}\u201d as a buy-in.`;
+      input.value = String(planIn.buyIn);
+      return;
+    }
+    planPatch({ buyIn: v });
+  }
+  function commitPlayers(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const v = parseChips(input.value);
+    if (v === null || v < 1) {
+      planMsg = 'Players has to be a whole number, 1 or more.';
+      input.value = String(planIn.players);
+      return;
+    }
+    planPatch({ players: v });
+  }
+  function commitShare(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const n = Number(input.value.replace('%', '').trim());
+    if (!Number.isFinite(n) || n < 10 || n > 100) {
+      planMsg = 'The share to players has to be between 10% and 100%.';
+      input.value = String(Math.round(planIn.sharePercent * 10) / 10);
+      return;
+    }
+    planPatch({ sharePercent: n });
+  }
+  function acceptPlan() {
+    planAsk = false;
+    apply(applyPlan(cur(), ctx, now()));
+  }
+  const valText = (v: number | null) => (v ? String(Math.round((v / ppu) * 100) / 100) : '');
 
   const submitNote = () => {
     if (!noteText.trim()) return;
@@ -443,9 +633,27 @@
   {/if}
 {/snippet}
 
+<!-- asks who won the chips of players who are going out -->
+{#snippet winnerPicker(pids: number[])}
+  {@const total = pids.reduce((n, id) => n + stackOf(id), 0)}
+  <div class="ask">
+    <p><strong>Who won {pids.map((id) => labelOf[id]).join(' and ')}’s {chips(total)} chips?</strong></p>
+    <div class="row">
+      {#each active.filter((o) => !pids.includes(o.id)) as o (o.id)}
+        <button class="big" disabled={!!bustBlock(game, ctx, pids, o.id)} onclick={() => chooseWinner(o.id)}>{labelOf[o.id]}</button>
+      {/each}
+    </div>
+    <div class="row">
+      <button class="link" onclick={() => chooseWinner(null)}>Someone else: I’ll update the stacks myself</button>
+      <button class="link" onclick={() => (winnerAsk = null)}>Cancel</button>
+    </div>
+  </div>
+{/snippet}
+
 {#snippet playerPanel(p: BoardPlayer)}
   {@const d = pl(game, p.id, ctx)}
   {@const why = rebuyBlock(game, ctx, p.id, nowMs)}
+  {@const pr = payBy[p.id]}
   <section class="panel pp" class:cur={p.id === sel} id={`poker-p-${p.id}`}>
     <div class="spread">
       <div class="row">
@@ -454,7 +662,7 @@
         {@render tags(p.id)}
         {#if crownId === p.id && !d.out}<span class="small" title="Wears the crown">👑</span>{/if}
       </div>
-      <span class="badge" class:live={!d.out}>{d.out ? 'Out' : `${chips(d.stack)} chips`}</span>
+      <span class="badge" class:live={!d.out}>{d.out ? 'Out' : `${chips(d.stack)} chips · ${pts(d.stack)}`}</span>
     </div>
 
     {#if d.out}
@@ -464,7 +672,7 @@
       </p>
       <div class="row">
         <button class="big" onclick={() => apply(restore(cur(), ctx, p.id, now()))}>Undo bust-out</button>
-        {#if rebuysOn}<button class="big" disabled={!!why} onclick={() => doRebuy(p.id)}>Rebuy ({money(cfg(ctx.settings, 'buyIn'))})</button>{/if}
+        {#if rebuysOn}<button class="big" disabled={!!why} onclick={() => doRebuy(p.id)}>Rebuy ({unit(buyInNow)})</button>{/if}
       </div>
       {#if rebuysOn && why}<p class="small muted">{why}</p>{/if}
       {#if notice[p.id]}<p class="error">{notice[p.id]}</p>{/if}
@@ -483,16 +691,24 @@
 
       <div class="field">
         <div class="spread">
-          <span class="small">Bought in <strong class="mono">{money(paidDollars(d))}</strong>{rebuysOf(d) ? ` · ${rebuysOf(d)} rebuy${rebuysOf(d) === 1 ? '' : 's'}` : ''}</span>
+          <span class="small">Bought in <strong class="mono">{unit(paidDollars(d))}</strong>{rebuysOf(d) ? ` · ${rebuysOf(d)} rebuy${rebuysOf(d) === 1 ? '' : 's'}` : ''}</span>
           <div class="row">
-            {#if rebuysOn}<button class="big" disabled={!!why} onclick={() => doRebuy(p.id)}>Rebuy ({money(cfg(ctx.settings, 'buyIn'))})</button>{/if}
+            {#if rebuysOn}<button class="big" disabled={!!why} onclick={() => doRebuy(p.id)}>Rebuy ({unit(buyInNow)})</button>{/if}
             {#if rebuysOf(d) > 0}<button class="link" onclick={() => apply(undoRebuy(cur(), ctx, p.id, now()))}>Undo last rebuy</button>{/if}
           </div>
         </div>
         {#if rebuysOn && why}<p class="small muted">{why}</p>{/if}
+        {#if pr && pr.short > 0 && game.button !== null}
+          <div class="field">
+            <span class="small"><strong>To collect {unit(pr.short)}</strong> from {labelOf[p.id]}</span>
+            <div class="row">
+              {#each methods as how (how)}<button class="big" onclick={() => payWith(p.id, how)}>{inLabel(how)}</button>{/each}
+            </div>
+          </div>
+        {/if}
         {#if rebuyAsk === p.id}
           <div class="ask">
-            <p><strong>{p.name} still has {chips(d.stack)} chips.</strong> Rebuy {money(cfg(ctx.settings, 'buyIn'))} for {chips(cfg(ctx.settings, 'rebuyChips'))} more?</p>
+            <p><strong>{p.name} still has {chips(d.stack)} chips.</strong> Rebuy {unit(buyInNow)} for {chips(cfg(ctx.settings, 'rebuyChips'))} more chips?</p>
             <div class="row">
               <button class="big primary" onclick={() => doRebuy(p.id, true)}>Yes, rebuy</button>
               <button class="big" onclick={() => (rebuyAsk = null)}>Cancel</button>
@@ -510,7 +726,11 @@
         {/if}
       </div>
 
-      <button class="big danger" disabled={stat.alive.length <= 1} onclick={() => doBust(p.id)}>Mark {labelOf[p.id]} out</button>
+      {#if winnerAsk && winnerAsk.from === 'panel' && winnerAsk.pids[0] === p.id}
+        {@render winnerPicker(winnerAsk.pids)}
+      {:else}
+        <button class="big danger" disabled={stat.alive.length <= 1} onclick={() => doBust(p.id)}>Mark {labelOf[p.id]} out</button>
+      {/if}
     {/if}
   </section>
 {/snippet}
@@ -520,7 +740,6 @@
 <div class="left">
   <section class="panel">
     <div class="spread">
-      <h2>Texas Hold'em</h2>
       <div class="row">
         <span class="badge">{cash ? 'Cash game' : 'Tournament'}</span>
         <span class="badge">{stat.alive.length} of {ctx.players.length} still in</span>
@@ -587,6 +806,7 @@
         <div>
           <div class="small muted">Level {clock.level} of {lastLevel}</div>
           <div class="blinds mono">{blindText(blinds)}</div>
+          <div class="small muted">{pts(blinds.sb)} / {pts(blinds.bb)}{blinds.ante > 0 ? `, ante ${pts(blinds.ante)}` : ''} (points are {gold ? 'hundredths of a gold' : 'cents'})</div>
         </div>
         {#if clock.remainingMs !== null}
           <div class="clockbox">
@@ -598,7 +818,7 @@
         {/if}
       </div>
       <p class="small muted">
-        {#if nextBlinds}Next: {blindText(nextBlinds)}{:else}No higher level.{/if}
+        {#if nextBlinds}Next: {blindText(nextBlinds)} ({pts(nextBlinds.sb)} / {pts(nextBlinds.bb)}){:else}No higher level.{/if}
         · {rebuyText}
       </p>
       <div class="row">
@@ -630,11 +850,145 @@
               Not enough players left for blinds.
             {/if}
           </span>
-          <button class="big" disabled={stat.alive.length < 2} onclick={() => apply(nextHand(cur(), ctx))}>{game.button === null ? 'Deal first hand' : 'Next hand'}</button>
+          <button class="big" disabled={stat.alive.length < 2 || (game.button === null && !!dealWhy)} onclick={() => apply(nextHand(cur(), ctx))}>{game.button === null ? 'Deal first hand' : 'Next hand'}</button>
         </div>
+        {#if game.button === null && dealWhy}<p class="warnline">⚠ {dealWhy}</p>{/if}
       </div>
     {/if}
   </section>
+
+  {#if ctx.players.length === 0}
+    <section class="panel"><p class="muted">No players in this game yet. Add players first, then set up the chips here.</p></section>
+  {/if}
+
+  {#if payNeeded || pay.toCollect > 0}
+    <section class="panel" id="poker-money">
+      <div class="spread">
+        <h3>Buy-ins</h3>
+        <span class="badge">{pay.rows.filter((r) => r.short === 0).length} of {pay.rows.length} paid</span>
+      </div>
+      {#if pay.toCollect === 0 && !showPay}
+        <p class="small">✓ Every buy-in is in: {unit(pay.got)} {gold ? 'in gold held' : 'collected'}. <button class="link" onclick={() => (showPay = true)}>Details</button></p>
+      {:else}
+        {#if planPending}
+          <p class="warnline">⚠ Accept the chip plan below before collecting: the buy-in or currency may still change.</p>
+        {/if}
+        {#if game.button === null}
+          <p class="small muted">
+            {#if gold}Gold game: each player’s gold has to be liquid in their account and held until the game ends. Tap “Gold held” once it is held.
+            {:else}Take each player’s {unit(buyInNow)} in cash or Venmo before the first hand. Tap when it is in.{/if}
+          </p>
+        {/if}
+        {#each payRowsShown as r (r.playerId)}
+          <div class="payrow">
+            <span>{labelOf[r.playerId]}</span>
+            {#if r.short > 0}
+              <span class="small muted">owes {unit(r.short)}{r.owed > r.short ? ' (rebuy)' : ''}</span>
+              <span class="row">{#each methods as how (how)}<button class="big" disabled={planPending} onclick={() => payWith(r.playerId, how)}>{inLabel(how)}</button>{/each}</span>
+            {:else}
+              <span class="small">✓ {unit(r.got)} · {howLabel(r.how)}</span>
+              <button class="link" onclick={() => unpay(r.playerId)} aria-label={`Undo ${labelOf[r.playerId]}'s payment`}>Undo</button>
+            {/if}
+          </div>
+        {/each}
+        {#if pay.rows.filter((r) => r.short > 0).length > 1}
+          <div class="row">
+            {#each methods as how (how)}<button class="big" disabled={planPending} onclick={() => payAll(how)}>Everyone paid: {howLabel(how)}</button>{/each}
+          </div>
+        {/if}
+        {#if pay.toCollect === 0}<button class="link" onclick={() => (showPay = false)}>Hide</button>{/if}
+      {/if}
+    </section>
+  {/if}
+
+  {#if pristine}
+    <section class="panel" id="poker-plan">
+      <h3>Chips and buy-in</h3>
+      <p class="small muted">Type the chips you own, lowest value first. The board works out a fair stack for every player and keeps the rest in the bank for rebuys.</p>
+      {#if stackMismatch}
+        <p class="warnline">⚠ The starting stack ({chips(stackPts)} points) is worth {pts(stackPts)}, but the buy-in is {unit(buyInNow)}. Accept a chip plan below, or fix the settings.</p>
+      {/if}
+      <div class="row" role="group" aria-label="What players put up">
+        <button class="big seg" class:on={planIn.currency === 0} aria-pressed={planIn.currency === 0} onclick={() => planPatch({ currency: 0 })}>Real money</button>
+        <button class="big seg" class:on={planIn.currency === 1} aria-pressed={planIn.currency === 1} onclick={() => planPatch({ currency: 1 })}>Gold</button>
+      </div>
+      <div class="planfields">
+        <label>Buy-in per player ({planIn.currency ? 'gold' : '$'})<input class="mono" type="text" inputmode="decimal" value={planIn.buyIn} onchange={commitBuyIn} /></label>
+        <label>Players<input class="mono" type="text" inputmode="numeric" value={planIn.players} onchange={commitPlayers} /></label>
+        <label>Chips to players (%)<input class="mono" type="text" inputmode="decimal" value={Math.round(planIn.sharePercent * 10) / 10} onchange={commitShare} /></label>
+      </div>
+      {#if planCols.length}<div class="colhead small muted"><span>Colour</span><span>How many</span><span>Value each (optional)</span></div>{/if}
+      {#each planCols as c, i (i)}
+        <div class="colrow">
+          <input list="poker-colours" value={c.name} aria-label={`Chip colour ${i + 1}`} onchange={(e) => setColour(i, { name: e.currentTarget.value })} />
+          <input class="mono" type="text" inputmode="numeric" value={c.count || ''} placeholder="0" aria-label={`How many ${c.name || 'colour ' + (i + 1)} chips`} onchange={(e) => commitCount(e, i)} />
+          <input class="mono" type="text" inputmode="decimal" value={valText(c.value)} placeholder={c.count > 0 ? planUnit(((suggested[planCols.slice(0, i).filter((x) => x.count > 0).length] ?? 0)) / ppu).replace(/ gold$/, '') : ''} aria-label={`Value of one ${c.name || 'colour ' + (i + 1)} chip`} onchange={(e) => commitValue(e, i)} />
+          <span class="colbtns">
+            <button onclick={() => moveColour(i, -1)} disabled={i === 0} aria-label={`Move ${c.name} up`}>↑</button>
+            <button onclick={() => moveColour(i, 1)} disabled={i === planCols.length - 1} aria-label={`Move ${c.name} down`}>↓</button>
+            <button onclick={() => dropColour(i)} aria-label={`Remove ${c.name}`}>✕</button>
+          </span>
+        </div>
+      {/each}
+      <datalist id="poker-colours">{#each COLOUR_NAMES as n (n)}<option value={n}></option>{/each}</datalist>
+      <button class="big" onclick={addColour} disabled={planCols.length >= MAX_COLOURS}>{planCols.length ? 'Add a colour' : 'Add your first colour'}</button>
+      {#if planMsg}<p class="error">{planMsg}</p>{/if}
+
+      <div class="planout">
+        {#if !chipsTyped}
+          <p class="small muted">No chips entered: every player gets {chips(outcome?.stack ?? 0)} points ({planWorth(outcome?.stack ?? 0)}), the same as the buy-in. Add your chips above for a planned stack and a bank.</p>
+        {:else if plan.status === 'empty'}
+          <p class="small muted">{plan.problems.join(' ')}</p>
+        {:else if plan.problems.length}
+          {#each plan.problems as pr (pr)}<p class="warnline">⚠ {pr}</p>{/each}
+        {:else}
+          <p><strong>{plan.status === 'exact' ? `✓ Every player gets exactly ${planWorth(plan.stack)}.` : plan.status === 'adjusted' ? `⚠ Closest fair stack: ${planWorth(plan.stack)} (the buy-in is ${planWorth(plan.target)}).` : '⚠ These chips can’t make a fair stack.'}</strong></p>
+          <ul class="small">
+            {#each plan.rows.filter((r) => r.perPlayer > 0) as r (r.name + r.value)}
+              <li>{r.perPlayer} × {r.name} ({planWorth(r.value)} each){r.typed ? '' : ' · suggested value'} · bank keeps {r.bankLeft}</li>
+            {/each}
+          </ul>
+          <p class="small">Stack {chips(plan.stack)} points = {planWorth(plan.stack)}. Bank keeps {planWorth(plan.bankValue)}, enough for {plan.rebuys} more {plan.rebuys === 1 ? 'rebuy' : 'rebuys'}.</p>
+          {#if plan.blinds}
+            <p class="small muted">Suggested first blinds: {chips(plan.blinds.sb)}/{chips(plan.blinds.bb)} points ({planWorth(plan.blinds.sb)}/{planWorth(plan.blinds.bb)}), about {plan.blinds.bigBlinds} big blinds. Blinds come from the settings (now {chips(blindsFor(1, ctx.settings).sb)}/{chips(blindsFor(1, ctx.settings).bb)}).</p>
+          {/if}
+        {/if}
+        {#each plan.notes as n (n)}<p class="warnline">⚠ {n}</p>{/each}
+        {#if outcome || chipsTyped}
+          {#if planMatches}
+            <p class="small">✓ This plan is in use for the game.</p>
+          {:else if planAsk && !planWhy}
+            <div class="ask">
+              <p><strong>Give every player {chips(outcome?.stack ?? 0)} points ({planWorth(outcome?.stack ?? 0)})?</strong> Rebuys will hand out the same stack, the buy-in becomes {planUnit(planBuyIn)}{planBuyIn !== planIn.buyIn ? ` (the chips can’t make ${planUnit(planIn.buyIn)})` : ''}, and everyone’s chips are reset.</p>
+              <div class="row">
+                <button class="big primary" onclick={acceptPlan}>Yes, use this plan</button>
+                <button class="big" onclick={() => (planAsk = false)}>Cancel</button>
+              </div>
+            </div>
+          {:else}
+            <button class="big primary" disabled={!!planWhy} onclick={() => (planAsk = true)}>{chipsTyped ? 'Use this plan' : 'Use these money settings'}</button>
+            {#if planWhy}<p class="small muted">{planWhy}</p>{/if}
+          {/if}
+        {/if}
+      </div>
+    </section>
+  {:else if game.applied || stackMismatch}
+    <section class="panel" id="poker-plan">
+      <h3>Chips in play</h3>
+      {#if game.applied}
+        <p class="small">Each player started with {chips(game.applied.startStack)} points ({pts(game.applied.startStack)}). Rebuys give the same.</p>
+      {/if}
+      {#if bank}
+        <p class="small">
+          Bank: {bank.rows.filter((r) => r.perPlayer > 0).map((r) => `${r.bank} ${r.name}`).join(', ')}. Covers {Math.max(0, bank.rebuysLeft)} more {bank.rebuysLeft === 1 ? 'rebuy' : 'rebuys'}.
+        </p>
+        {#if bank.rebuysLeft <= 0 || bank.short}<p class="warnline">⚠ The bank can’t cover another rebuy. Add chips from the box or stop rebuys.</p>{/if}
+      {/if}
+      {#if stackMismatch}
+        <p class="warnline">⚠ The starting stack is worth {pts(stackPts)} but the buy-in is {unit(buyInNow)}.</p>
+      {/if}
+    </section>
+  {/if}
 
   {#if ctx.table}
     <section class="panel">
@@ -698,7 +1052,7 @@
     </div>
     <p class="small">
       On the table <strong class="mono">{chips(totals.onTable)}</strong> · bought in <strong class="mono">{chips(totals.boughtIn)}</strong>
-      ({money(totals.dollars)})
+      ({unit(totals.dollars)})
       · last count {game.snaps.length ? clockTime(game.snaps[game.snaps.length - 1]!.t) : 'none yet'}
     </p>
     {#if totals.diff !== 0}
@@ -804,7 +1158,8 @@
       {/each}
     </div>
     {#if bustNotice}<p class="error">{bustNotice}</p>{/if}
-    <button class="big danger" disabled={!bustPick.length} onclick={doBustSelected}>{bustPick.length ? `Mark ${bustPick.length} out` : 'Mark out'}</button>
+    {#if winnerAsk && winnerAsk.from === 'together'}{@render winnerPicker(winnerAsk.pids)}{/if}
+    <button class="big danger" disabled={!bustPick.length || (winnerAsk !== null && winnerAsk.from === 'together')} onclick={doBustSelected}>{bustPick.length ? `Mark ${bustPick.length} out` : 'Mark out'}</button>
   </section>
 
   <section class="panel">
@@ -812,7 +1167,7 @@
     <div class="scroll-x">
       <table class="standings">
         <thead>
-          <tr><th>Place</th><th>Player</th><th class="num">Chips</th><th class="num">Bought in</th></tr>
+          <tr><th>Place</th><th>Player</th><th class="num">Chips</th>{#if payNeeded}<th class="num">Cashes out</th>{/if}</tr>
         </thead>
         <tbody>
           {#each standings as r (r.playerId)}
@@ -820,12 +1175,16 @@
               <td class="mono">{ordinal(r.place)}{r.tied ? '=' : ''}</td>
               <td><button class="link" onclick={() => pick(r.playerId)}>{labelOf[r.playerId]}</button></td>
               <td class="num mono">{r.out ? 'out' : chips(r.stack)}</td>
-              <td class="num mono">{money(r.dollars)}</td>
+              {#if payNeeded}<td class="num mono">{unit(r.cashOut)}</td>{/if}
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
+    {#if payNeeded}
+      <p class="small muted">Everyone is paid what their chips are worth. Money in: {unit(cashOut.invested)} · paid out: {unit(cashOut.cashOut)}.</p>
+      {#if cashOut.diff !== 0}<p class="warnline">⚠ The cash-outs are {unit(Math.abs(cashOut.diff))} {cashOut.diff > 0 ? 'more' : 'less'} than the money put in. Count the chips again before paying anyone.</p>{/if}
+    {/if}
   </section>
 
   {#if showRecap || stat.over}
@@ -842,7 +1201,8 @@
               {:else}Still in with {chips(r.stack)} chips.{/if}
             </p>
             <p class="small muted">
-              Bought in {money(r.dollars)}{r.rebuys ? ` (${r.rebuys} rebuy${r.rebuys === 1 ? '' : 's'})` : ''}
+              Bought in {unit(r.dollars)}{r.rebuys ? ` (${r.rebuys} rebuy${r.rebuys === 1 ? '' : 's'})` : ''}
+              {#if payNeeded}<br />Cashes out {unit(r.cashOut)}{/if}
               {#if r.trail.length >= 3}<br />Chips: {r.trail.slice(-8).map(chips).join(' → ')}{/if}
               {#if r.peak > r.stack && r.peak > (r.trail[0] ?? 0) && r.trail.length >= 3}<br />Biggest stack: {chips(r.peak)}{r.peakAfterMs !== null ? ` (${spanText(r.peakAfterMs)} in)` : ''}{/if}
             </p>
@@ -878,7 +1238,7 @@
           <li class:note-entry={e.kind === 'note'}>
             <span class="mono muted small">{time(e.t)}</span>
             <span>
-              {describeEntry(e, nameOf)}
+              {describeEntry(e, nameOf, ctx.settings)}
               {#if e.kind === 'note'}<button class="link small" onclick={() => apply(removeNote(cur(), e.id))} aria-label="Delete this note">Delete</button>{/if}
             </span>
           </li>
@@ -911,13 +1271,8 @@
     align-items: start;
   }
   .right {
-    position: sticky;
-    top: 0.5rem;
-    max-height: calc(100vh - 5rem);
-    overflow-y: auto;
     display: grid;
     gap: 0.5rem;
-    padding-right: 2px;
   }
   .right :global(.panel) {
     margin: 0;
@@ -956,6 +1311,66 @@
     border-left: 3px solid var(--danger, var(--text));
     color: var(--danger, var(--text));
     font-weight: 600;
+  }
+
+  /* money: buy-ins and the chip plan */
+  .payrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.7rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .payrow > span:first-child {
+    min-width: 5rem;
+    font-weight: 600;
+  }
+  .seg.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+  .planfields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+    margin: 0.6rem 0;
+    align-items: end;
+  }
+  .planfields label {
+    display: grid;
+    gap: 0.2rem;
+    font-size: 0.85rem;
+  }
+  .planfields input,
+  .colrow input {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+  }
+  .colhead,
+  .colrow {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.3rem;
+    align-items: center;
+  }
+  .colrow {
+    margin-bottom: 0.5rem;
+  }
+  .colbtns {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.3rem;
+  }
+  .colbtns button {
+    min-width: 44px;
+    padding: 0 0.5rem;
+  }
+  .planout ul {
+    margin: 0.3rem 0;
+    padding-left: 1.1rem;
   }
 
   /* blind clock */

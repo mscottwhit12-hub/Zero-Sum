@@ -4,13 +4,24 @@ import {
   SETTINGS, ackLevels, addNote, blindProblems, blindText, blindsFor, boughtChips, bust, bustBlock, buttonInfo, chipTotals, chips, clockInfo, clockText,
   countDue, def, describeEntry, init, mergeBust, money, nextHand, ordinal, paidDollars, parseChips, pauseClock, placements, pl, rebuy, rebuyBlock, recap,
   recapText, recordCount, removeCount, removeNote, restore, resumeClock, score, setButton, setLevel, setPin, setStack, snoozeCount, spanText, startClock, status,
-  syncClock, syncPlayers, undoRebuy, zeroChipAlive, type PokerState,
+  syncClock, syncPlayers, undoRebuy, zeroChipAlive, applyBlock, applyPlan, bankInfo, clearPayment, computePlan, dealBlock, effectiveCtx, isPristine, payInfo, payMethods, payoutTable,
+  planOutcome, planResolved, recordAllPayments, syncStart, recordPayment, setPlan, settingsOf, units, worth, type PokerState,
 } from './def';
 
 const T0 = 1_000_000_000_000;
 const MIN = 60000;
 const player = (id: number, seat: number | null = id): BoardPlayer => ({ id, name: `P${id}`, color: null, avatarPath: null, seat });
-const defaults = () => Object.fromEntries(Object.entries(SETTINGS).map(([k, v]) => [k, v.default]));
+const realDefaults = () => Object.fromEntries(Object.entries(SETTINGS).map(([k, v]) => [k, v.default]));
+/** Settings the first tests were written with (5,000-point stack, 25/50 blinds, no payment gate): they still prove the rules. */
+const OLD_SB = [25, 50, 75, 100, 150, 200, 300, 400];
+const OLD_BB = [50, 100, 150, 200, 300, 400, 600, 800];
+const defaults = () => ({
+  ...realDefaults(),
+  startStack: 5000,
+  rebuyChips: 5000,
+  requirePayment: 0,
+  ...Object.fromEntries(OLD_SB.flatMap((sb, i) => [[`sb${i + 1}`, sb], [`bb${i + 1}`, OLD_BB[i]]])),
+});
 const mk = (n: number, settings: Record<string, number> = {}, startedAt: number | null = T0): BoardContext => ({
   players: Array.from({ length: n }, (_, i) => player(i + 1)),
   table: { name: 'T1', seats: 10, w: 0.3, h: 0.15 },
@@ -24,7 +35,7 @@ const mk = (n: number, settings: Record<string, number> = {}, startedAt: number 
 describe('settings and data', () => {
   it('has the agreed defaults', () => {
     expect(SETTINGS.format!.default).toBe(0);
-    expect(SETTINGS.startStack!.default).toBe(5000);
+    expect(SETTINGS.startStack!.default).toBe(2000);
     expect(SETTINGS.buyIn).toMatchObject({ default: 20, min: 5, max: 100 });
     expect(SETTINGS.levelMinutes!.default).toBe(20);
     expect(SETTINGS.blindLevels!.default).toBe(8);
@@ -776,5 +787,477 @@ describe('fixes: typed chip numbers', () => {
   });
   it('rejects everything else', () => {
     for (const bad of ['', ' ', 'abc', '0x10', '1e3', '-500', '+5', '4200.7', '5.000', '1.2345k', '5k5', '--1', 'Infinity', 'NaN']) expect(parseChips(bad), bad).toBeNull();
+  });
+});
+
+
+// ------------------------------------------------------------------ chips as money: the new rules
+
+/** A context with the real defaults (2,000-point stack = $20, payment required). */
+const mkR = (n: number, o: Record<string, number> = {}, startedAt: number | null = T0): BoardContext => ({ ...mk(n, {}, startedAt), settings: { ...realDefaults(), ...o } }) as BoardContext;
+const PLAN = [
+  { name: 'white', count: 100, value: null },
+  { name: 'red', count: 100, value: null },
+  { name: 'blue', count: 100, value: null },
+  { name: 'green', count: 100, value: null },
+];
+
+describe('defaults and settings', () => {
+  it('the default stack is worth the default buy-in, and the first blinds are 100 big blinds', () => {
+    const st = realDefaults();
+    expect(st.startStack! / st.pointsPerUnit!).toBe(st.buyIn);
+    expect(st.rebuyChips).toBe(st.startStack);
+    expect(blindsFor(1, st)).toMatchObject({ sb: 10, bb: 20 });
+    expect(Math.floor(st.startStack! / blindsFor(1, st).bb)).toBe(100);
+    expect(blindsFor(8, st)).toMatchObject({ sb: 160, bb: 320 });
+    for (let l = 2; l <= 8; l++) expect(blindsFor(l, st).bb).toBeGreaterThanOrEqual(blindsFor(l - 1, st).bb);
+  });
+  it('currency, payment and share defaults', () => {
+    const st = realDefaults();
+    expect([st.currency, st.requirePayment, st.pointsPerUnit, st.shareNum, st.shareDen]).toEqual([0, 1, 100, 1, 3]);
+  });
+  it('every label starts with its group and the settings run in a sensible order', () => {
+    const keys = Object.keys(SETTINGS);
+    for (const k of keys) expect(SETTINGS[k]!.label, k).toMatch(/^(Game|Money|Chips|Chip plan|Rebuys|Blinds|Dealer|Reminders|Buttons|Limits|History): /);
+    expect(keys.slice(0, 3)).toEqual(['format', 'currency', 'requirePayment']);
+    expect(keys.indexOf('buyIn')).toBeLessThan(keys.indexOf('maxRebuys'));
+    expect(keys.indexOf('maxRebuys')).toBeLessThan(keys.indexOf('levelMinutes'));
+    expect(keys.indexOf('sb1')).toBe(keys.indexOf('bb1') - 1);
+    expect(keys.indexOf('bb8')).toBeLessThan(keys.indexOf('trackButton'));
+    expect(keys.indexOf('trackButton')).toBeLessThan(keys.indexOf('countEveryMinutes'));
+  });
+});
+
+describe('money words', () => {
+  it('shows dollars and gold, with cents only when needed', () => {
+    const cash = { currency: 0, pointsPerUnit: 100 };
+    const gold = { currency: 1, pointsPerUnit: 100 };
+    expect(units(20, cash)).toBe('$20');
+    expect(units(18.5, cash)).toBe('$18.50');
+    expect(units(1234.5, cash)).toBe('$1,234.50');
+    expect(units(0, cash)).toBe('$0');
+    expect(units(20, gold)).toBe('20 gold');
+    expect(units(0.25, gold)).toBe('0.25 gold');
+    expect(units(-3.5, cash)).toBe('-$3.50');
+  });
+  it('turns chip points into money', () => {
+    const cash = { currency: 0, pointsPerUnit: 100 };
+    expect(worth(25, cash)).toBe('$0.25');
+    expect(worth(2000, cash)).toBe('$20');
+    expect(worth(1850, cash)).toBe('$18.50');
+    expect(worth(50, { currency: 1, pointsPerUnit: 100 })).toBe('0.50 gold');
+    expect(worth(50, { currency: 0, pointsPerUnit: 10 })).toBe('$5');
+  });
+});
+
+describe('collecting the money before the first hand', () => {
+  it('nobody has paid at the start, and the first hand is blocked with a reason', () => {
+    const c = mkR(4);
+    const s = init(c);
+    const info = payInfo(s, c);
+    expect(info.rows.map((r) => [r.owed, r.got, r.short])).toEqual([[20, 0, 20], [20, 0, 20], [20, 0, 20], [20, 0, 20]]);
+    expect(info.toCollect).toBe(80);
+    expect(info.startersShort).toEqual([1, 2, 3, 4]);
+    expect(dealBlock(s, c)).toBe('Collect 4 more buy-ins first.');
+    expect(nextHand(s, c)).toBe(s);
+    expect(setButton(s, c, 1)).toBe(s);
+  });
+  it('names the players when only a few are left to pay', () => {
+    const c = mkR(4);
+    let s = recordAllPayments(init(c), c, 'cash', T0);
+    s = clearPayment(s, c, 2, T0);
+    expect(dealBlock(s, c)).toBe('Collect the buy-in from P2 first.');
+  });
+  it('is dealt once every buy-in is in, by cash or Venmo', () => {
+    const c = mkR(3);
+    let s = recordPayment(init(c), c, 1, 'cash', T0);
+    s = recordPayment(s, c, 2, 'venmo', T0 + 1);
+    expect(dealBlock(s, c)).toMatch(/P3/);
+    s = recordPayment(s, c, 3, 'cash', T0 + 2);
+    expect(dealBlock(s, c)).toBeNull();
+    expect(nextHand(s, c).button).toBe(1);
+    expect(payInfo(s, c)).toMatchObject({ owed: 60, got: 60, toCollect: 0, startersShort: [] });
+    expect(s.pay![2]).toMatchObject({ got: 20, how: 'venmo' });
+  });
+  it('real money is cash or Venmo, gold games are gold only', () => {
+    expect(payMethods(realDefaults())).toEqual(['cash', 'venmo']);
+    expect(payMethods({ ...realDefaults(), currency: 1 })).toEqual(['gold']);
+    const c = mkR(2);
+    const s = init(c);
+    expect(recordPayment(s, c, 1, 'gold', T0)).toBe(s);
+    const g = mkR(2, { currency: 1 });
+    const t = init(g);
+    expect(recordPayment(t, g, 1, 'cash', T0)).toBe(t);
+    expect(recordPayment(t, g, 1, 'gold', T0).pay![1]!.got).toBe(20);
+  });
+  it('a payment is only recorded once, and unknown players are ignored', () => {
+    const c = mkR(2);
+    const s = recordPayment(init(c), c, 1, 'cash', T0);
+    expect(recordPayment(s, c, 1, 'cash', T0 + 1)).toBe(s);
+    expect(recordPayment(s, c, 99, 'cash', T0)).toBe(s);
+    expect(clearPayment(s, c, 2, T0)).toBe(s);
+  });
+  it('a rebuy never blocks the game; it just adds to what is still to collect', () => {
+    const c = mkR(2);
+    let s = recordAllPayments(init(c), c, 'cash', T0);
+    s = nextHand(s, c);
+    s = rebuy(s, c, 2, T0 + MIN);
+    expect(s.players[2]!.buys).toHaveLength(2);
+    expect(payInfo(s, c)).toMatchObject({ owed: 60, got: 40, toCollect: 20, startersShort: [] });
+    expect(dealBlock(s, c)).toBeNull();
+    expect(nextHand(s, c).hand).toBe(2);
+    s = recordPayment(s, c, 2, 'venmo', T0 + 2 * MIN);
+    expect(payInfo(s, c).toCollect).toBe(0);
+    expect(s.pay![2]).toMatchObject({ got: 40, how: 'venmo' });
+  });
+  it('can be switched off for games without money', () => {
+    const c = mkR(3, { requirePayment: 0 });
+    const s = init(c);
+    expect(dealBlock(s, c)).toBeNull();
+    expect(nextHand(s, c).button).toBe(1);
+  });
+  it('writes each payment into the history, in the right currency', () => {
+    const c = mkR(2);
+    let s = recordPayment(init(c), c, 1, 'venmo', T0);
+    s = clearPayment(s, c, 1, T0 + 1);
+    const name = (id: number) => `P${id}`;
+    expect(s.log.map((e) => describeEntry(e, name, settingsOf(s, c)))).toEqual(['P1 paid $20 (venmo)', 'P1\u2019s payment of $20 was cleared']);
+    const g = mkR(2, { currency: 1 });
+    const t = recordPayment(init(g), g, 2, 'gold', T0);
+    expect(describeEntry(t.log[0]!, name, g.settings)).toBe('P2 paid 20 gold (gold)');
+  });
+  it('recordAllPayments records everyone who owes money', () => {
+    const c = mkR(3);
+    const s = recordAllPayments(recordPayment(init(c), c, 2, 'venmo', T0), c, 'cash', T0 + 1);
+    expect(s.pay![1]!.how).toBe('cash');
+    expect(s.pay![2]!.how).toBe('venmo');
+    expect(s.log).toHaveLength(3);
+    expect(recordAllPayments(s, c, 'cash', T0 + 2)).toBe(s);
+  });
+  it('the first hand is only gated once: after it is dealt the button moves freely', () => {
+    const c = mkR(3);
+    let s = recordAllPayments(init(c), c, 'cash', T0);
+    s = nextHand(s, c);
+    s = clearPayment(s, c, 1, T0 + 1);
+    expect(dealBlock(s, c)).toBeNull();
+    expect(nextHand(s, c).hand).toBe(2);
+  });
+});
+
+describe('chip plan in the game', () => {
+  it('starts empty, with players and buy-in taken from the game and settings', () => {
+    const c = mkR(5);
+    const s = init(c);
+    expect(planResolved(s, c)).toMatchObject({ colours: [], players: 5, buyIn: 20, currency: 0, shareNum: 1, shareDen: 3 });
+    expect(computePlan(s, c).status).toBe('empty');
+    expect(applyBlock(s, c)).toBeNull();
+    expect(applyBlock(setPlan(s, c, { colours: [{ name: 'white', count: 0, value: null }], buyIn: null }), c)).toBeNull();
+    expect(isPristine(s)).toBe(true);
+  });
+  it('keeps what the GM types and tidies nonsense', () => {
+    const c = mkR(4);
+    let s = setPlan(init(c), c, { colours: [{ name: '  white  ', count: 99.7, value: null }, { name: 'x'.repeat(40), count: -5, value: 0.2 }, { name: 'red', count: NaN, value: 1e12 }], players: 99, buyIn: 500, currency: 7, sharePercent: 3 });
+    expect(s.plan!.colours.map((x) => [x.name, x.count, x.value])).toEqual([['white', 100, null], ['x'.repeat(24), 0, null], ['red', 0, 10000000]]);
+    expect(s.plan).toMatchObject({ players: 60, buyIn: 100, currency: 1, sharePercent: 10 });
+    s = setPlan(s, c, { players: null, buyIn: null, currency: null, sharePercent: null });
+    expect(s.plan).toMatchObject({ players: null, buyIn: null, currency: null, sharePercent: null });
+    expect(setPlan(s, c, {})).toBe(s);
+  });
+  it('limits the colours', () => {
+    const c = mkR(2);
+    const s = setPlan(init(c), c, { colours: Array.from({ length: 12 }, (_, i) => ({ name: `c${i}`, count: 10, value: null })) });
+    expect(s.plan!.colours).toHaveLength(8);
+  });
+  it('turns a typed percent into an exact share', () => {
+    const c = mkR(2);
+    expect(planResolved(setPlan(init(c), c, { sharePercent: 50 }), c)).toMatchObject({ shareNum: 50, shareDen: 100, sharePercent: 50 });
+    expect(planResolved(setPlan(init(c), c, { sharePercent: 33.3 }), c).sharePercent).toBeCloseTo(33.3, 5);
+  });
+  it('accepting sets every stack, the buy-in, the rebuy chips and the currency for this game only', () => {
+    const c = mkR(4);
+    let s = setPlan(init(c), c, { colours: PLAN, buyIn: 30, currency: 1 });
+    expect(applyBlock(s, c)).toBeNull();
+    s = applyPlan(s, c, T0);
+    expect(s.applied).toMatchObject({ currency: 1, buyIn: 30, startStack: 3000, rebuyChips: 3000 });
+    for (const p of Object.values(s.players)) expect(p).toMatchObject({ stack: 3000 });
+    expect(s.players[1]!.buys[0]).toMatchObject({ chips: 3000, dollars: 30 });
+    expect(settingsOf(s, c)).toMatchObject({ currency: 1, buyIn: 30, startStack: 3000, rebuyChips: 3000, maxRebuys: 3 });
+    expect(c.settings.startStack).toBe(2000);
+    expect(effectiveCtx(s, c).settings.currency).toBe(1);
+    expect(effectiveCtx(init(c), c)).toBe(c);
+    expect(s.log[s.log.length - 1]!.text).toBe('Chip plan set: 30 gold (3,000 chips) per player, buy-in 30 gold');
+  });
+  it('rebuys then hand out the plan stack for the plan buy-in', () => {
+    const c = mkR(4);
+    let s = applyPlan(setPlan(init(c), c, { colours: PLAN, buyIn: 30 }), c, T0);
+    s = rebuy(s, c, 1, T0 + MIN);
+    expect(s.players[1]!.buys[1]).toMatchObject({ chips: 3000, dollars: 30 });
+    expect(s.players[1]!.stack).toBe(6000);
+    expect(payInfo(s, c).owed).toBe(30 * 5);
+  });
+  it('late joiners get the planned stack too', () => {
+    const c = mkR(2);
+    const s = applyPlan(setPlan(init(c), c, { colours: PLAN }), c, T0);
+    const t = syncPlayers(s, mkR(3), T0 + MIN);
+    expect(t.players[3]).toMatchObject({ stack: 2000 });
+    const big = applyPlan(setPlan(init(c), c, { colours: PLAN, buyIn: 40 }), c, T0);
+    expect(syncPlayers(big, mkR(3), T0 + MIN).players[3]).toMatchObject({ stack: 4000 });
+  });
+  it('is refused when the chips cannot make a fair stack', () => {
+    const c = mkR(8);
+    const s = setPlan(init(c), c, { colours: [{ name: 'white', count: 20, value: null }] });
+    expect(applyBlock(s, c)).toMatch(/Not enough chips/);
+    expect(applyPlan(s, c, T0)).toBe(s);
+  });
+  it('accepts an adjusted stack (the nearest one) and says so in the plan', () => {
+    const c = mkR(7);
+    const s = setPlan(init(c), c, { colours: [{ name: 'white', count: 200, value: null }, { name: 'red', count: 150, value: null }, { name: 'blue', count: 100, value: null }], buyIn: 50 });
+    const plan = computePlan(s, c);
+    expect(plan.status).toBe('adjusted');
+    expect(applyBlock(s, c)).toBeNull();
+    const a = applyPlan(s, c, T0);
+    expect(a.applied!.startStack).toBe(plan.stack);
+    // the buy-in becomes what the stack is worth, so the money collected matches the chips handed out
+    expect(a.applied!.buyIn).toBe(plan.stack / 100);
+    expect(a.players[1]!.buys[0]).toMatchObject({ chips: plan.stack, dollars: plan.stack / 100 });
+    const pay = recordAllPayments(a, c, 'cash', T0);
+    expect(payoutTable(pay, c).diff).toBe(0);
+    expect(a.log[a.log.length - 1]!.text).toContain(`buy-in $${plan.stack / 100}`);
+  });
+  it('can be re-run until the first hand, and is then locked', () => {
+    const c = mkR(3, { requirePayment: 0 });
+    let s = applyPlan(setPlan(init(c), c, { colours: PLAN }), c, T0);
+    expect(applyPlan(s, c, T0 + 1)).toBe(s);
+    s = applyPlan(setPlan(s, c, { buyIn: 25 }), c, T0 + 2);
+    expect(s.applied!.buyIn).toBe(25);
+    s = nextHand(s, c);
+    expect(isPristine(s)).toBe(false);
+    expect(applyBlock(s, c)).toMatch(/locked/);
+    expect(setPlan(s, c, { buyIn: 10 })).toBe(s);
+    expect(applyPlan(s, c, T0 + 3)).toBe(s);
+  });
+  it('is locked once chips move or someone rebuys', () => {
+    const c = mkR(3, { requirePayment: 0 });
+    expect(isPristine(rebuy(init(c), c, 1, T0))).toBe(false);
+    expect(isPristine(bust(init(c), c, [1], T0))).toBe(false);
+    expect(isPristine(recordCount(init(c), c, { 1: 2000 }, T0))).toBe(false);
+  });
+});
+
+describe('the bank', () => {
+  it('has no figures until a plan is accepted', () => {
+    const c = mkR(3);
+    expect(bankInfo(init(c), c)).toBeNull();
+  });
+  it('counts what is left after the first handout and every rebuy', () => {
+    const c = mkR(4);
+    let s = applyPlan(setPlan(init(c), c, { colours: PLAN }), c, T0);
+    const per = s.applied!.rows.map((r) => r.perPlayer);
+    let b = bankInfo(s, c)!;
+    expect(b.handouts).toBe(4);
+    expect(b.rows.map((r) => r.bank)).toEqual(s.applied!.rows.map((r, i) => r.count - 4 * per[i]!));
+    expect(b.short).toBe(false);
+    const before = b.rebuysLeft;
+    s = rebuy(s, c, 1, T0 + MIN);
+    b = bankInfo(s, c)!;
+    expect(b.handouts).toBe(5);
+    expect(b.rebuysLeft).toBe(before - 1);
+    s = undoRebuy(s, c, 1, T0 + 2 * MIN);
+    expect(bankInfo(s, c)!.rebuysLeft).toBe(before);
+  });
+  it('says when the bank cannot cover another rebuy', () => {
+    const c = mkR(2, { maxRebuys: 10 });
+    let s = applyPlan(setPlan(init(c), c, { colours: PLAN, sharePercent: 100 }), c, T0);
+    for (let i = 0; i < 12; i++) s = rebuy(s, c, 1 + (i % 2), T0 + MIN + i);
+    const b = bankInfo(s, c)!;
+    expect(b.rebuysLeft).toBeLessThanOrEqual(0);
+  });
+});
+
+describe('going out with chips', () => {
+  const pick = (c: BoardContext) => {
+    let s = init(c);
+    s = setStack(s, c, 1, 9000, T0);
+    s = setStack(s, c, 2, 1000, T0);
+    return s;
+  };
+  it('hands the chips straight to the winner, so the totals still tally', () => {
+    const c = mk(3);
+    const s = bust(pick(c), c, [2], T0 + MIN, 1);
+    expect(s.players[2]).toMatchObject({ out: true, stack: 0, wonBy: 1, wonAmt: 1000 });
+    expect(s.players[1]!.stack).toBe(10000);
+    expect(chipTotals(s, c).diff).toBe(0);
+    expect(describeEntry(s.log[s.log.length - 1]!, (id) => `P${id}`)).toBe('P2 is out; P1 took 1,000 chips');
+  });
+  it('without a winner the chips are simply gone from the table (as before)', () => {
+    const c = mk(3);
+    const s = bust(pick(c), c, [2], T0 + MIN);
+    expect(s.players[1]!.stack).toBe(9000);
+    expect(chipTotals(s, c).diff).toBe(-1000);
+  });
+  it('several players out on the same hand give all their chips to one winner', () => {
+    const c = mk(4);
+    const s = bust(pick(c), c, [2, 3], T0 + MIN, 1);
+    expect(s.players[1]!.stack).toBe(9000 + 1000 + 5000);
+    expect(s.players[2]!.outGroup).toBe(s.players[3]!.outGroup);
+    expect(describeEntry(s.log[s.log.length - 1]!, (id) => `P${id}`)).toBe('P2 and P3 went out on the same hand; P1 took 6,000 chips');
+  });
+  it('undoing the bust takes the chips back from the winner', () => {
+    const c = mk(3);
+    let s = bust(pick(c), c, [2], T0 + MIN, 1);
+    s = restore(s, c, 2, T0 + 2 * MIN);
+    expect(s.players[2]).toMatchObject({ out: false, stack: 1000 });
+    expect(s.players[1]!.stack).toBe(9000);
+    expect(s.players[2]!.wonBy).toBeNull();
+    expect(chipTotals(s, c).diff).toBe(0);
+  });
+  it('undo is safe when the winner has since gone out or lost chips', () => {
+    const c = mk(3);
+    let s = bust(pick(c), c, [2], T0 + MIN, 1);
+    s = setStack(s, c, 1, 500, T0 + 2 * MIN);
+    s = restore(s, c, 2, T0 + 3 * MIN);
+    expect(s.players[1]!.stack).toBe(0);
+    const t = bust(bust(pick(c), c, [2], T0, 1), c, [1], T0 + 1);
+    expect(restore(t, c, 2, T0 + 2).players[1]).toMatchObject({ out: true, stack: 0 });
+  });
+  it('refuses a winner who is out, is the busted player, or would go over the chip limit', () => {
+    const c = mk(3, { chipMax: 3500 });
+    let s = setStack(setStack(init(c), c, 1, 3000, T0), c, 2, 1000, T0);
+    expect(bustBlock(s, c, [2], 2)).toMatch(/can.t take/);
+    expect(bustBlock(s, c, [2], 99)).toMatch(/can.t take/);
+    expect(bustBlock(s, c, [2], 1)).toMatch(/over the chip limit \(3,500\)/);
+    expect(bust(s, c, [2], T0, 1)).toBe(s);
+    s = bust(s, c, [3], T0);
+    expect(bustBlock(s, c, [2], 3)).toMatch(/can.t take/);
+    const big = mk(3);
+    expect(bustBlock(pick(big), big, [2], 3)).toBeNull();
+  });
+  it('a player with no chips can be marked out with or without a winner and nothing moves', () => {
+    const c = mk(3);
+    const s = setStack(init(c), c, 2, 0, T0);
+    const t = bust(s, c, [2], T0, 1);
+    expect(t.players[1]!.stack).toBe(5000);
+    expect(t.log[t.log.length - 1]!.amount).toBeUndefined();
+  });
+});
+
+describe('what everyone receives', () => {
+  it('pays exactly what the chips are worth, and the total equals the money put in', () => {
+    const c = mkR(3);
+    let s = init(c);
+    s = setStack(s, c, 1, 3500, T0);
+    s = setStack(s, c, 2, 2500, T0);
+    s = bust(s, c, [3], T0 + MIN, 1);
+    const t = payoutTable(s, c);
+    expect(t.rows.map((r) => [r.invested, r.cashOut, r.net])).toEqual([[20, 55, 35], [20, 25, 5], [20, 0, -20]]);
+    expect(t.invested).toBe(60);
+    expect(t.cashOut).toBe(80);
+    expect(t.diff).toBe(20);
+  });
+  it('the totals match once the stacks are right', () => {
+    const c = mkR(3);
+    let s = setStack(init(c), c, 1, 3500, T0);
+    s = setStack(s, c, 2, 500, T0);
+    s = bust(s, c, [3], T0, 2);
+    const t = payoutTable(s, c);
+    expect(t.diff).toBe(0);
+    expect(t.cashOut).toBe(t.invested);
+  });
+  it('a tournament played to the finish pays the whole pool to the last player', () => {
+    const c = mkR(3);
+    const s = bust(init(c), c, [2, 3], T0, 1);
+    const t = payoutTable(s, c);
+    expect(t.rows.map((r) => r.cashOut)).toEqual([60, 0, 0]);
+    expect(t.diff).toBe(0);
+  });
+  it('rebuys add to the pool, and a plan with another stack scales the cash-out', () => {
+    const c = mkR(2, { requirePayment: 1 });
+    let s = applyPlan(setPlan(init(c), c, { colours: PLAN, buyIn: 30 }), c, T0);
+    s = rebuy(s, c, 1, T0 + MIN);
+    const t = payoutTable(s, c);
+    expect(t.invested).toBe(90);
+    expect(t.rows[0]!.invested).toBe(60);
+    expect(t.cashOut).toBe(90);
+  });
+  it('the recap tells each player what they receive, and says nothing about money in a game with none', () => {
+    const c = mkR(2);
+    const s = bust(init(c), c, [2], T0, 1);
+    const rows = recap(s, c);
+    expect(rows[0]).toMatchObject({ invested: 20, cashOut: 40 });
+    const texts = def.recap!(s, c);
+    expect(texts[0]!.text).toContain('Cash-out: $40 for your chips (you put in $20).');
+    expect(texts[1]!.text).toContain('Cash-out: $0 for your chips (you put in $20).');
+    const free = mkR(2, { requirePayment: 0 });
+    expect(def.recap!(init(free), free)[0]!.text).not.toContain('Cash-out');
+    const g = mkR(2, { currency: 1 });
+    expect(def.recap!(init(g), g)[0]!.text).toContain('Cash-out: 20 gold for your chips (you put in 20 gold).');
+  });
+});
+
+describe('old saved games still load', () => {
+  it('a state saved before these changes works with the new code', () => {
+    const c = mkR(3);
+    const old = JSON.parse(JSON.stringify(init(c)));
+    delete old.plan;
+    delete old.applied;
+    delete old.pay;
+    for (const p of Object.values(old.players) as any[]) {
+      delete p.wonBy;
+      delete p.wonAmt;
+    }
+    const s = old as PokerState;
+    expect(payInfo(s, c).toCollect).toBe(60);
+    expect(bankInfo(s, c)).toBeNull();
+    expect(settingsOf(s, c)).toBe(c.settings);
+    expect(restore(bust(s, c, [2], T0), c, 2, T0 + 1).players[2]!.stack).toBe(2000);
+    expect(recordPayment(s, c, 1, 'cash', T0).pay![1]!.got).toBe(20);
+    expect(payoutTable(s, c).diff).toBe(0);
+  });
+});
+
+
+describe('money without a chip inventory', () => {
+  it('a plan with no chips just sets the money: the stack is the buy-in in points', () => {
+    const c = mkR(3);
+    let s = setPlan(init(c), c, { buyIn: 35, currency: 1 });
+    expect(planOutcome(s, c)).toMatchObject({ stack: 3500, buyIn: 35, currency: 1, rows: [] });
+    expect(applyBlock(s, c)).toBeNull();
+    s = applyPlan(s, c, T0);
+    expect(s.applied).toMatchObject({ startStack: 3500, rebuyChips: 3500, buyIn: 35, currency: 1, rows: [] });
+    expect(s.players[2]).toMatchObject({ stack: 3500 });
+    expect(bankInfo(s, c)!.rows).toEqual([]);
+    expect(units(35, settingsOf(s, c))).toBe('35 gold');
+    expect(applyPlan(s, c, T0 + 1)).toBe(s);
+  });
+  it('an empty plan with the default money is fine too (and changes nothing important)', () => {
+    const c = mkR(3);
+    const s = applyPlan(init(c), c, T0);
+    expect(s.applied).toMatchObject({ startStack: 2000, buyIn: 20, currency: 0 });
+  });
+  it('is refused for a silly buy-in', () => {
+    const c = mkR(3, { pointsPerUnit: 1 });
+    expect(planOutcome(setPlan(init(c), c, { buyIn: 5 }), c)).toMatchObject({ stack: 5 });
+  });
+  it('lets the settings screen change the buy-in or starting stack until the first hand', () => {
+    const c = mkR(3);
+    const s = init(c);
+    const c2 = mkR(3, { buyIn: 30, startStack: 3000 });
+    const t = syncStart(s, c2);
+    expect(t.players[1]).toMatchObject({ stack: 3000 });
+    expect(t.players[1]!.buys[0]).toMatchObject({ chips: 3000, dollars: 30 });
+    expect(syncStart(t, c2)).toBe(t);
+    expect(syncStart(s, c)).toBe(s);
+  });
+  it('does not overwrite a stack the GM already changed, a plan in use, or a game in progress', () => {
+    const c = mkR(3, { requirePayment: 0 });
+    const c2 = mkR(3, { buyIn: 30, startStack: 3000, requirePayment: 0 });
+    const edited = setStack(init(c), c, 1, 1500, T0);
+    const t = syncStart(edited, c2);
+    expect(t.players[1]!.stack).toBe(1500);
+    expect(t.players[2]!.stack).toBe(3000);
+    const planned = applyPlan(setPlan(init(c), c, { buyIn: 25 }), c, T0);
+    expect(syncStart(planned, c2)).toBe(planned);
+    const started = nextHand(init(c), c);
+    expect(syncStart(started, c2)).toBe(started);
   });
 });

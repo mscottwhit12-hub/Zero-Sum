@@ -21,37 +21,49 @@
  * allowed) it returns the SAME object, so repeating an operation is harmless. `*Block` helpers give the reason in words.
  */
 import type { BoardContext, BoardDef, BoardSetting } from '../contract';
+import { MAX_COLOURS, planChips, type ChipColour, type ChipPlan } from './chips';
 
 /** Typed notes are cut to this many characters (a text-box limit, not a gameplay number). */
 export const NOTE_MAX = 280;
 /** How many blind levels the settings screen has slots for (a layout limit; `blindLevels` says how many are used). */
 export const MAX_LEVELS = 8;
 
-const DEFAULT_SB = [25, 50, 75, 100, 150, 200, 300, 400];
-const DEFAULT_BB = [50, 100, 150, 200, 300, 400, 600, 800];
+/** First blinds are 1/200 of the default 2,000-point stack (a $20 buy-in): 100 big blinds, and the schedule climbs from there. */
+const DEFAULT_SB = [10, 20, 30, 40, 60, 80, 120, 160];
+const DEFAULT_BB = [20, 40, 60, 80, 120, 160, 240, 320];
 
-/** Every gameplay number. */
+/**
+ * Every gameplay number, in the order the GM sees them. Labels start with their group:
+ * Game, Money and chips, Chip plan, Rebuys, Blinds, Dealer, Reminders, Buttons and limits.
+ * Points are the smallest unit the board counts in: with the default 100 points per $1 (or per 1 gold),
+ * 1 point is 1 cent, and a $20 buy-in is a 2,000-point stack.
+ */
 export const SETTINGS: Record<string, BoardSetting> = (() => {
   const s: Record<string, BoardSetting> = {};
-  s.format = { label: 'Format (0 = tournament, 1 = cash game)', default: 0, min: 0, max: 1 };
-  s.startStack = { label: 'Starting stack (chips)', default: 5000, min: 100, max: 10000000, step: 100 };
-  s.buyIn = { label: 'Buy-in per player ($); a rebuy costs the same', default: 20, min: 5, max: 100, step: 5 };
-  s.levelMinutes = { label: 'Minutes per blind level (tournament)', default: 20, min: 1, max: 180 };
-  s.blindLevels = { label: 'Number of blind levels in use (1 to 8)', default: MAX_LEVELS, min: 1, max: MAX_LEVELS };
+  s.format = { label: 'Game: format (0 = tournament, 1 = cash game)', default: 0, min: 0, max: 1 };
+  s.currency = { label: 'Money: players put up (0 = real money, cash or Venmo; 1 = gold)', default: 0, min: 0, max: 1 };
+  s.requirePayment = { label: 'Money: collect every buy-in before the first hand (1 = yes, 0 = no)', default: 1, min: 0, max: 1 };
+  s.buyIn = { label: 'Money: buy-in per player ($ or gold); a rebuy costs the same', default: 20, min: 5, max: 100, step: 5 };
+  s.startStack = { label: 'Chips: starting stack (points); should equal the buy-in in points', default: 2000, min: 100, max: 10000000, step: 100 };
+  s.pointsPerUnit = { label: 'Chips: points per $1 or per 1 gold (100 = 1 point is a cent)', default: 100, min: 1, max: 1000 };
+  s.shareNum = { label: 'Chip plan: share of chips handed to players, top number (1 of 3 = a third)', default: 1, min: 1, max: 100 };
+  s.shareDen = { label: 'Chip plan: share of chips handed to players, bottom number (the rest stays in the bank)', default: 3, min: 1, max: 100 };
+  s.maxRebuys = { label: 'Rebuys: allowed per player (0 = no rebuys)', default: 3, min: 0, max: 10 };
+  s.rebuyChips = { label: 'Rebuys: chips given by one rebuy (points)', default: 2000, min: 100, max: 10000000, step: 100 };
+  s.rebuyUntilLevel = { label: 'Rebuys: allowed through blind level', default: 4, min: 1, max: MAX_LEVELS };
+  s.levelMinutes = { label: 'Blinds: minutes per level (tournament)', default: 20, min: 1, max: 180 };
+  s.blindLevels = { label: 'Blinds: number of levels in use (1 to 8)', default: MAX_LEVELS, min: 1, max: MAX_LEVELS };
+  s.antePercent = { label: 'Blinds: ante as % of the big blind (0 = no antes)', default: 0, min: 0, max: 100, step: 5 };
   for (let i = 0; i < MAX_LEVELS; i++) {
-    s[`sb${i + 1}`] = { label: `Level ${i + 1}: small blind`, default: DEFAULT_SB[i]!, min: 1, max: 10000000, step: 5 };
-    s[`bb${i + 1}`] = { label: `Level ${i + 1}: big blind`, default: DEFAULT_BB[i]!, min: 1, max: 10000000, step: 5 };
+    s[`sb${i + 1}`] = { label: `Blinds: level ${i + 1} small blind (points)`, default: DEFAULT_SB[i]!, min: 1, max: 10000000, step: 5 };
+    s[`bb${i + 1}`] = { label: `Blinds: level ${i + 1} big blind (points)`, default: DEFAULT_BB[i]!, min: 1, max: 10000000, step: 5 };
   }
-  s.antePercent = { label: 'Ante as % of the big blind (0 = no antes)', default: 0, min: 0, max: 100, step: 5 };
-  s.maxRebuys = { label: 'Rebuys allowed per player (0 = no rebuys)', default: 3, min: 0, max: 10 };
-  s.rebuyChips = { label: 'Chips given by one rebuy', default: 5000, min: 100, max: 10000000, step: 100 };
-  s.rebuyUntilLevel = { label: 'Rebuys allowed through blind level', default: 4, min: 1, max: MAX_LEVELS };
-  s.trackButton = { label: 'Track the dealer button and blind seats (1 = yes, 0 = no)', default: 1, min: 0, max: 1 };
-  s.headsUpRule = { label: 'Heads-up: dealer posts the small blind (1 = yes, 0 = normal rotation)', default: 1, min: 0, max: 1 };
-  s.countEveryMinutes = { label: 'Remind the GM to take a chip count every (minutes)', default: 30, min: 5, max: 240, step: 5 };
-  s.stepSmall = { label: 'Chip buttons: small step (chips)', default: 100, min: 1, max: 1000000, step: 25 };
-  s.stepBig = { label: 'Chip buttons: big step (chips)', default: 1000, min: 1, max: 10000000, step: 100 };
-  s.chipMax = { label: 'Most chips one player can have', default: 10000000, min: 1000, max: 1000000000, step: 1000 };
+  s.trackButton = { label: 'Dealer: track the button and blind seats (1 = yes, 0 = no)', default: 1, min: 0, max: 1 };
+  s.headsUpRule = { label: 'Dealer: heads-up, the dealer posts the small blind (1 = yes, 0 = normal rotation)', default: 1, min: 0, max: 1 };
+  s.countEveryMinutes = { label: 'Reminders: take a chip count every (minutes)', default: 30, min: 5, max: 240, step: 5 };
+  s.stepSmall = { label: 'Buttons: small chip step (points)', default: 100, min: 1, max: 1000000, step: 25 };
+  s.stepBig = { label: 'Buttons: big chip step (points)', default: 1000, min: 1, max: 10000000, step: 100 };
+  s.chipMax = { label: 'Limits: most chips one player can have (points)', default: 10000000, min: 1000, max: 1000000000, step: 1000 };
   s.mergeSeconds = { label: 'History: merge quick chip taps within (seconds)', default: 5, min: 0, max: 60 };
   s.logMax = { label: 'History: most entries kept', default: 500, min: 50, max: 2000, step: 50 };
   return s;
@@ -128,6 +140,9 @@ export interface PokerPlayer {
   outGroup: number | null;
   /** The stack the player had when marked out, so a mis-tap can be undone. */
   backup: number | null;
+  /** Who was given this player's chips when they went out (and how many), so undoing the bust takes them back. */
+  wonBy?: number | null;
+  wonAmt?: number;
 }
 
 export interface Clock {
@@ -151,7 +166,7 @@ export interface Snap {
   stacks: Record<number, number>;
 }
 
-export type LogKind = 'note' | 'stack' | 'count' | 'countRemoved' | 'bust' | 'tie' | 'restore' | 'rebuy' | 'unrebuy' | 'blinds' | 'clock' | 'pin';
+export type LogKind = 'note' | 'stack' | 'count' | 'countRemoved' | 'paid' | 'unpaid' | 'plan' | 'bust' | 'tie' | 'restore' | 'rebuy' | 'unrebuy' | 'blinds' | 'clock' | 'pin';
 
 export interface LogEntry {
   id: number;
@@ -172,13 +187,54 @@ export interface LogEntry {
   manual?: boolean;
   /** count: chips on the table. rebuy: chips bought. */
   amount?: number;
-  /** rebuy: dollars paid. */
+  /** rebuy / paid: dollars (or gold) paid. */
   dollars?: number;
+  /** paid: how the money came in. */
+  how?: string;
   text?: string;
+}
+
+/** What the GM typed into the chip plan (every field optional: blanks fall back to the settings). */
+export interface PlanDraft {
+  /** Listed lowest value first. */
+  colours: ChipColour[];
+  players?: number | null;
+  buyIn?: number | null;
+  /** 0 = real money, 1 = gold. */
+  currency?: number | null;
+  /** Share of chips handed to players, in percent (10 to 100). */
+  sharePercent?: number | null;
+}
+
+/** A chip plan that was accepted for this game. Its money settings replace the settings screen's for this game only. */
+export interface Applied {
+  currency: number;
+  buyIn: number;
+  startStack: number;
+  rebuyChips: number;
+  players: number;
+  shareNum: number;
+  shareDen: number;
+  /** What each colour is worth, how many chips there are and how many each player gets. */
+  rows: { name: string; value: number; count: number; perPlayer: number }[];
+  at: number;
+}
+
+/** Money collected from one player so far, in dollars or gold. */
+export interface Pay {
+  got: number;
+  how: 'cash' | 'venmo' | 'gold' | null;
+  at: number | null;
 }
 
 export interface PokerState {
   v: 1;
+  /** The chip plan the GM is working on (before the first hand). */
+  plan?: PlanDraft;
+  /** The accepted chip plan, if any. */
+  applied?: Applied;
+  /** Money collected per player. */
+  pay?: Record<number, Pay>;
   players: Record<number, PokerPlayer>;
   clock: Clock;
   /** Player holding the dealer button, or null = not set yet. */
@@ -200,11 +256,34 @@ export interface PokerState {
   bustCount: number;
 }
 
-const blank = (ctx: BoardContext): PokerPlayer => {
-  const start = Math.min(cfg(ctx.settings, 'startStack'), cfg(ctx.settings, 'chipMax'));
+/**
+ * The settings in force for this game: the settings screen's, except that an accepted chip plan replaces the currency,
+ * buy-in, starting stack and rebuy chips for this game only.
+ */
+export function settingsOf(s: PokerState, ctx: BoardContext): Record<string, number> {
+  const a = s.applied;
+  return a ? { ...ctx.settings, currency: a.currency, buyIn: a.buyIn, startStack: a.startStack, rebuyChips: a.rebuyChips } : ctx.settings;
+}
+/** The board context with `settingsOf` applied: read-only code can use it in place of `ctx`. */
+export const effectiveCtx = (s: PokerState, ctx: BoardContext): BoardContext => (s.applied ? { ...ctx, settings: settingsOf(s, ctx) } : ctx);
+
+export const isGold = (settings: Record<string, number>): boolean => cfg(settings, 'currency') >= 1;
+/** 20 -> "20", 18.5 -> "18.50", 1234.5 -> "1,234.50": whole amounts have no decimals, anything else shows cents. */
+const plain = (n: number): string => {
+  const r = Math.round(Math.abs(n) * 100) / 100;
+  const [i, d] = (Number.isInteger(r) ? String(r) : r.toFixed(2)).split('.');
+  return `${n < 0 ? '-' : ''}${i!.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${d ? `.${d}` : ''}`;
+};
+/** An amount of money in the game's currency: "$20", "$18.50" or "20 gold". */
+export const units = (n: number, settings: Record<string, number>): string => (isGold(settings) ? `${plain(n)} gold` : `${n < 0 ? '-' : ''}$${plain(Math.abs(n))}`);
+/** What chip points are worth in the game's currency: 25 points -> "$0.25" (or "0.25 gold"). */
+export const worth = (points: number, settings: Record<string, number>): string => units(points / Math.max(1, cfg(settings, 'pointsPerUnit')), settings);
+
+const blank = (ctx: BoardContext, settings: Record<string, number> = ctx.settings): PokerPlayer => {
+  const start = Math.min(cfg(settings, 'startStack'), cfg(settings, 'chipMax'));
   return {
     stack: start,
-    buys: [{ t: ctx.startedAt ?? null, chips: start, dollars: cfg(ctx.settings, 'buyIn') }],
+    buys: [{ t: ctx.startedAt ?? null, chips: start, dollars: cfg(settings, 'buyIn') }],
     out: false,
     outAt: null,
     outGroup: null,
@@ -213,7 +292,7 @@ const blank = (ctx: BoardContext): PokerPlayer => {
 };
 
 /** A player's record; players the state doesn't know yet read as a fresh buy-in. */
-export const pl = (s: PokerState, id: number, ctx: BoardContext): PokerPlayer => s.players[id] ?? blank(ctx);
+export const pl = (s: PokerState, id: number, ctx: BoardContext): PokerPlayer => s.players[id] ?? blank(ctx, settingsOf(s, ctx));
 
 export function init(ctx: BoardContext): PokerState {
   const players: Record<number, PokerPlayer> = {};
@@ -362,7 +441,8 @@ export function ensure(s: PokerState, ctx: BoardContext): PokerState {
   const missing = ctx.players.filter((p) => !s.players[p.id]);
   if (!missing.length) return s;
   const players = { ...s.players };
-  for (const p of missing) players[p.id] = blank(ctx);
+  const st = settingsOf(s, ctx);
+  for (const p of missing) players[p.id] = blank(ctx, st);
   return { ...s, players };
 }
 
@@ -441,8 +521,8 @@ export function recordCount(s: PokerState, ctx: BoardContext, values: Record<num
   return { ...next, remindedAt: null };
 }
 
-/** Why these players can't be marked out, in words; null = they can. */
-export function bustBlock(s: PokerState, ctx: BoardContext, pids: number[]): string | null {
+/** Why these players can't be marked out (optionally giving their chips to `winnerId`), in words; null = they can. */
+export function bustBlock(s: PokerState, ctx: BoardContext, pids: number[], winnerId?: number | null): string | null {
   const ids = [...new Set(pids)];
   if (!ids.length) return 'Pick who is out.';
   for (const id of ids) {
@@ -451,21 +531,35 @@ export function bustBlock(s: PokerState, ctx: BoardContext, pids: number[]): str
   }
   const left = ctx.players.filter((p) => !pl(s, p.id, ctx).out && !ids.includes(p.id));
   if (!left.length) return 'Someone has to stay in: the winner of the hand still has chips.';
+  if (winnerId !== undefined && winnerId !== null) {
+    if (ids.includes(winnerId) || !left.some((p) => p.id === winnerId)) return `${nameIn(ctx, winnerId)} can\u2019t take these chips.`;
+    const moved = ids.reduce((n, id) => n + pl(s, id, ctx).stack, 0);
+    const limit = cfg(settingsOf(s, ctx), 'chipMax');
+    if (pl(s, winnerId, ctx).stack + moved > limit) return `${nameIn(ctx, winnerId)} would go over the chip limit (${chips(limit)}).`;
+  }
   return null;
 }
 
-/** Marks players out. Several ids = they all went out on the same hand and share a place. */
-export function bust(s: PokerState, ctx: BoardContext, pids: number[], now: number): PokerState {
-  if (bustBlock(s, ctx, pids) !== null) return s;
+/**
+ * Marks players out. Several ids = they all went out on the same hand and share a place.
+ * With `winnerId`, the chips they had go straight to that player (one step instead of two).
+ */
+export function bust(s: PokerState, ctx: BoardContext, pids: number[], now: number, winnerId?: number | null): PokerState {
+  if (bustBlock(s, ctx, pids, winnerId) !== null) return s;
   const ids = [...new Set(pids)];
   const s1 = ensure(s, ctx);
   const grp = s1.bustCount + 1;
+  const win = winnerId ?? null;
   let players = s1.players;
+  let moved = 0;
   for (const id of ids) {
     const p = s1.players[id]!;
-    players = { ...players, [id]: { ...p, out: true, outAt: now, outGroup: grp, backup: p.stack, stack: 0 } };
+    moved += p.stack;
+    players = { ...players, [id]: { ...p, out: true, outAt: now, outGroup: grp, backup: p.stack, stack: 0, ...(win !== null && p.stack > 0 ? { wonBy: win, wonAmt: p.stack } : { wonBy: null, wonAmt: 0 }) } };
   }
-  const busted = addLog({ ...s1, players, bustCount: grp }, { t: now, kind: 'bust', playerId: ids[0]!, playerIds: ids }, ctx);
+  if (win !== null && moved > 0) players = { ...players, [win]: { ...players[win]!, stack: players[win]!.stack + moved } };
+  const entry: Omit<LogEntry, 'id'> = { t: now, kind: 'bust', playerId: ids[0]!, playerIds: ids, ...(win !== null && moved > 0 ? { withId: win, amount: moved } : {}) };
+  const busted = addLog({ ...s1, players, bustCount: grp }, entry, ctx);
   // A crown pinned on someone who goes out is dropped, so it can't jump back to them after a rebuy.
   return busted.pin !== null && ids.includes(busted.pin) ? addLog({ ...busted, pin: null }, { t: now, kind: 'pin', playerId: null }, ctx) : busted;
 }
@@ -486,20 +580,24 @@ export function restore(s: PokerState, ctx: BoardContext, pid: number, now: numb
   const s1 = ensure(s, ctx);
   const p = s1.players[pid]!;
   if (!p.out) return s1;
-  return addLog(putPlayer(s1, pid, { ...p, out: false, outAt: null, outGroup: null, stack: p.backup ?? 0, backup: null }), { t: now, kind: 'restore', playerId: pid }, ctx);
+  let next = putPlayer(s1, pid, { ...p, out: false, outAt: null, outGroup: null, stack: p.backup ?? 0, backup: null, wonBy: null, wonAmt: 0 });
+  const w = p.wonBy != null ? next.players[p.wonBy] : undefined;
+  if (w && !w.out && p.wonAmt) next = putPlayer(next, p.wonBy!, { ...w, stack: Math.max(0, w.stack - p.wonAmt) });
+  return addLog(next, { t: now, kind: 'restore', playerId: pid }, ctx);
 }
 
 /** Why a rebuy isn't allowed right now, in words; null = it is. */
 export function rebuyBlock(s: PokerState, ctx: BoardContext, pid: number, now: number): string | null {
   if (!known(ctx, pid)) return 'That player isn\u2019t in this game.';
-  const max = Math.floor(cfg(ctx.settings, 'maxRebuys'));
+  const st = settingsOf(s, ctx);
+  const max = Math.floor(cfg(st, 'maxRebuys'));
   if (max <= 0) return 'Rebuys are off (the rebuy limit is 0).';
   const d = pl(s, pid, ctx);
   if (rebuysOf(d) >= max) return `${nameIn(ctx, pid)} has used all ${max} rebuy${max === 1 ? '' : 's'}.`;
   const until = Math.floor(cfg(ctx.settings, 'rebuyUntilLevel'));
   if (clockInfo(s, ctx, now).level > until) return `Rebuys closed after blind level ${until}.`;
-  const limit = cfg(ctx.settings, 'chipMax');
-  if ((d.out ? 0 : d.stack) + cfg(ctx.settings, 'rebuyChips') > limit) return `A rebuy would put ${nameIn(ctx, pid)} over the chip limit (${chips(limit)}).`;
+  const limit = cfg(st, 'chipMax');
+  if ((d.out ? 0 : d.stack) + cfg(st, 'rebuyChips') > limit) return `A rebuy would put ${nameIn(ctx, pid)} over the chip limit (${chips(limit)}).`;
   return null;
 }
 
@@ -508,12 +606,13 @@ export function rebuy(s: PokerState, ctx: BoardContext, pid: number, now: number
   if (rebuyBlock(s, ctx, pid, now) !== null) return s;
   const s1 = ensure(s, ctx);
   const p = s1.players[pid]!;
-  const add = cfg(ctx.settings, 'rebuyChips');
-  const dollars = cfg(ctx.settings, 'buyIn');
+  const st = settingsOf(s, ctx);
+  const add = cfg(st, 'rebuyChips');
+  const dollars = cfg(st, 'buyIn');
   const buy: Buy = { t: now, chips: add, dollars, ...(p.out ? { revived: { outAt: p.outAt, outGroup: p.outGroup, backup: p.backup } } : {}) };
   const next: PokerPlayer = p.out
     ? { ...p, out: false, outAt: null, outGroup: null, backup: null, stack: add, buys: [...p.buys, buy] }
-    : { ...p, stack: Math.min(cfg(ctx.settings, 'chipMax'), p.stack + add), buys: [...p.buys, buy] };
+    : { ...p, stack: Math.min(cfg(st, 'chipMax'), p.stack + add), buys: [...p.buys, buy] };
   return addLog(putPlayer(s1, pid, next), { t: now, kind: 'rebuy', playerId: pid, amount: add, dollars }, ctx);
 }
 
@@ -587,7 +686,7 @@ const sameDeal = (a: ButtonInfo | null, b: ButtonInfo | null) => (a === null || 
 /** Puts the button on a player still in (the first hand, or a correction). */
 export function setButton(s: PokerState, ctx: BoardContext, pid: number): PokerState {
   const e = editable(s, ctx, pid);
-  if (!e) return s;
+  if (!e || (e.s.button === null && dealBlock(e.s, ctx) !== null)) return s;
   const deal = dealFor(e.s, ctx, pid);
   if (e.s.button === pid && e.s.hand >= 1 && sameDeal(e.s.deal, deal)) return e.s;
   return { ...e.s, button: pid, deal, hand: Math.max(1, e.s.hand) };
@@ -599,6 +698,7 @@ export function setButton(s: PokerState, ctx: BoardContext, pid: number): PokerS
  */
 export function nextHand(s: PokerState, ctx: BoardContext): PokerState {
   const s1 = ensure(s, ctx);
+  if (s1.button === null && dealBlock(s1, ctx) !== null) return s;
   const alive = ctx.players.filter((p) => !pl(s1, p.id, ctx).out);
   if (alive.length < 2) return s;
   const dealer = s1.button === null ? (seatOrder(ctx).find((p) => !pl(s1, p.id, ctx).out)?.id ?? null) : nextAliveAfter(s1, ctx, s1.deal?.dealer ?? s1.button);
@@ -722,7 +822,7 @@ export function syncPlayers(s: PokerState, ctx: BoardContext, now: number): Poke
   let cur = ensure(s, ctx);
   for (const p of missing) {
     const d = cur.players[p.id]!;
-    cur = addLog(cur, { t: now, kind: 'note', playerId: p.id, text: `joined the game: bought in ${money(paidDollars(d))} for ${chips(d.stack)} chips` }, ctx);
+    cur = addLog(cur, { t: now, kind: 'note', playerId: p.id, text: `joined the game: bought in ${units(paidDollars(d), settingsOf(cur, ctx))} for ${chips(d.stack)} chips` }, ctx);
   }
   return cur;
 }
@@ -766,8 +866,9 @@ export function removeNote(s: PokerState, id: number): PokerState {
 
 // ------------------------------------------------------------------ history text
 
-export function describeEntry(e: LogEntry, nameOf: (id: number) => string): string {
+export function describeEntry(e: LogEntry, nameOf: (id: number) => string, settings?: Record<string, number>): string {
   const who = e.playerId === null ? '' : nameOf(e.playerId);
+  const pay = (n: number) => (settings ? units(n, settings) : money(n));
   switch (e.kind) {
     case 'note':
       return e.playerId === null || (e.text ?? '').toLowerCase().includes(who.toLowerCase()) ? (e.text ?? '') : `${who}: ${e.text ?? ''}`;
@@ -779,14 +880,20 @@ export function describeEntry(e: LogEntry, nameOf: (id: number) => string): stri
       return 'A saved chip count was removed';
     case 'bust': {
       const ids = e.playerIds ?? (e.playerId === null ? [] : [e.playerId]);
-      return ids.length > 1 ? `${ids.map(nameOf).join(' and ')} went out on the same hand` : `${who} is out`;
+      return (ids.length > 1 ? `${ids.map(nameOf).join(' and ')} went out on the same hand` : `${who} is out`) + (e.withId !== undefined && e.amount ? `; ${nameOf(e.withId)} took ${chips(e.amount)} chips` : '');
     }
     case 'tie':
       return `${who} went out on the same hand as ${e.withId === undefined ? 'another player' : nameOf(e.withId)}`;
     case 'restore':
       return `${who} is back in (bust-out undone)`;
     case 'rebuy':
-      return `${who} rebought ${chips(e.amount ?? 0)} chips for ${money(e.dollars ?? 0)}`;
+      return `${who} rebought ${chips(e.amount ?? 0)} chips for ${pay(e.dollars ?? 0)}`;
+    case 'paid':
+      return `${who} paid ${pay(e.dollars ?? 0)}${e.how ? ` (${e.how})` : ''}`;
+    case 'unpaid':
+      return `${who}\u2019s payment of ${pay(e.dollars ?? 0)} was cleared`;
+    case 'plan':
+      return e.text ?? 'Chip plan set';
     case 'unrebuy':
       return `${who}'s last rebuy was undone`;
     case 'blinds':
@@ -819,6 +926,10 @@ export interface RecapRow {
   peak: number;
   /** Time into the game of the biggest stack; null if unknown. */
   peakAfterMs: number | null;
+  /** Dollars or gold put in (buy-in plus rebuys). */
+  invested: number;
+  /** Dollars or gold the player's chips are worth at the end (0 for players who are out). */
+  cashOut: number;
 }
 
 /** One row per player, best first. */
@@ -849,6 +960,8 @@ export function recap(s: PokerState, ctx: BoardContext): RecapRow[] {
         trail: points.map((pt) => pt.v),
         peak: best.v,
         peakAfterMs: best.t,
+        invested: paidDollars(d),
+        cashOut: Math.round(((d.out ? 0 : d.stack) / Math.max(1, cfg(settingsOf(s, ctx), 'pointsPerUnit'))) * 100) / 100,
       });
     }
     place += g.length;
@@ -857,13 +970,14 @@ export function recap(s: PokerState, ctx: BoardContext): RecapRow[] {
 }
 
 /** The recap as plain text for one player (a private phone message). */
-export function recapText(r: RecapRow, cash: boolean): string {
+export function recapText(r: RecapRow, cash: boolean, settings?: Record<string, number>): string {
   const lines = [`Texas Hold'em recap for ${r.name}: ${ordinal(r.place)} place${r.tied ? ' (tied)' : ''}.`];
   if (cash) lines.push(`Finished with ${chips(r.stack)} chips.`);
   else if (r.out) lines.push(`Went out${r.outAfterMs !== null ? ` after ${spanText(r.outAfterMs)}` : ''}.`);
   else if (r.winner) lines.push(`Last one standing with ${chips(r.stack)} chips.`);
   else lines.push(`Still in with ${chips(r.stack)} chips when time was called.`);
-  lines.push(`Bought in for ${money(r.dollars)}${r.rebuys ? ` (${r.rebuys} rebuy${r.rebuys === 1 ? '' : 's'})` : ''}.`);
+  lines.push(`Bought in for ${settings ? units(r.dollars, settings) : money(r.dollars)}${r.rebuys ? ` (${r.rebuys} rebuy${r.rebuys === 1 ? '' : 's'})` : ''}.`);
+  if (settings && cfg(settings, 'requirePayment') >= 1) lines.push(`Cash-out: ${units(r.cashOut, settings)} for your chips (you put in ${units(r.invested, settings)}).`);
   if (r.trail.length >= 3) lines.push(`Your chips through the night: ${r.trail.slice(-8).map(chips).join(' \u2192 ')}.`);
   if (r.peak > r.stack && r.peak > (r.trail[0] ?? 0) && r.trail.length >= 3) lines.push(`Biggest stack: ${chips(r.peak)} chips${r.peakAfterMs !== null ? ` (${spanText(r.peakAfterMs)} in)` : ''}.`);
   return lines.join('\n');
@@ -876,5 +990,275 @@ export const def: BoardDef<PokerState> = {
   init,
   score,
   placements,
-  recap: (s, ctx) => recap(s, ctx).map((r) => ({ playerId: r.playerId, text: recapText(r, isCash(ctx.settings)) })),
+  recap: (s, ctx) => recap(s, ctx).map((r) => ({ playerId: r.playerId, text: recapText(r, isCash(ctx.settings), settingsOf(s, ctx)) })),
 };
+
+// ------------------------------------------------------------------ money collected
+
+export interface PayRow {
+  playerId: number;
+  /** Everything this player has bought in for so far (buy-in plus rebuys), in dollars or gold. */
+  owed: number;
+  got: number;
+  /** owed - got, never below 0. */
+  short: number;
+  how: Pay['how'];
+  at: number | null;
+}
+
+export interface PayInfo {
+  rows: PayRow[];
+  owed: number;
+  got: number;
+  /** Still to collect, including rebuys. */
+  toCollect: number;
+  /** Players who haven't paid their starting buy-in (these block the first hand). */
+  startersShort: number[];
+}
+
+const EPS = 1e-9;
+
+/** What every player owes, has paid and still owes. */
+export function payInfo(s: PokerState, ctx: BoardContext): PayInfo {
+  const rows: PayRow[] = ctx.players.map((p) => {
+    const d = pl(s, p.id, ctx);
+    const owed = paidDollars(d);
+    const rec = s.pay?.[p.id];
+    const got = rec?.got ?? 0;
+    return { playerId: p.id, owed, got, short: Math.max(0, owed - got), how: rec?.how ?? null, at: rec?.at ?? null };
+  });
+  const startersShort = ctx.players.filter((p) => (s.pay?.[p.id]?.got ?? 0) + EPS < (pl(s, p.id, ctx).buys[0]?.dollars ?? 0)).map((p) => p.id);
+  return { rows, owed: rows.reduce((n, r) => n + r.owed, 0), got: rows.reduce((n, r) => n + Math.min(r.got, r.owed), 0), toCollect: rows.reduce((n, r) => n + r.short, 0), startersShort };
+}
+
+/** Why the first hand can't be dealt yet (buy-ins not all in), in words; null = it can. */
+export function dealBlock(s: PokerState, ctx: BoardContext): string | null {
+  if (s.button !== null || cfg(settingsOf(s, ctx), 'requirePayment') < 1) return null;
+  const short = payInfo(s, ctx).startersShort;
+  if (!short.length) return null;
+  return short.length <= 3 ? `Collect the buy-in from ${short.map((id) => nameIn(ctx, id)).join(', ')} first.` : `Collect ${short.length} more buy-ins first.`;
+}
+
+/** The ways money can come in: real money by cash or Venmo, or gold held for the game. */
+export const payMethods = (settings: Record<string, number>): ('cash' | 'venmo' | 'gold')[] => (isGold(settings) ? ['gold'] : ['cash', 'venmo']);
+
+/** The GM (or sub-GM) records that a player's money is in: everything they owe so far (buy-in plus any rebuys). */
+export function recordPayment(s: PokerState, ctx: BoardContext, pid: number, how: 'cash' | 'venmo' | 'gold', now: number): PokerState {
+  if (!known(ctx, pid) || !payMethods(settingsOf(s, ctx)).includes(how)) return s;
+  const s1 = ensure(s, ctx);
+  const owed = paidDollars(s1.players[pid]!);
+  const got = s1.pay?.[pid]?.got ?? 0;
+  if (owed - got <= EPS) return s;
+  const next: PokerState = { ...s1, pay: { ...(s1.pay ?? {}), [pid]: { got: owed, how, at: now } } };
+  return addLog(next, { t: now, kind: 'paid', playerId: pid, dollars: owed - got, how }, ctx);
+}
+
+/** Records every player who still owes money as paid the same way (everyone handed over cash at once). */
+export function recordAllPayments(s: PokerState, ctx: BoardContext, how: 'cash' | 'venmo' | 'gold', now: number): PokerState {
+  let cur = s;
+  for (const p of ctx.players) cur = recordPayment(cur, ctx, p.id, how, now);
+  return cur;
+}
+
+/** Takes a payment back (a mis-tap): the player owes everything again. */
+export function clearPayment(s: PokerState, ctx: BoardContext, pid: number, now: number): PokerState {
+  const got = s.pay?.[pid]?.got ?? 0;
+  if (!known(ctx, pid) || got <= EPS) return s;
+  return addLog({ ...s, pay: { ...(s.pay ?? {}), [pid]: { got: 0, how: null, at: null } } }, { t: now, kind: 'unpaid', playerId: pid, dollars: got }, ctx);
+}
+
+// ------------------------------------------------------------------ chip plan
+
+/** True until the first hand is dealt and chips start to move: the chip plan can still be changed. */
+export function isPristine(s: PokerState): boolean {
+  return s.hand === 0 && s.deal === null && s.button === null && s.snaps.length === 0 && s.bustCount === 0 && Object.values(s.players).every((p) => p.buys.length === 1 && !p.out);
+}
+
+/** The plan inputs with blanks filled from the settings and this game's players. */
+export function planResolved(s: PokerState, ctx: BoardContext) {
+  const st = settingsOf(s, ctx);
+  const d = s.plan ?? { colours: [] };
+  let shareNum = cfg(st, 'shareNum');
+  let shareDen = cfg(st, 'shareDen');
+  if (d.sharePercent !== undefined && d.sharePercent !== null) {
+    const pct = d.sharePercent;
+    shareNum = Number.isInteger(pct) ? pct : Math.round(pct * 100);
+    shareDen = Number.isInteger(pct) ? 100 : 10000;
+  }
+  return {
+    colours: d.colours,
+    players: Math.max(1, Math.floor(d.players ?? (ctx.players.length || 1))),
+    buyIn: d.buyIn ?? cfg(st, 'buyIn'),
+    currency: d.currency ?? cfg(st, 'currency'),
+    shareNum,
+    shareDen,
+    sharePercent: (shareNum / shareDen) * 100,
+  };
+}
+
+/** The chip plan for what the GM has typed so far. */
+export function computePlan(s: PokerState, ctx: BoardContext): ChipPlan {
+  const r = planResolved(s, ctx);
+  const st = { ...settingsOf(s, ctx), currency: r.currency };
+  return planChips({ colours: r.colours, players: r.players, buyIn: r.buyIn, pointsPerUnit: cfg(st, 'pointsPerUnit'), shareNum: r.shareNum, shareDen: r.shareDen, fmt: (p) => worth(p, st) });
+}
+
+const cleanInt = (v: unknown, lo: number, hi: number): number => (typeof v === 'number' && Number.isFinite(v) ? clampInt(v, lo, hi) : lo);
+
+/** Saves what the GM typed into the chip plan (only until the first hand). Values that make no sense are tidied or dropped. */
+export function setPlan(s: PokerState, ctx: BoardContext, patch: Partial<PlanDraft>): PokerState {
+  if (!isPristine(s)) return s;
+  const cur: PlanDraft = s.plan ?? { colours: [] };
+  const merged = { ...cur, ...patch };
+  const colours: ChipColour[] = (merged.colours ?? []).slice(0, MAX_COLOURS).map((c) => ({
+    name: String(c.name ?? '').trim().slice(0, 24),
+    count: cleanInt(c.count, 0, 1000000),
+    value: typeof c.value === 'number' && Number.isFinite(c.value) && c.value >= 1 ? clampInt(c.value, 1, 10000000) : null,
+  }));
+  const num = (v: number | null | undefined) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const bi = SETTINGS.buyIn!;
+  const next: PlanDraft = {
+    colours,
+    players: num(merged.players) === null ? null : clampInt(merged.players!, 1, 60),
+    buyIn: num(merged.buyIn) === null ? null : Math.round(Math.min(bi.max, Math.max(bi.min, merged.buyIn!)) * 100) / 100,
+    currency: num(merged.currency) === null ? null : merged.currency! >= 1 ? 1 : 0,
+    sharePercent: num(merged.sharePercent) === null ? null : Math.round(Math.min(100, Math.max(10, merged.sharePercent!)) * 10) / 10,
+  };
+  return JSON.stringify(next) === JSON.stringify(cur) ? s : { ...s, plan: next };
+}
+
+/** What accepting the chip plan would set for the game. */
+export interface PlanOutcome {
+  /** Starting stack and rebuy chips, in points. */
+  stack: number;
+  /** Buy-in per player: the typed one, or (when the chips fall short) what the stack is worth. */
+  buyIn: number;
+  currency: number;
+  players: number;
+  shareNum: number;
+  shareDen: number;
+  rows: Applied['rows'];
+}
+
+/**
+ * What the chip plan would set: with chips typed, the planned stack (and its buy-in); with no chips typed, just the money
+ * (a stack equal to the buy-in in points). null when the plan can't be accepted.
+ */
+export function planOutcome(s: PokerState, ctx: BoardContext): PlanOutcome | null {
+  const r = planResolved(s, ctx);
+  const st = settingsOf(s, ctx);
+  const ppu = Math.max(1, cfg(st, 'pointsPerUnit'));
+  if (!r.colours.some((c) => c.count > 0)) {
+    const stack = Math.round(r.buyIn * ppu);
+    return r.buyIn > 0 && stack >= 1 ? { stack, buyIn: r.buyIn, currency: r.currency, players: r.players, shareNum: r.shareNum, shareDen: r.shareDen, rows: [] } : null;
+  }
+  const plan = computePlan(s, ctx);
+  if (plan.status === 'empty' || plan.status === 'impossible') return null;
+  // When the chips can't make the full buy-in, the buy-in becomes what the stack is worth, so the money collected
+  // always matches the chips handed out (and the cash-outs add up to it).
+  const buyIn = plan.status === 'exact' ? r.buyIn : Math.round((plan.stack / ppu) * 100) / 100;
+  return {
+    stack: plan.stack,
+    buyIn,
+    currency: r.currency,
+    players: r.players,
+    shareNum: plan.share.num,
+    shareDen: plan.share.den,
+    rows: plan.rows.map((x) => ({ name: x.name, value: x.value, count: x.count, perPlayer: x.perPlayer })),
+  };
+}
+
+/** Why the chip plan can't be accepted yet, in words; null = it can. */
+export function applyBlock(s: PokerState, ctx: BoardContext): string | null {
+  if (!isPristine(s)) return 'The chip plan is locked once the first hand is dealt.';
+  if (planOutcome(s, ctx)) return null;
+  const r = planResolved(s, ctx);
+  if (!r.colours.some((c) => c.count > 0)) return 'Enter a buy-in above 0.';
+  const plan = computePlan(s, ctx);
+  return plan.problems[0] ?? plan.notes[0] ?? 'These chips can\u2019t make a fair stack.';
+}
+
+/**
+ * Accepts the chip plan for this game: every player's starting chips become the planned stack, rebuys hand out the same
+ * stack, and the plan's currency and buy-in replace the settings screen's for this game only. Chips are reset to the stack.
+ * If the chips could only make a smaller stack than the buy-in, the buy-in becomes what that stack is worth.
+ * With no chips typed it just sets the money: the stack is the buy-in in points.
+ */
+export function applyPlan(s: PokerState, ctx: BoardContext, now: number): PokerState {
+  if (applyBlock(s, ctx) !== null) return s;
+  const o = planOutcome(s, ctx)!;
+  const applied: Applied = { currency: o.currency, buyIn: o.buyIn, startStack: o.stack, rebuyChips: o.stack, players: o.players, shareNum: o.shareNum, shareDen: o.shareDen, rows: o.rows, at: now };
+  const same = s.applied && JSON.stringify({ ...s.applied, at: 0 }) === JSON.stringify({ ...applied, at: 0 });
+  const next: PokerState = { ...s, applied: same ? s.applied : applied };
+  const st = settingsOf(next, ctx);
+  const players = { ...next.players };
+  for (const p of ctx.players) players[p.id] = blank(ctx, st);
+  const reset = { ...next, players };
+  if (same && JSON.stringify(reset.players) === JSON.stringify(s.players)) return s;
+  return addLog(reset, { t: now, kind: 'plan', playerId: null, text: `Chip plan set: ${worth(o.stack, st)} (${chips(o.stack)} chips) per player, buy-in ${units(o.buyIn, st)}` }, ctx);
+}
+
+/**
+ * Before the first hand, keeps every untouched starting stack and buy-in in step with the settings (the GM may change the
+ * buy-in or starting stack after the game was created). Does nothing once a chip plan is accepted or chips have moved.
+ */
+export function syncStart(s: PokerState, ctx: BoardContext): PokerState {
+  if (s.applied || !isPristine(s)) return s;
+  const fresh = blank(ctx, settingsOf(s, ctx));
+  let players = s.players;
+  for (const p of ctx.players) {
+    const d = s.players[p.id];
+    const b = d?.buys[0];
+    if (!d || !b || d.stack !== b.chips) continue;
+    if (b.chips !== fresh.buys[0]!.chips || b.dollars !== fresh.buys[0]!.dollars) players = { ...players, [p.id]: { ...d, stack: fresh.stack, buys: [{ ...b, chips: fresh.buys[0]!.chips, dollars: fresh.buys[0]!.dollars }] } };
+  }
+  return players === s.players ? s : { ...s, players };
+}
+
+export interface BankRow {
+  name: string;
+  value: number;
+  perPlayer: number;
+  /** Chips of this colour left in the bank (negative = more handed out than the bank had). */
+  bank: number;
+}
+
+/** What is left in the bank after every handout so far (the first stacks and every rebuy). null without an accepted plan. */
+export function bankInfo(s: PokerState, ctx: BoardContext): { rows: BankRow[]; handouts: number; rebuysLeft: number; value: number; short: boolean } | null {
+  if (!s.applied) return null;
+  const handouts = ctx.players.reduce((n, p) => n + pl(s, p.id, ctx).buys.length, 0);
+  const rows = s.applied.rows.map((r) => ({ name: r.name, value: r.value, perPlayer: r.perPlayer, bank: r.count - handouts * r.perPlayer }));
+  let rebuysLeft = Infinity;
+  for (const r of rows) if (r.perPlayer > 0) rebuysLeft = Math.min(rebuysLeft, Math.floor(r.bank / r.perPlayer));
+  return { rows, handouts, rebuysLeft: rebuysLeft === Infinity ? 0 : rebuysLeft, value: rows.reduce((n, r) => n + Math.max(0, r.bank) * r.value, 0), short: rows.some((r) => r.bank < 0) };
+}
+
+// ------------------------------------------------------------------ cash-out
+
+export interface CashRow {
+  playerId: number;
+  name: string;
+  /** Put in so far (buy-in plus rebuys), in dollars or gold. */
+  invested: number;
+  /** What the chips are worth now; players who are out get 0. */
+  cashOut: number;
+  net: number;
+}
+
+/**
+ * What everyone receives if the game ended now: exactly what their chips are worth. Because every chip came from a
+ * buy-in or rebuy, the cash-outs add up to the money that went in (`diff` is 0) when the stacks are counted right.
+ */
+export function payoutTable(s: PokerState, ctx: BoardContext): { rows: CashRow[]; invested: number; cashOut: number; diff: number } {
+  const ppu = Math.max(1, cfg(settingsOf(s, ctx), 'pointsPerUnit'));
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const rows = ctx.players.map((p) => {
+    const d = pl(s, p.id, ctx);
+    const invested = paidDollars(d);
+    const cashOut = r2(d.out ? 0 : d.stack / ppu);
+    return { playerId: p.id, name: p.name, invested, cashOut, net: r2(cashOut - invested) };
+  });
+  const invested = r2(rows.reduce((n, r) => n + r.invested, 0));
+  const cashOut = r2(rows.reduce((n, r) => n + r.cashOut, 0));
+  return { rows, invested, cashOut, diff: r2(cashOut - invested) };
+}

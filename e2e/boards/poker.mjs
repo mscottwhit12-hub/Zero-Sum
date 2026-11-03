@@ -24,7 +24,7 @@ try {
   await page.reload(); await sleep(1500);
   await page.locator('nav.side button.board', { hasText: "Texas Hold'em" }).click(); await sleep(1500);
   R.check((await page.locator('.pp').count()) >= 4, 'board', 'board renders with a panel per player');
-  await page.screenshot({ path: `${s.dir}/shots/01-laptop.png`, fullPage: true });
+  await page.screenshot({ path: `${s.dir}/shots/01-laptop.png`, fullPage: true }); { const c3 = await b.newContext({ viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true }); await api(c3.request, s.base, 'POST', '/api/gm/login', { name: 'Tate', password: 'test pass 123', deviceType: 'phone' }); const p3 = await c3.newPage(); await p3.goto(s.base + '/gm'); await sleep(1500); await gmRoute(p3, `board-${g.id}`); await sleep(1500); await p3.screenshot({ path: `${s.dir}/shots/00-360-setup.png`, fullPage: true }); R.check((await p3.evaluate(() => document.documentElement.scrollWidth)) <= 360, 'layout', '360: nothing wider than the screen'); }
   const panel = (i) => page.locator(`#poker-p-${ids[i]}`).last();
   // Ann wins a pot from Dev: Ann +1000, Dev −1000 → Ann takes the crown
   await panel(0).getByRole('button', { name: 'plus 1,000' }).click(); await sleep(400);
