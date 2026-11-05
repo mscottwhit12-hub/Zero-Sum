@@ -218,10 +218,11 @@
       "none": "None",
       "download": "Download PDF",
       "save_images": "Save images to Photos",
-      "save_hint": "Opens your share sheet. On iPhone, choose Save Images.",
+      "save_hint": "Or save all three: in the share sheet, scroll past the apps and pick “Save 3 Images”.",
       "save_failed": "Couldn’t open the share sheet. Try again, or use the PDF.",
       "trades": "Trades",
-      "loading": "Preparing your statement…"
+      "loading": "Preparing your statement…",
+      "hold_hint": "On iPhone: press and hold a card, then “Save to Photos”."
     },
     "tip_from": "Anonymous tip",
     "gift_from": "Anonymous gift",

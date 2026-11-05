@@ -39,6 +39,12 @@
   let cards = $state<string[]>([]);
   let files = $state<(File | null)[]>([]); // same order as `cards`; null where a card couldn't be converted
   const ready = $derived(files.filter((f): f is File => !!f));
+  // Object URLs for the PNGs (shown in place of the SVGs; revoked when they change).
+  const pngUrls = $derived(files.map((f) => (f ? URL.createObjectURL(f) : null)));
+  $effect(() => {
+    const urls = pngUrls;
+    return () => urls.forEach((u) => u && URL.revokeObjectURL(u));
+  });
   let started = false;
   async function toPng(src: string, name: string): Promise<File | null> {
     const img = new Image();
@@ -144,10 +150,11 @@
       <div class="muted small">Cards to share</div>
       <div class="cards">
         {#each cards as src, i (src)}
-          <button class="card" onclick={() => (files[i] ? saveImages([files[i]!]) : toast(t('phone.statement.save_failed'), 'error'))} aria-label={`Save card ${i + 1}`}><img {src} alt={`Card ${i + 1}`} /></button>
+          <!-- The PNG itself (not the SVG), so press-and-hold gives the phone's own "Save to Photos". -->
+          <div class="card"><img src={pngUrls[i] ?? src} alt={`Card ${i + 1}`} /></div>
         {/each}
       </div>
-      <div class="muted small">Tap a card to save or share just that one.</div>
+      <div class="muted small">{t('phone.statement.hold_hint')}</div>
     {/if}
     {#if ready.length}
       <button class="primary wide" onclick={() => saveImages(ready)}>{t('phone.statement.save_images')}</button>
@@ -166,6 +173,6 @@
 
 <style>
   .cards { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.25rem 0; }
-  .card { flex: 0 0 auto; padding: 0; border: 0; background: none; }
-  .card img { width: 140px; height: auto; display: block; border-radius: 4px; }
+  .card { flex: 0 0 auto; }
+  .card img { width: 140px; height: auto; display: block; border-radius: 4px; -webkit-touch-callout: default; user-select: auto; }
 </style>
