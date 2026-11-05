@@ -39,11 +39,20 @@
   // Home-screen pages: home, and the leaderboard one swipe to the right (like the Today view on a real phone).
   let page = $state<'home' | 'board'>('home');
   let dragX = $state(0);
-  let swipe: { id: number; x: number; y: number; on: boolean } | null = null;
+  let swipe: { id: number; x: number; y: number; on: boolean; t: number } | null = null;
   let swiped = false;
+  const SWIPE_DIST = 60;
+  /** Decide the page from how far (or how fast) the finger went. A quick flick counts like a long drag. */
+  function settle(dx: number, ms: number) {
+    const flick = ms < 300 && Math.abs(dx) > 25;
+    if (page === 'home' && (dx > SWIPE_DIST || (flick && dx > 0))) page = 'board';
+    else if (page === 'board' && (dx < -SWIPE_DIST || (flick && dx < 0))) page = 'home';
+  }
   function swDown(e: PointerEvent) {
+    // Touch is handled by the touch listeners below (they can stop the browser's own scrolling); this is mouse/pen.
+    if (e.pointerType === 'touch') return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, on: false };
+    swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, on: false, t: Date.now() };
     // Window listeners instead of pointer capture: they keep working however the drag ends.
     window.addEventListener('pointermove', swMove);
     window.addEventListener('pointerup', swUp);
@@ -66,14 +75,60 @@
     window.removeEventListener('pointerup', swUp);
     window.removeEventListener('pointercancel', swUp);
     if (swipe.on) {
-      if (page === 'home' && dragX > 60) page = 'board';
-      else if (page === 'board' && dragX < -60) page = 'home';
+      settle(dragX, Date.now() - swipe.t);
       // the click that follows a drag must not open whatever was under the finger
       swiped = true;
       setTimeout(() => (swiped = false), 0);
     }
     swipe = null;
     dragX = 0;
+  }
+  /**
+   * Touch swipes. The leaderboard page scrolls up and down, so with pointer events the browser took over any slightly
+   * diagonal swipe as a scroll and cancelled the drag (swiping back felt stuck). Touch events let us claim the gesture
+   * (preventDefault) as soon as it is clearly sideways; vertical scrolling is left alone.
+   */
+  function swipeTouch(node: HTMLElement) {
+    let st: { x: number; y: number; t: number; on: boolean; off: boolean } | null = null;
+    const start = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return (st = null);
+      const p = e.touches[0]!;
+      st = { x: p.clientX, y: p.clientY, t: Date.now(), on: false, off: false };
+    };
+    const move = (e: TouchEvent) => {
+      if (!st || st.off) return;
+      const p = e.touches[0]!;
+      const dx = p.clientX - st.x;
+      const dy = p.clientY - st.y;
+      if (!st.on) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        if (Math.abs(dx) < Math.abs(dy) * 1.2) return void (st.off = true); // a scroll: not ours
+        st.on = true;
+      }
+      e.preventDefault(); // ours: the page must not scroll or bounce under the finger
+      dragX = page === 'home' ? Math.max(0, dx) : Math.min(0, dx);
+    };
+    const end = () => {
+      if (st?.on) {
+        settle(dragX, Date.now() - st.t);
+        swiped = true;
+        setTimeout(() => (swiped = false), 0);
+      }
+      st = null;
+      dragX = 0;
+    };
+    node.addEventListener('touchstart', start, { passive: true });
+    node.addEventListener('touchmove', move, { passive: false });
+    node.addEventListener('touchend', end);
+    node.addEventListener('touchcancel', end);
+    return {
+      destroy() {
+        node.removeEventListener('touchstart', start);
+        node.removeEventListener('touchmove', move);
+        node.removeEventListener('touchend', end);
+        node.removeEventListener('touchcancel', end);
+      },
+    };
   }
   let now = $state(Date.now());
   const clockTimer = setInterval(() => (now = Date.now()), 1000);
@@ -383,6 +438,7 @@
           class:drag={dragX !== 0}
           style:transform={`translateX(calc(${page === 'board' ? '100%' : '0%'} + ${dragX}px))`}
           onpointerdown={swDown}
+          use:swipeTouch
           onclickcapture={(e) => { if (swiped) { e.stopPropagation(); e.preventDefault(); } }}
         >
         <div class="view board">

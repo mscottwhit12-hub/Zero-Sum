@@ -289,6 +289,14 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
     const m = req.query.minutes;
     return priceSeries(ctx, p.night_id, req.params.id, m === undefined || m === '' || m === 'all' ? null : Number(m));
   });
+  // The same series for the GM Market screen's stock detail.
+  app.get<Id & { Querystring: { minutes?: string } }>('/api/gm/market/:id/history', async (req) => {
+    requireGm(ctx, req);
+    const n = currentNight(ctx);
+    if (!n) throw notFound('no_night');
+    const m = req.query.minutes;
+    return priceSeries(ctx, n.id, req.params.id, m === undefined || m === '' || m === 'all' ? null : Number(m));
+  });
   app.post('/api/trade/buy', async (req) => playerBuy(ctx, device(req), { securityId: b(req.body).securityId, gold: b(req.body).gold }));
   app.post('/api/trade/sell', async (req) => playerSell(ctx, device(req), { securityId: b(req.body).securityId, shares: b(req.body).shares }));
   app.post('/api/trade/short', async (req) => playerShort(ctx, device(req), { securityId: b(req.body).securityId, gold: b(req.body).gold }));

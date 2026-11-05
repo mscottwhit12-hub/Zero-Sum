@@ -148,6 +148,7 @@
       {/each}
     </div>
     {#if spanText}<div class="muted small ctr" aria-live="polite">{t('phone.chart.span', { span: spanText })}</div>{/if}
+    <div class="small ctr"><TickCountdown night={s.night} /></div>
     {#if securityBlurb(sec)}<p>{securityBlurb(sec)}</p>{/if}
   </div>
 

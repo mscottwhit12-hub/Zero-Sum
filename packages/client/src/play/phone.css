@@ -87,7 +87,7 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 /* home-screen pages: the leaderboard sits one page to the left of home; a swipe to the right brings it in */
 .phone .pager { position: absolute; inset: 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .phone .pager.drag { transition: none; }
-.phone .pager .board { left: -100%; right: 100%; overflow-y: auto; background: none; }
+.phone .pager .board { left: -100%; right: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; touch-action: pan-y; background: none; }
 .phone .lb { padding: 0.4rem 1.1rem calc(max(env(safe-area-inset-bottom, 0px), 24px) + 60px); }
 .phone .lb h1 { font-size: 1.9rem; margin: 0.2rem 0 0.1rem; }
 .phone .lb .sr { padding: 0.75rem 0; } .phone .lb .sr .v { font-size: 1.1rem; }
