@@ -68,3 +68,4 @@ the GM night export, statements), `events.log` and `shots/`. `SEED=` changes the
 - Nov 5 (security + Minter): features 22/22, r11 5/5, catan 13/13, poker 9/9, 0 CSP violations; scratch late-game Minter: 0 drops in 384 samples (old build 4 drops of ~1.4 M). Tests: client 828, engine 141, server 185, 4.
 - Nov 5 (QoL small + medium): features 22/22, Risk board 13/13; scratch checks 10/10 (seating warning + fix, board table, tuning, TV call, crop, finale control + TV follows). Tests: client 830, engine 141, server 190, 4.
 - Nov 3 (sound rename, 1 GB music, mood 10%): `features/sounds3.mjs` 7/7; `features/run.mjs` 22/22. Tests: engine 141, server 172, client 658, 4.
+- Nov 5 (table props): scratch props run 10/10 (auto Catan board, add/drag/resize/turn, TV floor + close-up, board cleared at result), 0 errors. Tests: client 831, engine 141, server 193, 4.
