@@ -61,6 +61,11 @@ export async function prepareAvatar(file: File): Promise<string> {
   c.width = Math.round(img.width * scale);
   c.height = Math.round(img.height * scale);
   c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+  return encodeAvatar(c);
+}
+
+/** Encode a canvas as a data URL under 200 KB (webp, else jpeg; the server enforces the size). */
+export function encodeAvatar(c: HTMLCanvasElement): string {
   for (const q of [0.85, 0.7, 0.55, 0.4, 0.3]) {
     for (const type of ['image/webp', 'image/jpeg']) {
       const url = c.toDataURL(type, q);

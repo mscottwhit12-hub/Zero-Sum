@@ -32,6 +32,32 @@
 
   let selected = $state<number | null>(null);
   const sel = $derived(tables.find((t) => t.id === selected) ?? null);
+
+  // A running game whose players aren't all sitting at its table: show it, and offer to seat them when the table
+  // has enough empty seats (players seated elsewhere move over). Never forced.
+  const problems = $derived(
+    (gs?.games ?? [])
+      .filter((g) => g.status === 'active' && g.tableId != null)
+      .flatMap((g) => {
+        const t = tables.find((x) => x.id === g.tableId);
+        if (!t) return [];
+        const here = new Set(t.assignments.map((a) => a.playerId));
+        const missing = g.participants.map((p) => p.playerId).filter((id) => !here.has(id) && !gs?.players.find((p) => p.id === id)?.left);
+        if (!missing.length) return [];
+        const free = Array.from({ length: t.seats }, (_, i) => i + 1).filter((s) => !t.assignments.some((a) => a.seat === s));
+        const where = (id: number) => tables.find((x) => x.assignments.some((a) => a.playerId === id))?.name ?? null;
+        return [{ game: g, table: t, missing: missing.map((id) => ({ id, at: where(id) })), free }];
+      }),
+  );
+  const problemKey = $derived(problems.map((p) => `${p.game.id}:${p.missing.map((m) => m.id).join(',')}`).join('|'));
+  let dismissed = $state('');
+  async function seatThem(p: (typeof problems)[number]) {
+    for (const [i, m] of p.missing.entries()) {
+      const ok = await run(() => post(`/api/tables/${p.table.id}/seat`, { seat: p.free[i], playerId: m.id }));
+      if (ok === undefined) return;
+    }
+    selected = p.table.id;
+  }
   let newName = $state('');
   let newSeats = $state(4);
   const seatOf = (t: SeatingTable, n: number) => t.assignments.find((a) => a.seat === n)?.playerId ?? null;
@@ -62,6 +88,30 @@
   }
   const assign = (t: SeatingTable, seat: number, playerId: string) => run(() => post(`/api/tables/${t.id}/seat`, { seat, playerId: playerId === '' ? null : Number(playerId) }));
 </script>
+
+{#if problems.length && problemKey !== dismissed}
+  <section class="panel seat-warn" role="alert">
+    <h3>Seating doesn't match a running game</h3>
+    {#each problems as p (p.game.id)}
+      <div class="seat-prob">
+        <p>
+          <b>{p.game.name}</b> is running at <b>{p.table.name}</b>, but
+          {#each p.missing as m, i (m.id)}{i ? (i === p.missing.length - 1 ? ' and ' : ', ') : ' '}<b>{playerName(gs, m.id)}</b> <span class="muted">({m.at ? `at ${m.at}` : 'not seated'})</span>{/each}
+          {p.missing.length === 1 ? "isn't" : "aren't"} sitting there.
+        </p>
+        <div class="row">
+          <button onclick={() => (selected = p.table.id)}>Show {p.table.name}</button>
+          {#if master && p.free.length >= p.missing.length}
+            <button class="primary" onclick={() => seatThem(p)}>Seat {p.missing.length === 1 ? 'them' : 'them all'} at {p.table.name}</button>
+          {:else if master}
+            <span class="small muted">{p.table.name} has {p.free.length} free seat{p.free.length === 1 ? '' : 's'}: move people by hand.</span>
+          {/if}
+        </div>
+      </div>
+    {/each}
+    <button class="small" onclick={() => (dismissed = problemKey)}>Seating is right, dismiss</button>
+  </section>
+{/if}
 
 <section class="panel">
   <div class="spread">
@@ -135,3 +185,13 @@
 {#if master && tables.length}
   <div class="actions"><button onclick={() => confirm('Clear every seat?') && run(() => post('/api/seats/clear'), 'Seats cleared')}>Clear all seats</button></div>
 {/if}
+
+<style>
+  .seat-warn {
+    border-color: var(--warn);
+  }
+  .seat-prob {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+</style>

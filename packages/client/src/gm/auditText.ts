@@ -100,6 +100,7 @@ export function describeEntry(e: AuditEntry, names: AuditNames = NO_NAMES): { te
     case 'night.settings': return done(`${w} changed night settings`, diff(b, a));
     case 'night.update': return done(`${w} changed the night's name or length`, diff(b, a));
     case 'finale.skip': return done(`${w} skipped the finale`);
+    case 'finale.control': return done(`${w} pressed ${a.action === 'prev' ? 'Back' : a.action === 'next' ? 'Next' : a.action === 'pause' ? 'Pause' : 'Play'} on the TV finale`);
     case 'game.cancel_at_end': return done(`${w} ended the night with ${Array.isArray(a.games) ? a.games.length : 'some'} unfinished game(s): they were cancelled`);
     case 'gold.adjust': {
       const g = Number(a.goldH);

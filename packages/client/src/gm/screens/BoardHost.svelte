@@ -10,6 +10,7 @@
   import type { GameInfo, GmState } from '@shared/types';
   import { BOARDS, boardSettingsFor } from '../boards';
   import { gameClock, gameTag } from '@shared/gameTime';
+  import FloorPlan from '@shared/FloorPlan.svelte';
   import type { BoardClaim, BoardContext, BoardPlayer } from '../boards/contract';
 
   let { gs, game, onfinish }: { gs: GmState | null; game: GameInfo; onfinish: (placements: number[][] | null) => void } = $props();
@@ -17,6 +18,16 @@
   const entry = $derived(game.board ? (BOARDS[game.board] ?? null) : null);
   const table = $derived(game.tableId == null ? null : (gs?.gm?.seating.find((t) => t.id === game.tableId) ?? null));
   const rerollsLeft = $derived(gs?.gm?.rerolls ?? {});
+  // The game's table, drawn exactly like the Seating tab (same code, view only), zoomed so it fills the box.
+  const zoomed = $derived.by(() => {
+    if (!table) return null;
+    const a = ((table.rotation ?? 0) * Math.PI) / 180;
+    const bw = table.w * Math.abs(Math.cos(a)) + table.h * Math.abs(Math.sin(a));
+    const bh = table.w * Math.abs(Math.sin(a)) + table.h * Math.abs(Math.cos(a));
+    const k = Math.min(0.62 / bw, 0.45 / bh);
+    const planH = bh * k + 0.32; // room for the seats around it
+    return { table: { ...table, x: 0.5, y: 0.5, w: table.w * k, h: table.h * k }, aspect: 1 / planH };
+  });
   const settings = $derived(game.board ? boardSettingsFor(game.board, gs?.gm?.boardSettings) : {});
   const players = $derived.by((): BoardPlayer[] =>
     game.participants.map((p) => {
@@ -172,6 +183,12 @@
     </div>
     <button onclick={finish}>Enter result</button>
   </div>
+  {#if zoomed}
+    <details class="board-table" open>
+      <summary class="small muted">Table: {table?.name} · {table?.assignments.length}/{table?.seats} seated (change it on Seating)</summary>
+      <div class="board-table-plan"><FloorPlan tables={[zoomed.table]} players={gs?.players ?? []} aspect={zoomed.aspect} /></div>
+    </details>
+  {/if}
   {#if !entry}
     <p class="muted">This game's board ({game.board}) isn't installed on this server. Use the Dashboard to enter scores.</p>
   {:else if failed}
@@ -184,3 +201,16 @@
     <Board {ctx} state={board} {onchange} onfinish={finish} />
   {/if}
 </section>
+
+<style>
+  .board-table {
+    margin: 0.4rem 0 0.8rem;
+  }
+  .board-table summary {
+    cursor: pointer;
+    padding: 0.2rem 0;
+  }
+  .board-table-plan {
+    max-width: 520px;
+  }
+</style>

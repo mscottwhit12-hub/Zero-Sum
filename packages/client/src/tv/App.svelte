@@ -83,13 +83,17 @@
       const x = d as { playerId: number; type: string };
       pushBanner(t('tv.achievement', { player: pname(x.playerId), achievement: t(`achievements.${x.type}.name`) }), 'info');
     },
-    'vote:call': (d) => pushBanner(t('tv.vote_open', { quarter: (d as { quarter: number }).quarter }), 'info'),
+    'vote:call': (d) => {
+      pushBanner(t('tv.vote_open', { quarter: (d as { quarter: number }).quarter }), 'info');
+      callUntil = Date.now() + CALL_MS; // the standings make way for "answer your phones" for a minute
+    },
     'tv:crawl': (d) => {
       const x = d as { kind: string; ticker: string; minted: number };
       if (x.kind === 'minter') addCrawl(t('tv.minter_crawl', { ticker: x.ticker, minted: x.minted.toLocaleString() }));
     },
     'sound:play': (d) => playSound(d as { cue?: string; url?: string | null }),
-    'finale:replay': () => (replayFrom = Date.now() + skew),
+    'finale:replay': () => ((replayFrom = Date.now() + skew), (ctl = null)),
+    'finale:ctl': (d) => (ctl = d as { start: number; pausedEl: number | null }),
     // A night was archived or a new one created: start fresh.
     'night:archived': () => location.reload(),
     'night:update': (d) => {
@@ -103,6 +107,8 @@
     },
   });
   let replayFrom = $state<number | null>(null);
+  /** The GM's finale clock (step back/forward, pause/play); falls back to the state's copy after a reload. */
+  let ctl = $state<{ start: number; pausedEl: number | null } | null>(null);
   const u1 = live.state.subscribe((v) => (s = v));
   const u2 = live.connected.subscribe((v) => (connected = v));
   let now = $state(Date.now());
@@ -163,6 +169,10 @@
     live.close();
   });
 
+  // Compliance call (the quarter vote): for one minute the standings panel becomes a floating "answer your phones".
+  const CALL_MS = 60_000;
+  let callUntil = $state(0);
+  const calling = $derived(callUntil > now && !!s?.vote?.open);
   const name = (id: number | null) => s?.players.find((p) => p.id === id)?.displayName ?? '—';
   const ticker = (id: number) => s?.players.find((p) => p.id === id)?.ticker ?? '';
   const active = $derived((s?.games ?? []).filter((g) => g.status === 'active'));
@@ -235,6 +245,13 @@
       {/if}
 
       <main class:tall={step.kind === 'floor' || step.kind === 'table' || step.kind === 'market'} class:fullh={step.kind === 'floor' || step.kind === 'table' || (step.kind === 'market' && !!s.vote?.open)}>
+        {#if calling}
+        <section class="panel standings n callout" aria-live="assertive">
+          <div class="ringing" aria-hidden="true">☎</div>
+          <h2 class="float">{t('tv.answer_phones')}</h2>
+          <p class="float2">{t('tv.answer_phones_sub')}</p>
+        </section>
+        {:else}
         <section class="panel standings n">
           <h2>{t('tv.standings')}</h2>
           <table style="--n:{Math.max(1, s.standings.length)}">
@@ -253,6 +270,7 @@
           </table>
           {#if !s.standings.length}<p class="muted">Awaiting associates…</p>{/if}
         </section>
+        {/if}
 
         <section class="right">
           <div class="panel e" class:compact={active.length > 2 || !!s.vote?.open || (step.kind === 'schedule' && next.length > 3)}>
@@ -352,7 +370,7 @@
   {/if}
 
   {#if s?.night?.status === 'ended' && s.finale}
-    <Finale {s} now={serverNow} {replayFrom} />
+    <Finale {s} now={serverNow} {replayFrom} ctl={ctl ?? (replayFrom == null ? (s.night?.finaleCtl ?? null) : null)} />
   {/if}
 
   {#if banner}

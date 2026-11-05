@@ -60,6 +60,28 @@
     const r = await run(() => patch('/api/night', { lengthMinutes: Math.round(Number(editLen)) }), 'Night length saved');
     if (r) editLen = null;
   }
+  // TV finale: it plays by itself; the GM can step back/forward (it keeps playing) and pause/play.
+  let finNow = $state(Date.now());
+  const finTimer = setInterval(() => (finNow = Date.now()), 500);
+  $effect(() => () => clearInterval(finTimer));
+  let finOffset = $state(0);
+  $effect(() => {
+    if (gs?.night) finOffset = gs.night.serverTime - Date.now();
+  });
+  const finaleLabel = (l: string) =>
+    l === 'collapse' ? 'Market collapse' : l === 'place3' ? '3rd place' : l === 'place2' ? '2nd place' : l === 'place1' ? '1st place' : l.startsWith('slide:') ? t(`tv.recap.${l.slice(6)}`) : l;
+  const finaleNow = $derived.by(() => {
+    const n = gs?.night;
+    const c = n?.finaleCtl;
+    const segs = n?.finaleSegments;
+    if (!n || n.status !== 'ended' || !c || !segs?.length) return null;
+    const el = c.pausedEl ?? (finNow + finOffset - c.start) / 1000;
+    let i = 0;
+    for (let k = 0; k < segs.length; k++) if (segs[k]!.at <= el) i = k;
+    const end = !!n.recapDone && c.pausedEl == null && el > segs[segs.length - 1]!.at + 30;
+    return { i, n: segs.length, label: end ? 'Finished' : finaleLabel(segs[i]!.label), paused: c.pausedEl != null };
+  });
+  const ctlFinale = (action: string) => run(() => post('/api/night/finale/control', { action }));
 </script>
 
 {#if !night}
@@ -161,6 +183,18 @@
         <div class="actions">
           {#if !night.recapDone}<button onclick={() => run(() => post('/api/night/finale/skip'), 'Phones unlocked')}>Skip finale</button>{/if}
           <button onclick={() => run(() => post('/api/night/finale/replay'), 'Replaying on TV')}>Replay on TV</button>
+        </div>
+        {#if finaleNow}
+          <div class="finale-ctl" role="group" aria-label="Finale on the TV">
+            <span class="small">On the TV: <b>{finaleNow.label}</b> <span class="muted">({finaleNow.i + 1} of {finaleNow.n}{finaleNow.paused ? ', paused' : ''})</span></span>
+            <div class="row">
+              <button aria-label="Previous" onclick={() => ctlFinale('prev')}>⏮ Back</button>
+              {#if finaleNow.paused}<button class="primary" onclick={() => ctlFinale('play')}>▶ Play</button>{:else}<button onclick={() => ctlFinale('pause')}>⏸ Pause</button>{/if}
+              <button aria-label="Next" onclick={() => ctlFinale('next')}>Next ⏭</button>
+            </div>
+          </div>
+        {/if}
+        <div class="actions">
           <a class="btn primary" href="/api/export/package.zip">Download package (zip)</a>
           <a class="btn" href="/api/export/night.json">Export JSON</a>
           <a class="btn" href="/api/export/standings.csv">Standings CSV</a>
@@ -254,6 +288,17 @@
 {/if}
 
 <style>
+  .finale-ctl {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0.6rem 0;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
   .prompt {
     border-left: 4px solid var(--accent);
   }

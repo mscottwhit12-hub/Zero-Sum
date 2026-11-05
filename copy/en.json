@@ -307,7 +307,9 @@
       "achievements": "Achievements"
     },
     "statements_ready": "Final Account Statements are now on your phones.",
-    "trading_closed_banner": "Trading desks are closed. Holdings auto-sell at the end of the night; {fee}% fee on profits only."
+    "trading_closed_banner": "Trading desks are closed. Holdings auto-sell at the end of the night; {fee}% fee on profits only.",
+    "answer_phones": "Answer your phones.",
+    "answer_phones_sub": "Compliance is calling. Every associate. Now."
   },
   "minter": {
     "loading": "Booting minting rig…",

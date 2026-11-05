@@ -3,6 +3,7 @@
   import { run } from '@shared/ui';
   import type { GmState, WhoAmI } from '@shared/types';
   import BoardSettings from './BoardSettings.svelte';
+  import Tuning from './Tuning.svelte';
   let { gs, whoami }: { gs: GmState | null; whoami: WhoAmI } = $props();
 
   type Leaf = { path: string; value: unknown };
@@ -65,6 +66,9 @@
 {:else if !resolved}
   <p class="panel muted">Create a night first. Settings belong to a night.</p>
 {:else}
+  <Tuning {resolved} />
+  <details class="advanced">
+  <summary class="panel">Advanced: every setting</summary>
   <div class="panel spread sticky">
     <span class="small muted">Every gameplay number. Changes apply live and re-score all totals. ● = changed from default.</span>
     <div class="row">
@@ -94,6 +98,7 @@
       </section>
     {/each}
   </div>
+  </details>
 {/if}
 {#if whoami.role === 'master'}<BoardSettings {gs} master />{/if}
 

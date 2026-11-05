@@ -299,3 +299,12 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
   .tvroot .finale .slide, .tvroot .finale .plate, .tvroot .finale .nm, .tvroot .finale .chipt, .tvroot .finale .stat, .tvroot .finale .cap, .tvroot .finale .face,
   .tvroot .finale .tile, .tvroot .finale .brow, .tvroot .finale .trk i, .tvroot .finale .ach p, .tvroot .finale .plate2, .tvroot .finale .phone, .tvroot .finale .fchips, .tvroot .finale .bfoot, .tvroot .finale .av.xl { animation: tvfade 0.6s both !important; }
 }
+
+/* compliance call: the standings panel becomes a floating "answer your phones" for a minute */
+.tvroot .callout { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 1.2rem; }
+.tvroot .callout .ringing { font-size: 7rem; color: var(--accent); animation: tvring 0.9s ease-in-out infinite; filter: drop-shadow(0 0 1.2rem #c9a24a66); }
+.tvroot .callout h2.float { font-size: 4.2rem; margin: 0; animation: tvfloat 3.2s ease-in-out infinite; }
+.tvroot .callout .float2 { font-size: 1.9rem; color: var(--muted); margin: 0; animation: tvfloat 3.2s 0.4s ease-in-out infinite; }
+@keyframes tvring { 0%, 100% { transform: rotate(0); } 10% { transform: rotate(-14deg); } 20% { transform: rotate(12deg); } 30% { transform: rotate(-10deg); } 40% { transform: rotate(8deg); } 50% { transform: rotate(0); } }
+@keyframes tvfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.9rem); } }
+@media (prefers-reduced-motion: reduce) { .tvroot .callout .ringing, .tvroot .callout h2.float, .tvroot .callout .float2 { animation: none; } }

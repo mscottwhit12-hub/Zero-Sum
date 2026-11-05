@@ -1,4 +1,5 @@
 import { checkAttempts, noteAttempt } from '../auth/attempts';
+import { controlFinale } from '../services/finaleControl';
 import type { FastifyInstance } from 'fastify';
 import { buyHint, gmSendHint, readHint, tradeRerollForHint } from '../services/hints';
 import { readGift, setHandicapOffset } from '../services/handicap';
@@ -469,6 +470,7 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/night/overrun', async (req) => answerOverrun(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
   app.post('/api/night/finale/skip', async (req) => skipFinale(ctx, requireGm(ctx, req, { master: true })));
   app.post('/api/night/finale/replay', async (req) => replayFinale(ctx, requireGm(ctx, req, { master: true })));
+  app.post('/api/night/finale/control', async (req) => controlFinale(ctx, requireGm(ctx, req, { master: true }), b(req.body).action));
   app.get('/api/me/statement', async (req) => statement(ctx, device(req)));
   app.get('/api/me/statement.pdf', async (req, reply) => {
     const s = statement(ctx, device(req));

@@ -8,12 +8,13 @@
   import { goldTv } from '@shared/format';
   import type { RecapSlide, TvState } from '@shared/types';
 
-  let { s, now, replayFrom }: { s: TvState; now: number; replayFrom: number | null } = $props();
+  let { s, now, replayFrom, ctl = null }: { s: TvState; now: number; replayFrom: number | null; ctl?: { start: number; pausedEl: number | null } | null } = $props();
   const f = $derived(s.finale!);
   const total = $derived(f.timing.collapseSeconds + 3 * f.timing.podiumStepSeconds + f.slides.length * f.timing.recapSlideSeconds);
   // Server clock → local clock offset (serverTime was "now" when the state was sent).
   const start = $derived(replayFrom ?? (s.night!.recapUntil ?? s.night!.serverTime) - total * 1000);
-  const el = $derived(Math.max(0, (now - start) / 1000));
+  // The GM's clock, when set (step back/forward, pause/play), else the automatic one.
+  const el = $derived(Math.max(0, ctl ? (ctl.pausedEl ?? (now - ctl.start) / 1000) : (now - start) / 1000));
   const podiumAt = $derived(f.timing.collapseSeconds);
   const slidesAt = $derived(podiumAt + 3 * f.timing.podiumStepSeconds);
   const phase = $derived(el < podiumAt ? 'collapse' : el < slidesAt ? 'podium' : el < total ? 'recap' : 'done');

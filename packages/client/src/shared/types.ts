@@ -15,6 +15,9 @@ export interface NightInfo {
   pauseUntil: number | null;
   recapUntil: number | null;
   recapDone: boolean;
+  /** End of night: the finale clock (elapsed = now − start; frozen at pausedEl while paused) and where each part starts. */
+  finaleCtl?: { start: number; pausedEl: number | null } | null;
+  finaleSegments?: { at: number; label: string }[] | null;
   rules: { feeFrac: number; investCapH: number; lockoutMinutes: number; minTradeH: number; endSellProfitFeeFrac: number };
 }
 export interface PlayerInfo {

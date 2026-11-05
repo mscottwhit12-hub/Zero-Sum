@@ -1,3 +1,4 @@
+import { restartFinaleCtl } from './finaleControl';
 import { awardAchievements } from './achievements';
 import { closeBetsForGame } from './betting';
 import { refundBoardGold } from './boardGold';
@@ -223,6 +224,7 @@ export function replayFinale(ctx: Ctx, actor: GmAuth) {
   masterOnly(actor);
   const n = requireNight(ctx);
   if (n.status !== 'ended') throw conflict('night_not_ended');
+  restartFinaleCtl(ctx, n.id);
   ctx.bus.tv('finale:replay', { at: ctx.now() });
   playCue(ctx, 'collapse');
   return { ok: true };

@@ -28,6 +28,7 @@ import { musicForGm, musicForTv, getAudioSettings } from './music';
 import { ambientOff, currentAmbient, listSounds } from './sounds';
 import { minterLeaderboard } from './minter';
 import { finale, type Finale } from './recap';
+import { finaleCtl, finaleSegments } from './finaleControl';
 import { promptsView } from './prompts';
 import { loadResults, nightOverrides, pid, type NightState } from './state';
 
@@ -50,6 +51,8 @@ export interface PublicView {
     pauseUntil: number | null;
     /** End of night: TV finale runs until this wall-clock time; phones unlock when done. */
     recapUntil: number | null;
+    finaleCtl: { start: number; pausedEl: number | null } | null;
+    finaleSegments: { at: number; label: string }[] | null;
     recapDone: boolean;
     /** Trade rules players need to see. */
     rules: { feeFrac: number; investCapH: GoldH; lockoutMinutes: number; minTradeH: GoldH; endSellProfitFeeFrac: number };
@@ -89,6 +92,8 @@ export function publicView(ctx: Ctx, st: NightState): PublicView {
       pauseUntil: n.status === 'paused' ? n.pause_until : null,
       recapUntil: n.recap_until,
       recapDone: !!n.recap_done,
+      finaleCtl: finaleCtl(ctx, n),
+      finaleSegments: n.status === 'ended' ? finaleSegments(finale(ctx, n.id)) : null,
       rules: {
         feeFrac: st.settings.market.feeFrac,
         investCapH: Math.round(st.settings.market.investCap * 100),

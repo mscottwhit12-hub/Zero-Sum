@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CropPhoto from './CropPhoto.svelte';
   import { onMount } from 'svelte';
   import { get, post } from '@shared/api';
   import { t } from '@shared/copy';
@@ -37,16 +38,15 @@
     if (!tickerTouched) ticker = name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase();
   });
 
+  // Picking a photo opens the cropper (drag + zoom); the square crop becomes the avatar.
+  let cropping = $state<File | null>(null);
   async function pickPhoto(e: Event) {
-    const f = (e.currentTarget as HTMLInputElement).files?.[0];
-    if (!f) return;
-    try {
-      avatar = await prepareAvatar(f);
-    } catch (err) {
-      avatar = null;
-      toast(t('phone.photo_failed'), 'error');
-    }
+    const input = e.currentTarget as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = ''; // the same file can be picked again
+    if (f) cropping = f;
   }
+  void prepareAvatar;
   async function submit(e: Event) {
     e.preventDefault();
     busy = true;
@@ -107,7 +107,11 @@
         </div>
       </div>
       <label class="field"><span>Photo (optional)</span><input type="file" accept="image/*" onchange={pickPhoto} /></label>
-      {#if avatar}<img src={avatar} alt="" width="64" height="64" style="border-radius:50%;object-fit:cover" />{/if}
+      {#if cropping}
+        <CropPhoto file={cropping} ondone={(u) => ((avatar = u), (cropping = null))} oncancel={() => (cropping = null)} />
+      {:else if avatar}
+        <span class="row"><img src={avatar} alt="" width="64" height="64" style="border-radius:50%;object-fit:cover" /><button type="button" onclick={() => (avatar = null)}>Remove</button></span>
+      {/if}
       <button class="primary big" type="submit" disabled={busy || !name || ticker.length < 3}>{info.mode === 'join' ? 'Join' : 'Request to join'}</button>
     </form>
     {#if info.mode === 'late' && info.players.length}
