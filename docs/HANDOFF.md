@@ -320,6 +320,10 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - Statement cards render the PNGs (press-and-hold → Save to Photos); only the button opens the share sheet.
 - Minter client counts whole cycles like `advanceMinter` (no drop at sync), time from the request, monotonic display, rAF ~30 fps; cycles < 0.25 s show a full bar. Rebrand themes `play/fun/minter/themes.svelte.ts` (5, rotate by `rebrands % 5`; `minterBrand` drives the phone header/home label).
 
+### 4p. Swipe back, stock detail (Nov 5)
+- Phone home pager: touch handled by `swipeTouch` (touch events; `preventDefault` once a swipe is sideways so the scrolling leaderboard can't take it), pointer events only for mouse/pen; flicks (>25 px, <300 ms) count. `.pager .board` has `touch-action: pan-y; overscroll-behavior: contain`.
+- Phone stock page shows `TickCountdown` under the range chips. GM Market: ticker buttons open a stock detail (chart from `GET /api/gm/market/:id/history`, ranges, countdown, mood/offset).
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
