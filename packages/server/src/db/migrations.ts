@@ -625,4 +625,19 @@ export const MIGRATIONS: string[] = [
   /* 25 — table rotation on the floor plan, in degrees (multiples of 15; QoL list). */ `
   ALTER TABLE game_table ADD COLUMN rotation INTEGER NOT NULL DEFAULT 0;
   `,
+  /* 26 — table props (QoL list): pictures on a table, in the table's own frame; game_id = placed by a running game. */ `
+  CREATE TABLE table_prop (
+    id INTEGER PRIMARY KEY,
+    night_id INTEGER NOT NULL REFERENCES night(id),
+    table_id INTEGER NOT NULL REFERENCES game_table(id),
+    kind TEXT NOT NULL,
+    x REAL NOT NULL DEFAULT 0,
+    y REAL NOT NULL DEFAULT 0,
+    w REAL NOT NULL,
+    rotation INTEGER NOT NULL DEFAULT 0,
+    game_id INTEGER REFERENCES game(id),
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX table_prop_table ON table_prop(table_id);
+  `,
 ];

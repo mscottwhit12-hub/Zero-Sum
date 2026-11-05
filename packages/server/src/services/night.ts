@@ -2,6 +2,7 @@ import { restartFinaleCtl } from './finaleControl';
 import { awardAchievements } from './achievements';
 import { closeBetsForGame } from './betting';
 import { refundBoardGold } from './boardGold';
+import { clearGameBoard } from './seating';
 import { finale, finaleSeconds, markRecapDone } from './recap';
 import { playCue } from './sounds';
 import {
@@ -175,6 +176,7 @@ export function applyNightAction(ctx: Ctx, actor: GmAuth, action: NightAction, o
             // Held bet stakes go back with the cancelled game, so nobody's final standing is short.
             closeBetsForGame(ctx, n.id, g.id);
             refundBoardGold(ctx, g.id, actor.gmId);
+            clearGameBoard(ctx, g.id);
           }
           if (open.length) audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.cancel_at_end', entity: 'night', entityId: n.id, after: { games: open } });
         }

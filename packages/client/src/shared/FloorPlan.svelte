@@ -5,6 +5,8 @@
    * seats and the unseated tray. An empty seat can be dragged to another spot around its table. Read-only mode (TV) just draws it.
    */
   import Avatar from './Avatar.svelte';
+  import { fitProp, propKind } from '@gn/engine';
+  import PropSprite from './PropSprite.svelte';
   import { clamp, edgeDistance, minSize, SEAT_EDGE, seatFractions, seatPoints, snapToFree, TABLE_H, TABLE_W } from './seating';
   import type { PlayerInfo, SeatingTable } from './types';
 
@@ -23,6 +25,9 @@
     onresize = undefined,
     onseat = undefined,
     onseatpos = undefined,
+    selectedPropId = null,
+    onselectprop = undefined,
+    onprop = undefined,
   }: {
     tables: SeatingTable[];
     players: PlayerInfo[];
@@ -40,6 +45,10 @@
     onseat?: (tableId: number, seat: number, playerId: number | null) => unknown;
     /** An empty seat was dragged: the table's new seat positions (0–1 fractions along its edge, one per seat). */
     onseatpos?: (tableId: number, pos: number[]) => unknown;
+    /** Table props: the selected one (edit handles), picking one, and a move/resize to save. */
+    selectedPropId?: number | null;
+    onselectprop?: (tableId: number, propId: number) => void;
+    onprop?: (propId: number, g: { x: number; y: number; w: number }) => unknown;
   } = $props();
 
   let W = $state(0);
@@ -64,7 +73,13 @@
     | { kind: 'move'; id: number; offX: number; offY: number; sx: number; sy: number; moved: boolean }
     | { kind: 'resize'; id: number; axis: 'w' | 'h' | 'wh'; sx: number; sy: number; cx: number; cy: number; deg: number; tw: number; th: number; minW: number; minH: number; moved: boolean }
     | { kind: 'player'; playerId: number; from: { tableId: number; seat: number } | null; sx: number; sy: number; moved: boolean }
-    | { kind: 'seat'; tableId: number; seat: number; sx: number; sy: number; moved: boolean };
+    | { kind: 'seat'; tableId: number; seat: number; sx: number; sy: number; moved: boolean }
+    | { kind: 'prop'; tableId: number; propId: number; mode: 'move' | 'size'; sx: number; sy: number; x0: number; y0: number; w0: number; d0: number; moved: boolean };
+  type Prop = NonNullable<SeatingTable['props']>[number];
+  /** The prop being dragged, shown where it is now (kept briefly after the drop until the server agrees). */
+  let liveProp = $state<{ id: number; x: number; y: number; w: number } | null>(null);
+  let propTok = 0;
+  const propGeo = (p: Prop) => (liveProp && liveProp.id === p.id ? { ...p, ...liveProp } : p);
   let op: Op | null = null;
 
   const geo = (t: SeatingTable): Geo => (live && live.id === t.id ? live : t);
@@ -107,6 +122,22 @@
     op = { kind: 'player', playerId, from, sx: e.clientX, sy: e.clientY, moved: false };
   }
 
+  /** Screen point → the table's own frame (px from its centre, before its rotation). */
+  function toTable(t: SeatingTable, cx: number, cy: number) {
+    const r = planEl!.getBoundingClientRect();
+    const g = geo(t);
+    return rot(cx - (r.left + g.x * W), cy - (r.top + g.y * H), -rotOf(t));
+  }
+  function startProp(e: PointerEvent, t: SeatingTable, p: Prop, mode: 'move' | 'size') {
+    if (!editable) return;
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    onselectprop?.(t.id, p.id);
+    const g = geo(t);
+    const c = { x: p.x * g.w * W, y: p.y * g.h * W };
+    const at = toTable(t, e.clientX, e.clientY);
+    op = { kind: 'prop', tableId: t.id, propId: p.id, mode, sx: e.clientX, sy: e.clientY, x0: p.x, y0: p.y, w0: p.w, d0: Math.max(4, Math.hypot(at.x - c.x, at.y - c.y)), moved: false };
+  }
   function startSeat(e: PointerEvent, t: SeatingTable, seat: number) {
     if (!editable) return;
     e.stopPropagation();
@@ -172,6 +203,22 @@
       const others = posOf(t).filter((_, i) => i + 1 !== so.seat).map((f) => f * per);
       const snapped = snapToFree(d, others, per, SEAT_EDGE * W);
       if (snapped !== null) liveSeat = { tableId: t.id, seat: so.seat, f: snapped / per };
+    } else if (op.kind === 'prop') {
+      const po = op;
+      const t = tables.find((x) => x.id === po.tableId);
+      const p = t?.props?.find((x) => x.id === po.propId);
+      const kind = p ? propKind(p.kind) : null;
+      if (!t || !p || !kind) return;
+      const g = geo(t);
+      const tw = g.w * W;
+      const th = g.h * W;
+      const at = toTable(t, e.clientX, e.clientY);
+      const start = toTable(t, po.sx, po.sy);
+      let next = { x: po.x0, y: po.y0, w: po.w0, rotation: p.rotation };
+      if (po.mode === 'move') next = { ...next, x: po.x0 + (at.x - start.x) / tw, y: po.y0 + (at.y - start.y) / th };
+      else next = { ...next, w: po.w0 * (Math.hypot(at.x - po.x0 * tw, at.y - po.y0 * th) / po.d0) };
+      const f = fitProp(kind, next, g.w, g.h);
+      liveProp = { id: p.id, x: f.x, y: f.y, w: f.w };
     } else if (op.kind === 'player') {
       ghost = { playerId: op.playerId, x: e.clientX, y: e.clientY };
       draggingPlayer = op.playerId;
@@ -194,6 +241,22 @@
       if (!o.moved) return;
       if (target && !(o.from && o.from.tableId === target.tableId && o.from.seat === target.seat)) await onseat?.(target.tableId, target.seat, o.playerId);
       else if (!target && toTray && o.from) await onseat?.(o.from.tableId, o.from.seat, null);
+      return;
+    }
+    if (o.kind === 'prop') {
+      const lp = liveProp;
+      const tok = ++propTok;
+      if (!o.moved || !lp) {
+        liveProp = null;
+        return;
+      }
+      try {
+        await onprop?.(lp.id, { x: lp.x, y: lp.y, w: lp.w });
+      } finally {
+        setTimeout(() => {
+          if (tok === propTok) liveProp = null;
+        }, 400);
+      }
       return;
     }
     if (o.kind === 'seat') {
@@ -234,6 +297,7 @@
     op = null;
     live = null;
     liveSeat = null;
+    liveProp = null;
     ghost = null;
     hover = null;
     overTray = false;
@@ -259,9 +323,34 @@
             onpointerdown={(e) => startMove(e, t)}
             onclick={() => onselect?.(t.id)}
           >
-            <strong>{t.name}</strong>
-            {#if th >= 34}<span class="muted cnt">{t.assignments.length}/{t.seats}{gameName && t.gameId ? ` · ${gameName(t.gameId)}` : ''}</span>{/if}
+            {#if !t.props?.length}
+              <strong>{t.name}</strong>
+              {#if th >= 34}<span class="muted cnt">{t.assignments.length}/{t.seats}{gameName && t.gameId ? ` · ${gameName(t.gameId)}` : ''}</span>{/if}
+            {/if}
           </button>
+          {#each t.props ?? [] as pr (pr.id)}
+            {@const q = propGeo(pr)}
+            {@const k = propKind(pr.kind)}
+            {#if k}
+              {@const pw = q.w * tw}
+              <div
+                class="prop"
+                class:edit={editable}
+                class:psel={selectedPropId === pr.id}
+                style="left:{tw / 2 + q.x * tw}px;top:{th / 2 + q.y * th}px;width:{pw}px;height:{pw / k.aspect}px;transform:translate(-50%, -50%) rotate({pr.rotation}deg)"
+                title={k.label}
+                role="presentation"
+                onpointerdown={(e) => startProp(e, t, pr, 'move')}
+              >
+                <PropSprite kind={pr.kind} />
+                {#if editable && selectedPropId === pr.id}<div class="phd" role="presentation" title="Drag to resize" onpointerdown={(e) => startProp(e, t, pr, 'size')}></div>{/if}
+              </div>
+            {/if}
+          {/each}
+          {#if t.props?.length}
+            <!-- label above the props, on a pill, never catching the pointer -->
+            <div class="plbl" style="font-size:{fs}px;--txt-rot:{deg > 90 && deg < 270 ? 180 : 0}deg"><strong>{t.name}</strong>{#if th >= 34 && gameName && t.gameId}<span class="cnt"> · {gameName(t.gameId)}</span>{/if}</div>
+          {/if}
           {#each seatPoints(t.seats, tw, th, S, 3, posOf(t)) as p (p.seat)}
             {@const pid = t.assignments.find((a) => a.seat === p.seat)?.playerId ?? null}
             {@const pl = pid == null ? null : (byId.get(pid) ?? null)}
@@ -289,7 +378,7 @@
               {/if}
             </div>
           {/each}
-          {#if editable && selectedId === t.id}
+          {#if editable && selectedId === t.id && !t.props?.length}
             <div class="hd hw" onpointerdown={(e) => startResize(e, t, 'w')} role="presentation" title="Drag to change length"></div>
             <div class="hd hh" onpointerdown={(e) => startResize(e, t, 'h')} role="presentation" title="Drag to change width"></div>
             <div class="hd hc" onpointerdown={(e) => startResize(e, t, 'wh')} role="presentation" title="Drag to resize"></div>
@@ -324,6 +413,47 @@
 </div>
 
 <style>
+  .plbl {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(var(--txt-rot, 0deg));
+    z-index: 2;
+    pointer-events: none;
+    white-space: nowrap;
+    max-width: 95%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.05em 0.5em;
+    border-radius: 0.5em;
+    background: #000a;
+    color: #fff;
+  }
+  .prop {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .prop.edit {
+    pointer-events: auto;
+    cursor: move;
+    touch-action: none;
+  }
+  .prop.psel {
+    outline: 2px dashed var(--accent);
+    outline-offset: 2px;
+  }
+  .phd {
+    position: absolute;
+    right: -8px;
+    bottom: -8px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #fff;
+    cursor: nwse-resize;
+  }
   .fp {
     width: 100%;
   }

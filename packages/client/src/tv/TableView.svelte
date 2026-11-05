@@ -3,6 +3,8 @@
    * TV close-up of one table: the table at its real shape, scaled up, with big avatars and first names
    * around it (seat order matches the floor plan). Read-only.
    */
+  import { propKind } from '@gn/engine';
+  import PropSprite from '@shared/PropSprite.svelte';
   import Avatar from '@shared/Avatar.svelte';
   import { clamp, relaxSeats, seatFractions, seatPoints } from '@shared/seating';
   import type { PlayerInfo, SeatingTable } from '@shared/types';
@@ -38,7 +40,12 @@
     {@const sideSeat = (p: { x: number }) => p.x < -tw / 2 || p.x > tw / 2}
     {@const crowded = room < 150 && pts.some((p) => sideSeat(p) && pts.some((q) => q.seat !== p.seat && sideSeat(q) && Math.abs(q.x - p.x) < S * 0.4 && Math.abs(q.y - p.y) < S + 56))}
     {@const mode = room >= 150 ? 'out' : crowded ? 'in' : 'low'}
-    <div class="tbl" style="width:{tw}px;height:{th}px;font-size:{Math.round(clamp(th * 0.2, 16, S * 0.6))}px;padding:0 {mode === 'in' ? Math.round(tw * 0.3) : 6}px">
+    <div class="tbl" class:hasprops={!!table.props?.length} style="width:{tw}px;height:{th}px;font-size:{Math.round(clamp(th * 0.2, 16, S * 0.6))}px;padding:0 {mode === 'in' ? Math.round(tw * 0.3) : 6}px">
+      <!-- props: under the name, in the table's own frame (the close-up is never turned) -->
+      {#each table.props ?? [] as pr (pr.id)}
+        {@const k = propKind(pr.kind)}
+        {#if k}<div class="prop" style="left:{tw / 2 + pr.x * tw}px;top:{th / 2 + pr.y * th}px;width:{pr.w * tw}px;height:{(pr.w * tw) / k.aspect}px;transform:translate(-50%, -50%) rotate({pr.rotation}deg)"><PropSprite kind={pr.kind} /></div>{/if}
+      {/each}
       <strong>{table.name}</strong>
       <span class="muted cnt">{table.assignments.length}/{table.seats}{game ? ` · ${game}` : ''}</span>
     </div>
@@ -61,6 +68,23 @@
 </div>
 
 <style>
+  .tbl .prop {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .tbl > strong,
+  .tbl > .cnt {
+    position: relative;
+    z-index: 1;
+  }
+  /* on a table with props, the label sits on a dark pill so it reads over the pictures */
+  .tbl.hasprops > strong,
+  .tbl.hasprops > .cnt {
+    background: #000a;
+    padding: 0 0.45em;
+    border-radius: 0.5em;
+  }
   .tv-table {
     position: relative;
     width: 100%;

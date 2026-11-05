@@ -184,6 +184,8 @@ export interface SeatingTable {
   seatPos: number[] | null;
   /** Degrees on the floor plan, multiples of 15 (0 = as drawn). */
   rotation?: number;
+  /** Pictures on the table, in its own frame: x, y from the centre as fractions of its width/height; w = fraction of its width. */
+  props?: { id: number; kind: string; x: number; y: number; w: number; rotation: number; gameId: number | null }[];
   assignments: { seat: number; playerId: number }[];
   gameId: number | null;
 }

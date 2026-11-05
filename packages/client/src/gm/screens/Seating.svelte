@@ -5,6 +5,8 @@
   import { run } from '@shared/ui';
   import type { GmState, SeatingTable, WhoAmI } from '@shared/types';
   import FloorPlan from '@shared/FloorPlan.svelte';
+  import PropSprite from '@shared/PropSprite.svelte';
+  import { PROP_KINDS, propKind } from '@gn/engine';
   import { activePlayers, playerName } from '../lib';
 
   let { gs, whoami }: { gs: GmState | null; whoami: WhoAmI } = $props();
@@ -32,6 +34,24 @@
 
   let selected = $state<number | null>(null);
   const sel = $derived(tables.find((t) => t.id === selected) ?? null);
+  // Table props: pick one on the plan to move/resize it there; add, turn and remove here.
+  let selProp = $state<number | null>(null);
+  const prop = $derived(sel?.props?.find((p) => p.id === selProp) ?? null);
+  const PROP_GROUPS = [
+    { id: 'board', label: 'Boards' },
+    { id: 'pieces', label: 'Pieces' },
+    { id: 'drinks', label: 'Drinks' },
+    { id: 'smoke', label: 'Smoke' },
+  ] as const;
+  async function addProp(kind: string) {
+    if (!sel) return;
+    const r = await run(() => post<{ id: number }>(`/api/tables/${sel.id}/props`, { kind }));
+    if (r) selProp = r.id;
+  }
+  const saveProp = (id: number, g: Record<string, unknown>) => run(() => patch(`/api/props/${id}`, g));
+  const removeProp = async (id: number) => {
+    if (await run(() => del(`/api/props/${id}`))) selProp = null;
+  };
 
   // A running game whose players aren't all sitting at its table: show it, and offer to seat them when the table
   // has enough empty seats (players seated elsewhere move over). Never forced.
@@ -141,6 +161,9 @@
     onresize={resizeTable}
     onseat={seatPlayer}
     onseatpos={moveSeat}
+    selectedPropId={selProp}
+    onselectprop={(tid, pid) => ((selected = tid), (selProp = pid))}
+    onprop={(id, g) => saveProp(id, g)}
   />
 </section>
 
@@ -181,12 +204,63 @@
     </div>
     <p class="small muted">Seated: {sel.assignments.map((a) => `${a.seat}. ${playerName(gs, a.playerId)}`).join(' · ') || 'nobody'}</p>
   </section>
+  {#if master}
+    <section class="panel">
+      <h3>Props on {sel.name}</h3>
+      <p class="small muted">Tap one to put it on the table, then drag it there; the round handle resizes it. A table with props can't be resized.</p>
+      {#if prop}
+        {@const k = propKind(prop.kind)}
+        <div class="row prop-sel">
+          <b>{k?.label ?? prop.kind}</b>{#if prop.gameId}<span class="small muted">(placed by the running game)</span>{/if}
+          <button aria-label="Turn left 15°" onclick={() => saveProp(prop.id, { rotation: prop.rotation - 15 })}>⟲</button>
+          <b class="mono">{prop.rotation}°</b>
+          <button aria-label="Turn right 15°" onclick={() => saveProp(prop.id, { rotation: prop.rotation + 15 })}>⟳</button>
+          <button aria-label="Smaller" onclick={() => saveProp(prop.id, { w: prop.w / 1.2 })}>−</button>
+          <button aria-label="Bigger" onclick={() => saveProp(prop.id, { w: prop.w * 1.2 })}>+</button>
+          <button class="danger" onclick={() => removeProp(prop.id)}>Remove</button>
+          <button onclick={() => (selProp = null)}>Done</button>
+        </div>
+      {/if}
+      {#each PROP_GROUPS as g (g.id)}
+        <div class="small muted">{g.label}</div>
+        <div class="palette">
+          {#each PROP_KINDS.filter((k) => k.group === g.id) as k (k.id)}
+            <button class="pal" title={k.label} aria-label="Add {k.label}" onclick={() => addProp(k.id)}><span class="pic"><PropSprite kind={k.id} /></span><span class="small">{k.label}</span></button>
+          {/each}
+        </div>
+      {/each}
+    </section>
+  {/if}
 {/if}
 {#if master && tables.length}
   <div class="actions"><button onclick={() => confirm('Clear every seat?') && run(() => post('/api/seats/clear'), 'Seats cleared')}>Clear all seats</button></div>
 {/if}
 
 <style>
+  .palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.2rem 0 0.6rem;
+  }
+  .pal {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    width: 5.6rem;
+    padding: 0.4rem 0.3rem;
+    min-height: 0;
+  }
+  .pal .pic {
+    width: 3.2rem;
+    height: 2.4rem;
+    display: block;
+  }
+  .prop-sel {
+    margin: 0.3rem 0 0.7rem;
+    flex-wrap: wrap;
+  }
   .seat-warn {
     border-color: var(--warn);
   }

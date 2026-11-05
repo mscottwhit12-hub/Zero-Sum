@@ -13,7 +13,7 @@ import { playerBuy, playerCover, playerSell, playerShort } from '../services/tra
 import { castBallot, openVoteEarly } from '../services/votes';
 import { haltSecurity, logReroll, recordMood, relistSecurity, sendNotification, setOffset } from '../services/field';
 import { createRule, deleteRule, listRules, updateRule } from '../services/rules';
-import { assignSeat, clearSeats, createTable, deleteTable, updateTable } from '../services/seating';
+import { addProp, assignSeat, clearSeats, createTable, deleteProp, deleteTable, updateProp, updateTable } from '../services/seating';
 import { createClaim, decideClaim, getBoard, saveBoard, setBoardSettings } from '../services/boards';
 import { chatMessages, gmChatMessages, gmChats, markChatRead, myChats, sendChat, startChat, useWiretap } from '../services/chat';
 import { musicAction, setAudioSettings } from '../services/music';
@@ -407,6 +407,9 @@ export function registerPlayerRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/tables', async (req) => createTable(ctx, requireGm(ctx, req, { master: true }), b(req.body)));
   app.patch<Id>('/api/tables/:id', async (req) => updateTable(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
   app.delete<Id>('/api/tables/:id', async (req) => deleteTable(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id)));
+  app.post<Id>('/api/tables/:id/props', async (req) => addProp(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
+  app.patch<Id>('/api/props/:id', async (req) => updateProp(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
+  app.delete<Id>('/api/props/:id', async (req) => deleteProp(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id)));
   app.post<Id>('/api/tables/:id/seat', async (req) => assignSeat(ctx, requireGm(ctx, req, { master: true }), Number(req.params.id), b(req.body)));
   app.post('/api/seats/clear', async (req) => clearSeats(ctx, requireGm(ctx, req, { master: true })));
 

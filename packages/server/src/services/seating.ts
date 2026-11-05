@@ -9,6 +9,19 @@ import { bad, conflict, notFound, type Ctx } from '../context';
 import { audit } from './audit';
 import { masterOnly, type GmAuth } from './gm';
 import { currentNight, type NightRow } from './state';
+import { BOARD_PROP, fitProp, propKind } from '@gn/engine';
+
+export interface TableProp {
+  id: number;
+  kind: string;
+  x: number;
+  y: number;
+  w: number;
+  rotation: number;
+  /** Placed by this running game (removed when it ends). */
+  gameId: number | null;
+}
+type PropRow = { id: number; table_id: number; kind: string; x: number; y: number; w: number; rotation: number; game_id: number | null };
 
 export interface SeatingTable {
   id: number;
@@ -22,6 +35,8 @@ export interface SeatingTable {
   seatPos: number[] | null;
   /** Degrees on the floor plan, multiples of 15. */
   rotation: number;
+  /** Pictures on the table (its own frame). */
+  props: TableProp[];
   /** seat number (1-based) → player id */
   assignments: { seat: number; playerId: number }[];
   /** Active game at this table, if any (else the next scheduled one). */
@@ -97,6 +112,7 @@ export function seatingView(ctx: Ctx, nightId: number): SeatingTable[] {
   const games = ctx.db
     .prepare("SELECT id, table_id, status FROM game WHERE night_id = ? AND table_id IS NOT NULL AND status IN ('active','scheduled') ORDER BY status = 'active' DESC, COALESCE(planned_start, id)")
     .all(nightId) as { id: number; table_id: number }[];
+  const props = ctx.db.prepare('SELECT * FROM table_prop WHERE night_id = ? ORDER BY id').all(nightId) as PropRow[];
   return (ctx.db.prepare('SELECT * FROM game_table WHERE night_id = ? ORDER BY id').all(nightId) as TableRow[]).map((t) => ({
     id: t.id,
     name: t.name,
@@ -107,6 +123,7 @@ export function seatingView(ctx: Ctx, nightId: number): SeatingTable[] {
     h: t.map_h,
     seatPos: readSeatPos(t.seat_pos, t.seats),
     rotation: t.rotation ?? 0,
+    props: props.filter((p) => p.table_id === t.id).map((p) => ({ id: p.id, kind: p.kind, x: p.x, y: p.y, w: p.w, rotation: p.rotation, gameId: p.game_id })),
     assignments: seats.filter((s) => s.table_id === t.id).map((s) => ({ seat: s.seat, playerId: s.player_id })),
     gameId: games.find((g) => g.table_id === t.id)?.id ?? null,
   }));
@@ -150,6 +167,10 @@ export function updateTable(ctx: Ctx, actor: GmAuth, id: number, input: { name?:
   const seats = input.seats === undefined ? t.seats : cleanSeats(input.seats);
   const x = input.x === undefined ? t.map_x : clamp01(input.x, t.map_x);
   const y = input.y === undefined ? t.map_y : clamp01(input.y, t.map_y);
+  // A table with props on it can't be resized (QoL list); adding seats may still grow it.
+  const hasProps = !!ctx.db.prepare('SELECT 1 FROM table_prop WHERE table_id = ?').get(id);
+  if (hasProps && ((input.w !== undefined && Number(input.w) !== t.map_w) || (input.h !== undefined && Number(input.h) !== t.map_h)))
+    throw conflict('table_has_props', 'Take the props off this table to resize it.');
   // A table never shrinks below what its seats need; adding seats grows it.
   const min = minSize(seats);
   const w = Math.max(min.w, input.w === undefined ? t.map_w : clampRange(input.w, t.map_w, TABLE_W));
@@ -184,6 +205,7 @@ export function deleteTable(ctx: Ctx, actor: GmAuth, id: number) {
   ctx.db.transaction(() => {
     ctx.db.prepare('UPDATE game SET table_id = NULL WHERE table_id = ?').run(id);
     ctx.db.prepare('DELETE FROM seat_assignment WHERE table_id = ?').run(id);
+    ctx.db.prepare('DELETE FROM table_prop WHERE table_id = ?').run(id);
     ctx.db.prepare('DELETE FROM game_table WHERE id = ?').run(id);
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'table.delete', entity: 'game_table', entityId: id, before: t });
   })();
@@ -232,4 +254,68 @@ export function clearSeats(ctx: Ctx, actor: GmAuth) {
   audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'seat.clear', entity: 'night', entityId: n.id });
   ctx.bus.refresh(n.id);
   return { ok: true };
+}
+
+// ---------- table props ----------
+
+function propRow(ctx: Ctx, nightId: number, id: number): PropRow {
+  const r = ctx.db.prepare('SELECT * FROM table_prop WHERE id = ? AND night_id = ?').get(id, nightId) as PropRow | undefined;
+  if (!r) throw notFound('prop_not_found');
+  return r;
+}
+const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+
+/** Put a prop on a table (centre by default), kept inside the table. */
+export function addProp(ctx: Ctx, actor: GmAuth, tableId: number, input: { kind?: unknown; x?: unknown; y?: unknown; w?: unknown; rotation?: unknown }) {
+  masterOnly(actor);
+  const n = night(ctx);
+  const t = table(ctx, n.id, tableId);
+  const kind = propKind(String(input.kind ?? ''));
+  if (!kind) throw bad('bad_prop', 'Pick a prop.');
+  if ((ctx.db.prepare('SELECT COUNT(*) c FROM table_prop WHERE table_id = ?').get(tableId) as { c: number }).c >= 30) throw conflict('too_many_props', 'A table can hold 30 props.');
+  const p = fitProp(kind, { x: num(input.x, 0), y: num(input.y, 0), w: num(input.w, kind.w), rotation: cleanRotation(input.rotation ?? 0, 0) }, t.map_w, t.map_h);
+  const id = Number(ctx.db.prepare('INSERT INTO table_prop (night_id, table_id, kind, x, y, w, rotation, created_at) VALUES (?,?,?,?,?,?,?,?)').run(n.id, tableId, kind.id, p.x, p.y, p.w, p.rotation, ctx.now()).lastInsertRowid);
+  ctx.bus.refresh(n.id);
+  return { id };
+}
+
+/** Move, resize or turn a prop (it stays on its table). */
+export function updateProp(ctx: Ctx, actor: GmAuth, id: number, input: { x?: unknown; y?: unknown; w?: unknown; rotation?: unknown }) {
+  masterOnly(actor);
+  const n = night(ctx);
+  const r = propRow(ctx, n.id, id);
+  const t = table(ctx, n.id, r.table_id);
+  const kind = propKind(r.kind)!;
+  const p = fitProp(kind, { x: num(input.x, r.x), y: num(input.y, r.y), w: num(input.w, r.w), rotation: input.rotation === undefined ? r.rotation : cleanRotation(input.rotation, r.rotation) }, t.map_w, t.map_h);
+  ctx.db.prepare('UPDATE table_prop SET x = ?, y = ?, w = ?, rotation = ? WHERE id = ?').run(p.x, p.y, p.w, p.rotation, id);
+  ctx.bus.refresh(n.id);
+  return { id, ...p };
+}
+
+export function deleteProp(ctx: Ctx, actor: GmAuth, id: number) {
+  masterOnly(actor);
+  const n = night(ctx);
+  propRow(ctx, n.id, id);
+  ctx.db.prepare('DELETE FROM table_prop WHERE id = ?').run(id);
+  ctx.bus.refresh(n.id);
+  return { ok: true };
+}
+
+/** A game starting at a table puts its mini board there (if it has one and none is there yet). */
+export function placeGameBoard(ctx: Ctx, gameId: number) {
+  const g = ctx.db.prepare('SELECT g.id, g.night_id, g.table_id, l.board FROM game g LEFT JOIN library_game l ON l.id = g.library_game_id WHERE g.id = ?').get(gameId) as
+    | { id: number; night_id: number; table_id: number | null; board: string | null }
+    | undefined;
+  const kind = g?.board ? propKind(BOARD_PROP[g.board] ?? '') : null;
+  if (!g || g.table_id == null || !kind) return;
+  if (ctx.db.prepare('SELECT 1 FROM table_prop WHERE game_id = ?').get(g.id)) return;
+  const t = ctx.db.prepare('SELECT map_w, map_h FROM game_table WHERE id = ?').get(g.table_id) as { map_w: number; map_h: number } | undefined;
+  if (!t) return;
+  const p = fitProp(kind, { x: 0, y: 0, w: kind.w, rotation: 0 }, t.map_w, t.map_h);
+  ctx.db.prepare('INSERT INTO table_prop (night_id, table_id, kind, x, y, w, rotation, game_id, created_at) VALUES (?,?,?,?,?,?,?,?,?)').run(g.night_id, g.table_id, kind.id, p.x, p.y, p.w, p.rotation, g.id, ctx.now());
+}
+
+/** The game is over (result, cancel, End night): its mini board leaves the table. */
+export function clearGameBoard(ctx: Ctx, gameId: number) {
+  ctx.db.prepare('DELETE FROM table_prop WHERE game_id = ?').run(gameId);
 }

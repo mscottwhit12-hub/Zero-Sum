@@ -25,3 +25,4 @@ export * from './minter';
 export * from './hints';
 export * from './handicap';
 export * from './betting';
+export * from './props';

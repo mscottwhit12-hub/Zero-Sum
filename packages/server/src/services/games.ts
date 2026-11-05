@@ -21,6 +21,7 @@ import { j } from '../db';
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { closeBetsForGame, settleBetsForGame } from './betting';
 import { refundBoardGold, settleBoardGold } from './boardGold';
+import { clearGameBoard, placeGameBoard } from './seating';
 import { audit } from './audit';
 import { sendBoardRecap, voidClaims } from './boards';
 import { pushFeed } from './feed';
@@ -207,6 +208,7 @@ export function cancelGame(ctx: Ctx, actor: GmAuth, id: number): void {
   })();
   closeBetsForGame(ctx, g.night_id, id);
   refundBoardGold(ctx, id, actor.gmId);
+  clearGameBoard(ctx, id);
   ctx.bus.all('game:update', { id, status: 'cancelled' });
   ctx.bus.refresh(g.night_id);
 }
@@ -227,6 +229,7 @@ export function startGame(ctx: Ctx, actor: GmAuth, id: number, input: { particip
     audit(ctx, { nightId: n.id, gmId: actor.gmId, action: 'game.start', entity: 'game', entityId: id, after: { participants: parts ?? participantIds(ctx, id) } });
   })();
   pushFeed(ctx, n.id, 'game', 'feed.game_started', { gameId: id, name: g.name });
+  placeGameBoard(ctx, id);
   ctx.bus.all('game:update', { id, status: 'active' });
   ctx.bus.refresh(n.id);
   return getGame(ctx, id);
@@ -325,6 +328,7 @@ export function submitResult(ctx: Ctx, actor: GmAuth, id: number, input: ResultI
   for (const p of recapTo) ctx.bus.player(p, 'notify:player', { gameId: id });
   settleBetsForGame(ctx, n, id, result);
   settleBoardGold(ctx, id, actor.gmId);
+  clearGameBoard(ctx, id);
   snapshotStandings(ctx, n.id);
   awardAchievements(ctx, n.id);
   hintsForResult(ctx, n, { ...result, id: String(id) });
