@@ -309,6 +309,10 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - **Board contract v1.4:** optional `BoardDef.gold(state, ctx)` → `{ held, payouts }` in gold, sent by `BoardHost` with every save (undefined = board never touches gold; null = nothing held).
 - Server `services/boardGold.ts`, migration 24 (adjustment kind `game_stake`, `board_gold`, `game_board.gold`): holds reconciled on each save (cash down, net worth unchanged, like bet stakes); at the result the pot is paid in proportion to the latest payouts, scaled to the pot (zero-sum, largest remainder); cancel / End night refund. Holds aren't capped by cash (cash can go negative while held).
 
+### 4n. Phone Catan app + no negative gold holds (Nov 5)
+- Contract v1.4 also adds `BoardClaim` kind `build` (`{ playerId, action: settlement | city | longestRoad | largestArmy }`); boards narrow on `kind` (Risk uses `BattleClaim`, Catan `BuildClaim`). Server `createClaim` accepts Catan actions (own only); `playerBoardGames` returns Risk and Catan games (Catan points from board settings, defaults mirrored in `CATAN_DEFAULTS`). Phone `play/apps/CatanApp.svelte` (⬡, only while in a running Catan game); Catan board "From players" panel (`applyBuild`, `buildProblem`). Harness `e2e/boards/catan.mjs` covers the phone flow.
+- `checkBoardGold`: a save that would hold more gold than a player's cash is refused (`not_enough_gold`); BoardHost reloads like a stale save.
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.

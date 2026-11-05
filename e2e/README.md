@@ -64,4 +64,5 @@ the GM night export, statements), `events.log` and `shots/`. `SEED=` changes the
 - Nov 1 (GM restyle + 360 fix): `features/run.mjs` 22/22, `boards/clue.mjs` 10/10; every GM screen and board 360 px wide. Tests: client 641, engine 139, server 130, 4.
 - Nov 2 (Soundboard 1): `features/run.mjs` 22/22; scratch check: pack import 2 added / re-import 0, TV plays and reports now playing, Sounds 360 px fits, 0 errors. Tests: client 658, engine 141, server 168, 4.
 - Nov 3 (poker + gold): `boards/poker.mjs` 9/9 (incl. 360 px); scratch end-to-end gold game: 3 × 20 gold held → cash 0, net worth 20; result paid +10/−10/0 by chips. Tests: client 825, engine 141, server 177, 4.
+- Nov 5 (Catan app): `boards/catan.mjs` 13/13 incl. phone app (log → GM approves → points → approved; app gone after result). Tests: client 827, engine 141, server 179, 4.
 - Nov 3 (sound rename, 1 GB music, mood 10%): `features/sounds3.mjs` 7/7; `features/run.mjs` 22/22. Tests: engine 141, server 172, client 658, 4.
