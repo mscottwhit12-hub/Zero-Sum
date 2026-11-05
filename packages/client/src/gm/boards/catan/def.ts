@@ -374,3 +374,27 @@ export const def: BoardDef<CatanState> = {
     return rows.map((r) => ({ playerId: r.playerId, text: recapText(r, rows) }));
   },
 };
+
+// ---------- player entries from the phone Catan app (contract v1.4 'build' claims) ----------
+
+export type BuildAction = 'settlement' | 'city' | 'longestRoad' | 'largestArmy';
+
+/** Why an entry can't be applied right now (shown on the approval row), or null when it can. */
+export function buildProblem(s: CatanState, ctx: BoardContext, pid: number, action: BuildAction): string | null {
+  if (!ctx.players.some((x) => x.id === pid)) return 'Not in this game.';
+  const p = pl(s, ctx, pid);
+  if (action === 'settlement') return p.settlements >= maxSettlements(ctx) ? 'No settlement pieces left.' : null;
+  if (action === 'city') return canUpgrade(s, ctx, pid) ? null : p.settlements < 1 ? 'No settlement to upgrade.' : 'No city pieces left.';
+  return holder(s, ctx, action) === pid ? 'Already holds it.' : null;
+}
+
+/** Applies an approved entry: +1 settlement, settlement → city, or the award moves to the player. */
+export function applyBuild(s: CatanState, ctx: BoardContext, pid: number, action: BuildAction, now: number): CatanState {
+  if (buildProblem(s, ctx, pid, action)) return s;
+  if (action === 'settlement') return setSettlements(s, ctx, pid, pl(s, ctx, pid).settlements + 1, now);
+  if (action === 'city') return upgradeToCity(s, ctx, pid, now);
+  return setAward(s, ctx, action, pid, now);
+}
+
+export const buildText = (action: BuildAction): string =>
+  action === 'settlement' ? 'built a settlement' : action === 'city' ? 'upgraded a settlement to a city' : action === 'longestRoad' ? 'took Longest Road' : 'took Largest Army';

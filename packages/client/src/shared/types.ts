@@ -417,15 +417,26 @@ export interface PendingRequest {
   createdAt: number;
 }
 
-export interface PlayerBoardGame {
+type ClaimStatus = 'pending' | 'approved' | 'rejected' | 'void';
+export interface RiskBoardGame {
   gameId: number;
   name: string;
   board: 'risk';
   players: { id: number; territories: number; armies: number; out: boolean }[];
   myClaims: {
     id: number;
-    status: 'pending' | 'approved' | 'rejected' | 'void';
+    status: ClaimStatus;
     createdAt: number;
     payload: { attackerId: number; defenderId: number; territories: number; attackerLosses: number | null; defenderLosses: number | null; rounds: number | null };
   }[];
 }
+export type CatanAction = 'settlement' | 'city' | 'longestRoad' | 'largestArmy';
+export interface CatanBoardGame {
+  gameId: number;
+  name: string;
+  board: 'catan';
+  target: number;
+  players: { id: number; settlements: number; cities: number; longestRoad: boolean; largestArmy: boolean; points: number }[];
+  myClaims: { id: number; status: ClaimStatus; createdAt: number; payload: { playerId: number; action: CatanAction } }[];
+}
+export type PlayerBoardGame = RiskBoardGame | CatanBoardGame;

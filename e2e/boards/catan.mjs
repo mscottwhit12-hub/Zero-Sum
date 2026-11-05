@@ -41,12 +41,30 @@ try {
   R.check(sw <= 362, 'layout', 'phone 360: nothing wider than the screen', String(sw));
   const ptsRight = await pgm.page.evaluate(() => { const th = [...document.querySelectorAll('th')].find((x) => x.textContent.trim() === 'Points'); const sc = th?.closest('.scroll-x'); return th && sc ? th.getBoundingClientRect().right - sc.getBoundingClientRect().right : 999; });
   R.check(ptsRight <= 1, 'layout', 'phone 360: Points column visible without scrolling (bug C-14)', String(ptsRight));
+  // Phone Catan app: Cat sees the standings, logs a settlement, the GM approves it on the board.
+  const catp = ps[2].page;
+  await openApp(catp, 'Catan'); await sleep(1200);
+  let ct = (await catp.textContent('body')) ?? '';
+  R.check(/first to 10/.test(ct) && /Ben[^]*4 pts/.test(ct), 'app', 'phone Catan app shows everyone’s points (Ben 4)', ct.replace(/\s+/g, ' ').slice(0, 200));
+  await catp.getByRole('button', { name: 'I built a settlement' }).click(); await sleep(1500);
+  await page.reload(); await sleep(1500);
+  await page.locator('nav.side button.board', { hasText: 'Catan' }).click(); await sleep(1500);
+  R.check(/From players \(1\)/.test((await page.textContent('body')) ?? ''), 'app', 'GM board shows the phone entry');
+  await page.getByRole('button', { name: 'Approve' }).first().click(); await sleep(2500);
+  ng = (await night(gm)).games.find((x) => x.id === g.id);
+  R.check(ng.scores?.[ids[2]] === 3, 'app', 'approved entry applied: Cat 3 points', JSON.stringify(ng.scores));
+  await sleep(1500);
+  ct = (await catp.textContent('body')) ?? '';
+  R.check(/You built a settlement\s*approved/.test(ct) && /3 settlements/.test(ct), 'app', 'phone shows the entry approved and Cat’s 3 settlements', ct.replace(/\s+/g, ' ').slice(-200));
+  await catp.screenshot({ path: `${s.dir}/shots/04-phone-catan-app.png`, fullPage: true });
   R.check(errs.length === 0, 'client', 'no page errors', errs.join(' | ').slice(0, 200));
   await api(gm.req, s.base, 'POST', `/api/games/${g.id}/result`, { actualHours: 1, participants: [ids[1], ids[0], ids[2], ids[3]].map((id, i) => ({ playerId: id, placement: i + 1 })) });
   await sleep(1500);
   await openApp(ps[1].page, 'Messages'); await sleep(900);
   const m = (await ps[1].page.textContent('body')) ?? '';
   R.check(/Catan/i.test(m), 'recap', "Ben's phone gets his Catan recap", m.replace(/\s+/g, ' ').slice(0, 160));
+  await catp.reload(); await sleep(2500);
+  R.check(!(await catp.locator('button', { hasText: /^⬡/ }).count()) && !/No Catan game running/.test((await catp.textContent('body')) ?? '') , 'app', 'Catan app gone after the result');
 } catch (e) {
   R.bug('harness', 'crashed', e.stack);
 } finally {

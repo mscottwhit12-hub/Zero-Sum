@@ -1,11 +1,11 @@
 <script lang="ts">
   /** Phone Risk app: only for players in a running Risk game. Live standings, and an optional battle log the GM approves. */
   import { run } from '@shared/ui';
-  import type { PlayerState } from '@shared/types';
+  import type { PlayerState, RiskBoardGame } from '@shared/types';
   import { dapi } from '../device';
 
   let { s }: { s: PlayerState } = $props();
-  const games = $derived(s.me?.boardGames ?? []);
+  const games = $derived((s.me?.boardGames ?? []).filter((x): x is RiskBoardGame => x.board === 'risk'));
   let pickedGame = $state<number | null>(null);
   const g = $derived(games.find((x) => x.gameId === pickedGame) ?? games[0] ?? null);
   const nameOf = (id: number) => s.players.find((p) => p.id === id)?.displayName ?? '?';

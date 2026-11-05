@@ -125,7 +125,8 @@
       "profile": "Profile",
       "vote": "Vote",
       "minter": "NFT Minter",
-      "risk": "Risk"
+      "risk": "Risk",
+      "catan": "Catan"
     },
     "rerolls_info_aria": "What are re-rolls?",
     "rerolls_info_title": "Re-rolls",

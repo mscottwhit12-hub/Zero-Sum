@@ -139,3 +139,34 @@ describe('player battle entries (Risk)', () => {
     expect(me.boardGames[0]!.myClaims[0]!.status).toBe('approved');
   });
 });
+
+describe('player build entries (Catan)', () => {
+  it('a player logs their own build/award; GMs approve; the phone shows everyone’s points and only their entries', async () => {
+    const t = await makeApp();
+    const { gm, devices } = await liveNight(t, 3);
+    const lib = (await call(t, gm, 'POST', '/api/library', { name: 'Catan', minPlayers: 3, maxPlayers: 4, leadMode: 'high', board: 'catan' })).json().game;
+    const ids = devices.map((d) => d.id);
+    const g = (await call(t, gm, 'POST', '/api/games', { libraryGameId: lib.id, participants: ids })).json().game;
+    await call(t, gm, 'POST', `/api/games/${g.id}/start`);
+    const dev = (i: number, payload: unknown) => t.app.inject({ method: 'POST', url: `/api/games/${g.id}/claims`, payload: payload as object, headers: { 'x-device-token': devices[i]!.token } });
+    const r = await dev(0, { action: 'city' });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().claim).toMatchObject({ kind: 'build', payload: { playerId: ids[0], action: 'city' }, status: 'pending' });
+    expect((await dev(0, { action: 'steal' })).statusCode).toBe(400);
+    expect((await dev(0, { defenderId: ids[1], territories: 1 })).statusCode).toBe(400); // a Risk battle isn't a Catan entry
+    await dev(1, { action: 'longestRoad' });
+    const pending = (await call(t, gm, 'GET', `/api/games/${g.id}/board`)).json().claims;
+    expect(pending.map((c: { kind: string }) => c.kind)).toEqual(['build', 'build']);
+    await call(t, gm, 'POST', `/api/claims/${r.json().claim.id}/decide`, { approve: true });
+    // the GM board applies it and saves: Ann 1 settlement + 1 city, Ben holds Longest Road
+    await call(t, gm, 'PUT', `/api/games/${g.id}/board`, { state: { v: 1, players: { [ids[0]!]: { settlements: 1, cities: 1, rerollsUsed: 0 } }, longestRoad: ids[1], largestArmy: null, log: [], seq: 0 }, version: 0 });
+    const { playerView } = await import('../src/services/views');
+    const st = computeNightState(t.ctx, currentNight(t.ctx)!.id)!;
+    const me = playerView(t.ctx, st, ids[0]!)!.me!;
+    expect(me.boardGames).toHaveLength(1);
+    const cg = me.boardGames[0]!;
+    expect(cg).toMatchObject({ board: 'catan', target: 10 });
+    expect((cg.players as { id: number; points: number }[]).map((p) => p.points)).toEqual([3, 4, 2]); // 1+2 · 2 settlements + LR 2 · 2 settlements
+    expect(cg.myClaims.map((c) => c.status)).toEqual(['approved']); // only Ann's own entry
+  });
+});

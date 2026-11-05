@@ -6,11 +6,14 @@
    * All rules live in ./def.ts; this file only draws and calls those operations.
    */
   import Avatar from '../../../shared/Avatar.svelte';
-  import type { BoardPlayer, BoardProps } from '../contract';
+  import type { BoardPlayer, BoardProps, BuildClaim } from '../contract';
   import {
     AWARDS,
     NOTE_MAX,
     addNote,
+    applyBuild,
+    buildProblem,
+    buildText,
     breakdown,
     canUpgrade,
     cfg,
@@ -48,6 +51,16 @@
     if (next !== game) onchange(next);
   };
   const now = () => Date.now();
+  // Player entries from the phone Catan app: the GM approves each; approving applies it here.
+  const buildClaims = $derived((ctx.claims ?? []).filter((c): c is BuildClaim => c.kind === 'build'));
+  let deciding = $state<number | null>(null);
+  async function decide(c: BuildClaim, approve: boolean) {
+    if (!ctx.decideClaim || deciding !== null) return;
+    deciding = c.id;
+    const ok = await ctx.decideClaim(c.id, approve);
+    deciding = null;
+    if (ok && approve) apply(applyBuild(game, ctx, c.payload.playerId, c.payload.action, now()));
+  }
   const nameOf = (id: number) => ctx.players.find((p) => p.id === id)?.name ?? 'Another player';
   const first = (n: string) => n.split(/\s+/)[0] ?? n;
 
@@ -248,6 +261,23 @@
       <button class="big" class:primary={stat.reached} onclick={() => onfinish?.()}>{stat.reached ? 'Game over' : 'End game early'}</button>
     {/if}
   </section>
+
+  {#if buildClaims.length}
+    <section class="panel">
+      <h3>From players ({buildClaims.length})</h3>
+      <p class="small muted">Builds and awards players logged on their phones. Approve to apply them to the board.</p>
+      {#each buildClaims as c (c.id)}
+        {@const problem = buildProblem(game, ctx, c.payload.playerId, c.payload.action)}
+        <div class="claim">
+          <span>{nameOf(c.payload.playerId)} {buildText(c.payload.action)}{#if problem} <span class="badge warn">{problem}</span>{/if}</span>
+          <div class="row">
+            <button class="big primary" disabled={deciding !== null || !!problem} onclick={() => decide(c, true)}>Approve</button>
+            <button class="big" disabled={deciding !== null} onclick={() => decide(c, false)}>Reject</button>
+          </div>
+        </div>
+      {/each}
+    </section>
+  {/if}
 
   {#if ctx.table}
     <section class="panel">
@@ -608,5 +638,12 @@
   }
   .log li.note-entry span:last-child {
     font-weight: 600;
+  }
+  .claim {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--line, #ddd);
   }
 </style>

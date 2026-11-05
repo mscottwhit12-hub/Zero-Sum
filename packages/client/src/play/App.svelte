@@ -17,6 +17,7 @@
   import Wallet from './apps/Wallet.svelte';
   import Vote from './apps/Vote.svelte';
   import RiskApp from './apps/RiskApp.svelte';
+  import CatanApp from './apps/CatanApp.svelte';
   import { FUN_APPS } from './fun';
   import { dapi, deviceToken, pendingToken, setDeviceToken, setPendingToken, store } from './device';
   import Join from './Join.svelte';
@@ -81,6 +82,7 @@
   const APPS = [
     { id: 'vote', icon: '☎' },
     { id: 'risk', icon: '⚔' },
+    { id: 'catan', icon: '⬡' },
     { id: 'wallet', icon: '◎' },
     { id: 'market', icon: '↗' },
     { id: 'bets', icon: '⚄' },
@@ -213,8 +215,9 @@
   const vote = $derived(s?.me?.vote ?? null);
   const voteOpen = $derived(!!vote?.open && s?.night?.status === 'live');
   const voteBadge = $derived(voteOpen && vote?.myTarget == null ? 1 : 0);
-  const hasRisk = $derived(!!s?.me?.boardGames?.length);
-  const apps = $derived(APPS.filter((a) => (a.id !== 'vote' || voteOpen) && (a.id !== 'risk' || hasRisk)));
+  const hasRisk = $derived(!!s?.me?.boardGames?.some((g) => g.board === 'risk'));
+  const hasCatan = $derived(!!s?.me?.boardGames?.some((g) => g.board === 'catan'));
+  const apps = $derived(APPS.filter((a) => (a.id !== 'vote' || voteOpen) && (a.id !== 'risk' || hasRisk) && (a.id !== 'catan' || hasCatan)));
   // Theme layout only: the four dock apps; everything else (Vote only while a poll is open) goes on the grid.
   const DOCK = ['messages', 'market', 'wallet', 'feed'];
   const dockApps = $derived(DOCK.map((id) => apps.find((a) => a.id === id)).filter((a): a is (typeof APPS)[number] => !!a));
@@ -240,6 +243,7 @@
   });
   $effect(() => {
     if (app === 'risk' && !hasRisk) app = null; // the game ended: the app goes away
+    if (app === 'catan' && !hasCatan) app = null;
   });
   const unseenFeed = $derived((s?.feed ?? []).filter((f) => f.id > feedSeen).length);
   const chatUnread = $derived(s?.me?.chatUnread ?? 0);
@@ -357,6 +361,7 @@
           <div class="list appbody">
             {#if app === 'vote'}<Vote {s} {now} ondone={() => { if (app === 'vote') app = null; }} />
             {:else if app === 'risk'}<RiskApp {s} />
+            {:else if app === 'catan'}<CatanApp {s} />
             {:else if app === 'wallet'}<Wallet {s} />
             {:else if app === 'market'}<Market {s} />
             {:else if app === 'bets'}<Bets {s} />

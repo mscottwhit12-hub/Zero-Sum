@@ -2,6 +2,7 @@
  * GAME BOARD CONTRACT v1.1 — binding for every board engineer. Changes go through the manager.
  * v1.1 (additive): BoardDef.recap, BoardProps.onfinish.
  * v1.3 (additive): BoardContext.claims + decideClaim (player-submitted entries a GM approves; Risk battles first).
+ * v1.4 (additive): BoardClaim kind 'build' (Catan: a player's own build/award).
  * v1.4 (additive): BoardDef.gold (a board that holds real gold for its game; poker played for gold).
  * Svelte note: don't keep the `state` prop under that name (it clashes with the $state rune); destructure it as
  * `let { ctx, state: game, onchange, onfinish }: BoardProps<S> = $props();`
@@ -48,14 +49,13 @@ export interface BoardContext {
   decideClaim?: (id: number, approve: boolean) => Promise<boolean>;
 }
 
-/** v1.3: a player-submitted entry. `payload` is board-specific (Risk: a battle). */
-export interface BoardClaim {
-  id: number;
-  playerId: number;
-  kind: 'battle';
-  payload: { attackerId: number; defenderId: number; territories: number; attackerLosses: number | null; defenderLosses: number | null; rounds: number | null };
-  createdAt: number;
-}
+/** v1.3: a player-submitted entry. `payload` is board-specific (Risk: a battle; v1.4 Catan: a build/award). Narrow on `kind`. */
+export type BoardClaim = { id: number; playerId: number; createdAt: number } & (
+  | { kind: 'battle'; payload: { attackerId: number; defenderId: number; territories: number; attackerLosses: number | null; defenderLosses: number | null; rounds: number | null } }
+  | { kind: 'build'; payload: { playerId: number; action: 'settlement' | 'city' | 'longestRoad' | 'largestArmy' } }
+);
+export type BattleClaim = Extract<BoardClaim, { kind: 'battle' }>;
+export type BuildClaim = Extract<BoardClaim, { kind: 'build' }>;
 
 export interface BoardSetting {
   label: string; // shown on the GM Settings screen

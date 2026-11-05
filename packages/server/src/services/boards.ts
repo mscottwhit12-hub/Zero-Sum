@@ -41,7 +41,7 @@ export function getBoard(ctx: Ctx, _actor: GmAuth, gameId: number): { state: unk
   return r ? { state: JSON.parse(r.state), version: r.version, claims } : { state: null, version: 0, claims };
 }
 
-// ---------- player-submitted entries (Risk battles), approved by a GM ----------
+// ---------- player-submitted entries (Risk battles, Catan builds), approved by a GM ----------
 
 export interface BattlePayload {
   attackerId: number;
@@ -51,25 +51,29 @@ export interface BattlePayload {
   defenderLosses: number | null;
   rounds: number | null;
 }
-export interface BoardClaim {
+/** Catan: something the player did themselves (Tate, Nov 5: builds and awards only, own actions only). */
+export const CATAN_ACTIONS = ['settlement', 'city', 'longestRoad', 'largestArmy'] as const;
+export interface BuildPayload {
+  playerId: number;
+  action: (typeof CATAN_ACTIONS)[number];
+}
+export type BoardClaim = {
   id: number;
   gameId: number;
   playerId: number;
-  kind: 'battle';
-  payload: BattlePayload;
   status: 'pending' | 'approved' | 'rejected' | 'void';
   createdAt: number;
-}
+} & ({ kind: 'battle'; payload: BattlePayload } | { kind: 'build'; payload: BuildPayload });
 interface ClaimRow {
   id: number;
   game_id: number;
   player_id: number;
-  kind: 'battle';
+  kind: 'battle' | 'build';
   payload: string;
   status: BoardClaim['status'];
   created_at: number;
 }
-const toClaim = (r: ClaimRow): BoardClaim => ({ id: r.id, gameId: r.game_id, playerId: r.player_id, kind: r.kind, payload: JSON.parse(r.payload), status: r.status, createdAt: r.created_at });
+const toClaim = (r: ClaimRow): BoardClaim => ({ id: r.id, gameId: r.game_id, playerId: r.player_id, kind: r.kind, payload: JSON.parse(r.payload), status: r.status, createdAt: r.created_at }) as BoardClaim;
 const MAX_PENDING = 10;
 
 export function claimsOf(ctx: Ctx, gameId: number, status?: BoardClaim['status']): BoardClaim[] {
@@ -86,13 +90,31 @@ const optInt = (v: unknown, max: number, name: string): number | null => {
   return n;
 };
 
-/** A player in a running Risk game logs a battle they attacked in. It waits for a GM. */
+/**
+ * A player in a running game logs something for the GM to approve: a Risk battle they attacked in, or a Catan
+ * build/award of their own. It waits for a GM.
+ */
 export function createClaim(ctx: Ctx, player: PlayerRow, gameId: number, input: Record<string, unknown>): BoardClaim {
   const g = boardGame(ctx, gameId);
   if (g.status !== 'active') throw conflict('board_closed', 'This game is not running.');
-  if (g.board !== 'risk') throw conflict('no_claims', 'This game does not take player entries.');
+  if (g.board !== 'risk' && g.board !== 'catan') throw conflict('no_claims', 'This game does not take player entries.');
   const parts = (ctx.db.prepare('SELECT player_id FROM game_participant WHERE game_id = ?').all(gameId) as { player_id: number }[]).map((r) => r.player_id);
   if (!parts.includes(player.id)) throw forbidden('not_a_participant');
+  const pending = (ctx.db.prepare("SELECT COUNT(*) c FROM board_claim WHERE game_id = ? AND player_id = ? AND status = 'pending'").get(gameId, player.id) as { c: number }).c;
+  if (pending >= MAX_PENDING) throw conflict('too_many_pending', g.board === 'catan' ? 'Wait for the GM to check your earlier entries.' : 'Wait for the GM to check your earlier battles.');
+  const insert = (kind: 'battle' | 'build', payload: object) => {
+    const id = Number(
+      ctx.db.prepare('INSERT INTO board_claim (game_id, night_id, player_id, kind, payload, created_at) VALUES (?,?,?,?,?,?)').run(gameId, g.night_id, player.id, kind, JSON.stringify(payload), ctx.now()).lastInsertRowid,
+    );
+    ctx.bus.gm('board:claims', { gameId });
+    ctx.bus.refresh(g.night_id);
+    return toClaim(ctx.db.prepare('SELECT * FROM board_claim WHERE id = ?').get(id) as ClaimRow);
+  };
+  if (g.board === 'catan') {
+    const action = String(input.action) as BuildPayload['action'];
+    if (!CATAN_ACTIONS.includes(action)) throw bad('bad_action', 'Pick what you did.');
+    return insert('build', { playerId: player.id, action } satisfies BuildPayload);
+  }
   const defenderId = Number(input.defenderId);
   if (!parts.includes(defenderId) || defenderId === player.id) throw bad('bad_defender', 'Pick who you attacked.');
   const territories = Number(input.territories);
@@ -105,14 +127,7 @@ export function createClaim(ctx: Ctx, player: PlayerRow, gameId: number, input: 
     defenderLosses: optInt(input.defenderLosses, 1000, 'losses'),
     rounds: optInt(input.rounds, 1000, 'rounds'),
   };
-  const pending = (ctx.db.prepare("SELECT COUNT(*) c FROM board_claim WHERE game_id = ? AND player_id = ? AND status = 'pending'").get(gameId, player.id) as { c: number }).c;
-  if (pending >= MAX_PENDING) throw conflict('too_many_pending', 'Wait for the GM to check your earlier battles.');
-  const id = Number(
-    ctx.db.prepare("INSERT INTO board_claim (game_id, night_id, player_id, kind, payload, created_at) VALUES (?,?,?,'battle',?,?)").run(gameId, g.night_id, player.id, JSON.stringify(payload), ctx.now()).lastInsertRowid,
-  );
-  ctx.bus.gm('board:claims', { gameId });
-  ctx.bus.refresh(g.night_id);
-  return toClaim(ctx.db.prepare('SELECT * FROM board_claim WHERE id = ?').get(id) as ClaimRow);
+  return insert('battle', payload);
 }
 
 /** GM approves or rejects a pending entry. Only the first decision counts (two GMs can't both apply it). */
@@ -128,20 +143,46 @@ export function decideClaim(ctx: Ctx, actor: GmAuth, claimId: number, approve: b
   return toClaim(ctx.db.prepare('SELECT * FROM board_claim WHERE id = ?').get(claimId) as ClaimRow);
 }
 
+/** Catan board defaults (mirror `gm/boards/catan/def.ts` SETTINGS; the GM can change them in GM Settings). */
+const CATAN_DEFAULTS: Record<string, number> = { targetPoints: 10, startSettlements: 2, settlementPoints: 1, cityPoints: 2, longestRoadPoints: 2, largestArmyPoints: 2 };
+
 /**
- * Phone "Risk" app: only for players in a running Risk game. Standings come straight from the board state
- * (territories, armies, out), plus this player's own entries and their status.
+ * Phone game apps ("Risk", "Catan"): only for players in a running game with that board. Standings come straight
+ * from the board state, plus this player's own entries and their status.
  */
 export function playerBoardGames(ctx: Ctx, nightId: number, playerId: number) {
   const games = ctx.db
     .prepare(
-      `SELECT g.id, g.name, b.state FROM game g JOIN library_game l ON l.id = g.library_game_id JOIN game_participant gp ON gp.game_id = g.id
-       LEFT JOIN game_board b ON b.game_id = g.id WHERE g.night_id = ? AND g.status = 'active' AND l.board = 'risk' AND gp.player_id = ? ORDER BY g.id`,
+      `SELECT g.id, g.name, l.board, b.state FROM game g JOIN library_game l ON l.id = g.library_game_id JOIN game_participant gp ON gp.game_id = g.id
+       LEFT JOIN game_board b ON b.game_id = g.id WHERE g.night_id = ? AND g.status = 'active' AND l.board IN ('risk','catan') AND gp.player_id = ? ORDER BY g.id`,
     )
-    .all(nightId, playerId) as { id: number; name: string; state: string | null }[];
+    .all(nightId, playerId) as { id: number; name: string; board: 'risk' | 'catan'; state: string | null }[];
+  const catanCfg = { ...CATAN_DEFAULTS, ...(boardSettings(ctx).catan ?? {}) };
   return games.map((g) => {
-    const st = g.state ? (JSON.parse(g.state) as { players?: Record<string, { territories?: number; armies?: number; eliminated?: boolean }> }) : {};
     const parts = (ctx.db.prepare('SELECT player_id FROM game_participant WHERE game_id = ?').all(g.id) as { player_id: number }[]).map((r) => r.player_id);
+    const myClaims = (ctx.db.prepare('SELECT * FROM board_claim WHERE game_id = ? AND player_id = ? ORDER BY id DESC LIMIT 20').all(g.id, playerId) as ClaimRow[]).map(toClaim);
+    if (g.board === 'catan') {
+      const st = g.state ? (JSON.parse(g.state) as { players?: Record<string, { settlements?: number; cities?: number }>; longestRoad?: number | null; largestArmy?: number | null }) : {};
+      const lr = st.longestRoad ?? null;
+      const la = st.largestArmy ?? null;
+      return {
+        gameId: g.id,
+        name: g.name,
+        board: 'catan' as const,
+        target: catanCfg.targetPoints!,
+        players: parts.map((id) => {
+          const p = st.players?.[String(id)];
+          const settlements = p?.settlements ?? catanCfg.startSettlements!;
+          const cities = p?.cities ?? 0;
+          const longestRoad = lr === id;
+          const largestArmy = la === id;
+          const points = settlements * catanCfg.settlementPoints! + cities * catanCfg.cityPoints! + (longestRoad ? catanCfg.longestRoadPoints! : 0) + (largestArmy ? catanCfg.largestArmyPoints! : 0);
+          return { id, settlements, cities, longestRoad, largestArmy, points };
+        }),
+        myClaims,
+      };
+    }
+    const st = g.state ? (JSON.parse(g.state) as { players?: Record<string, { territories?: number; armies?: number; eliminated?: boolean }> }) : {};
     return {
       gameId: g.id,
       name: g.name,
@@ -150,7 +191,7 @@ export function playerBoardGames(ctx: Ctx, nightId: number, playerId: number) {
         const p = st.players?.[String(id)] ?? {};
         return { id, territories: p.territories ?? 0, armies: p.armies ?? 0, out: !!p.eliminated };
       }),
-      myClaims: (ctx.db.prepare('SELECT * FROM board_claim WHERE game_id = ? AND player_id = ? ORDER BY id DESC LIMIT 20').all(g.id, playerId) as ClaimRow[]).map(toClaim),
+      myClaims,
     };
   });
 }

@@ -5,7 +5,7 @@
    * All rules live in ./def.ts; this file only draws and calls those operations.
    */
   import Avatar from '../../../shared/Avatar.svelte';
-  import type { BoardPlayer, BoardProps } from '../contract';
+  import type { BattleClaim, BoardPlayer, BoardProps } from '../contract';
   import {
     CONTINENTS,
     NOTE_MAX,
@@ -72,14 +72,15 @@
     bAL = bDL = bRounds = '';
   }
   let deciding = $state<number | null>(null);
-  async function decide(c: NonNullable<typeof ctx.claims>[number], approve: boolean) {
+  const battleClaims = $derived((ctx.claims ?? []).filter((c): c is BattleClaim => c.kind === 'battle'));
+  async function decide(c: BattleClaim, approve: boolean) {
     if (!ctx.decideClaim || deciding !== null) return;
     deciding = c.id;
     const ok = await ctx.decideClaim(c.id, approve);
     deciding = null;
     if (ok && approve) apply(battle(game, ctx, { attackerId: c.payload.attackerId, defenderId: c.payload.defenderId, territories: c.payload.territories, attackerLosses: c.payload.attackerLosses, defenderLosses: c.payload.defenderLosses, rounds: c.payload.rounds }, now(), true));
   }
-  const claimText = (c: NonNullable<typeof ctx.claims>[number]) => {
+  const claimText = (c: BattleClaim) => {
     const x = c.payload;
     const extra = [x.attackerLosses != null ? `${first(nameOf(x.attackerId))} lost ${x.attackerLosses}` : '', x.defenderLosses != null ? `${first(nameOf(x.defenderId))} lost ${x.defenderLosses}` : '', x.rounds != null ? `${x.rounds} rounds` : ''].filter(Boolean);
     return `${nameOf(x.attackerId)} attacked ${nameOf(x.defenderId)} and took ${x.territories}${extra.length ? ` (${extra.join(', ')})` : ''}`;
@@ -259,11 +260,11 @@
     {/if}
   </section>
 
-  {#if ctx.claims?.length}
+  {#if battleClaims.length}
     <section class="panel">
-      <h3>From players ({ctx.claims.length})</h3>
+      <h3>From players ({battleClaims.length})</h3>
       <p class="small muted">Battles players logged on their phones. Approve to apply them to the board.</p>
-      {#each ctx.claims as c (c.id)}
+      {#each battleClaims as c (c.id)}
         <div class="claim">
           <span>{claimText(c)}</span>
           <div class="row">
