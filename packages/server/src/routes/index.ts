@@ -1,3 +1,4 @@
+import { checkAttempts, noteAttempt } from '../auth/attempts';
 import type { FastifyInstance } from 'fastify';
 import { buyHint, gmSendHint, readHint, tradeRerollForHint } from '../services/hints';
 import { readGift, setHandicapOffset } from '../services/handicap';
@@ -103,7 +104,18 @@ export function registerRoutes(app: FastifyInstance, ctx: Ctx) {
   // ---- GM auth & devices
   app.post('/api/gm/login', async (req, reply) => {
     const b = body(req.body);
-    const { token, auth } = login(ctx, { name: b.name, password: b.password, deviceType: b.deviceType });
+    // Brake guessing: per name from this address, and per address overall (someone trying many names).
+    const keys = [`login:${req.ip}:${String(b.name ?? '').trim().toLowerCase()}`, `login-ip:${req.ip}`];
+    for (const k of keys) checkAttempts(ctx, k);
+    let r: ReturnType<typeof login>;
+    try {
+      r = login(ctx, { name: b.name, password: b.password, deviceType: b.deviceType });
+    } catch (e) {
+      if (e instanceof HttpError && e.code === 'bad_credentials') for (const k of keys) noteAttempt(ctx, k, false);
+      throw e;
+    }
+    for (const k of keys) noteAttempt(ctx, k, true);
+    const { token, auth } = r;
     reply.setCookie(GM_COOKIE, token, cookieOpts);
     return { gm: { name: auth.name, role: auth.role, deviceType: auth.deviceType } };
   });
@@ -130,7 +142,16 @@ export function registerRoutes(app: FastifyInstance, ctx: Ctx) {
     return { ok: true };
   });
   app.post('/api/gm/unlock', async (req) => {
-    unlockWithPin(ctx, requireGm(ctx, req, { allowPaused: true }), body(req.body).pin);
+    const auth = requireGm(ctx, req, { allowPaused: true });
+    const key = `pin:${auth.gmId}`; // per GM, so another device of theirs can't be used to keep guessing
+    checkAttempts(ctx, key);
+    try {
+      unlockWithPin(ctx, auth, body(req.body).pin);
+    } catch (e) {
+      if (e instanceof HttpError && e.code === 'bad_pin') noteAttempt(ctx, key, false);
+      throw e;
+    }
+    noteAttempt(ctx, key, true);
     return { ok: true };
   });
   app.get('/api/gm/gms', async (req) => ({ gms: (requireGm(ctx, req), listGms(ctx)) }));

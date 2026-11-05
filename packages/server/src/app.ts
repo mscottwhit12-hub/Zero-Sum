@@ -30,6 +30,31 @@ export async function buildApp(opts: BuildOptions): Promise<App> {
   await app.register(cookie);
   const ctx: Ctx = { db: opts.db, now: opts.now ?? Date.now, bus: nullBus as Bus, config: opts.config };
 
+  // Browser security headers on every response. Pages get a strict Content Security Policy: only this server's own
+  // scripts run (no inline or third-party script), so even an injected tag in user text could not execute.
+  const CSP = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'", // Svelte style: bindings
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "font-src 'self'",
+    "connect-src 'self' ws: wss:",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+  app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('x-frame-options', 'DENY');
+    reply.header('referrer-policy', 'no-referrer');
+    reply.header('cross-origin-opener-policy', 'same-origin');
+    if (String(reply.getHeader('content-type') ?? '').startsWith('text/html')) reply.header('content-security-policy', CSP);
+    return payload;
+  });
+
   app.setErrorHandler((error, _req, reply) => {
     const err = error as Error & { validation?: unknown; statusCode?: number };
     if (err instanceof HttpError) return reply.code(err.status).send({ error: err.code, message: err.message });
