@@ -45,6 +45,22 @@ describe('gold held by a board (poker for gold)', () => {
     expect(cash(t, b)).toBe(c0);
   });
 
+  it('never holds more than a player has in cash (no negative cash): the save is refused and nothing moves', async () => {
+    const { t, gm, ids, g, save, all } = await pokerNight();
+    const c0 = cash(t, ids[0]!);
+    const r = await call(t, gm, 'PUT', `/api/games/${g.id}/board`, { state: { v: 99 }, version: 0, gold: { held: { ...all(10), [ids[0]!]: c0 / 100 + 5 }, payouts: {} } });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code ?? r.json().error).toBeDefined();
+    expect(r.json().message).toMatch(/only .* gold in cash/);
+    expect(cash(t, ids[0]!)).toBe(c0);
+    expect(cash(t, ids[1]!)).toBe(c0); // nothing held for anyone
+    // exactly all their cash is fine, and giving back is always allowed
+    await save({ held: { [ids[0]!]: c0 / 100 }, payouts: {} });
+    expect(cash(t, ids[0]!)).toBe(0);
+    await save({ held: {}, payouts: {} });
+    expect(cash(t, ids[0]!)).toBe(c0);
+  });
+
   it('a board without gold (no report) never touches gold; junk ids and amounts are ignored', async () => {
     const { t, ids, save } = await pokerNight();
     const c0 = cash(t, ids[0]!);

@@ -6,7 +6,7 @@
  */
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit, boardDiff } from './audit';
-import { reconcileBoardGold } from './boardGold';
+import { checkBoardGold, reconcileBoardGold } from './boardGold';
 import type { GmAuth } from './gm';
 import { currentNight, type PlayerRow } from './state';
 
@@ -178,6 +178,7 @@ export function saveBoard(ctx: Ctx, actor: GmAuth, gameId: number, input: { stat
   const version = Number(input.version ?? 0);
   const row = ctx.db.prepare('SELECT * FROM game_board WHERE game_id = ?').get(gameId) as BoardRow | undefined;
   const current = row?.version ?? 0;
+  checkBoardGold(ctx, g, input.gold);
   if (row && row.state === json && version === current - 1) {
     reconcileBoardGold(ctx, g, input.gold, actor.gmId); // a retried save still settles any gold change
     return { version: current }; // same save twice

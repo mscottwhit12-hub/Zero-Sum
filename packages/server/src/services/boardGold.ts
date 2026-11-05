@@ -10,7 +10,8 @@
  *  - A cancelled game (or one cancelled by End night) refunds every hold.
  */
 import { audit } from './audit';
-import type { Ctx } from '../context';
+import { conflict, type Ctx } from '../context';
+import { computeNightState } from './state';
 
 export interface BoardGold {
   held: Record<number, number>;
@@ -45,6 +46,28 @@ function cleanMap(v: unknown, ids: Set<number>): Map<number, number> {
 
 const adjust = (ctx: Ctx, nightId: number, playerId: number, goldH: number, reason: string, gmId: number | null) =>
   ctx.db.prepare("INSERT INTO adjustment (night_id, player_id, gold_h, reason, kind, gm_id, created_at) VALUES (?,?,?,?, 'game_stake', ?, ?)").run(nightId, playerId, goldH, reason, gmId, ctx.now());
+
+/**
+ * Refuses a save that would hold more gold than a player has in cash (Tate, Nov 5: no negative cash).
+ * Only increases are checked; giving gold back is always allowed. Call before the board state is written.
+ */
+export function checkBoardGold(ctx: Ctx, game: { id: number; night_id: number }, gold: unknown): void {
+  if (!gold || typeof gold !== 'object') return;
+  const ids = new Set((ctx.db.prepare('SELECT player_id FROM game_participant WHERE game_id = ?').all(game.id) as { player_id: number }[]).map((r) => r.player_id));
+  const held = cleanMap((gold as Partial<BoardGold>).held, ids);
+  const have = new Map((ctx.db.prepare("SELECT player_id, held_h FROM board_gold WHERE game_id = ? AND status = 'held'").all(game.id) as { player_id: number; held_h: number }[]).map((r) => [r.player_id, r.held_h]));
+  const more = [...held].filter(([id, h]) => h > (have.get(id) ?? 0));
+  if (!more.length) return;
+  const st = computeNightState(ctx, game.night_id);
+  for (const [id, h] of more) {
+    const cashH = st?.ledger.get(String(id))?.cashH ?? 0;
+    const need = h - (have.get(id) ?? 0);
+    if (need > cashH) {
+      const name = (ctx.db.prepare('SELECT display_name FROM player WHERE id = ?').get(id) as { display_name: string } | undefined)?.display_name ?? 'A player';
+      throw conflict('not_enough_gold', `${name} has only ${(Math.max(0, cashH) / 100).toFixed(2)} gold in cash, so ${(need / 100).toFixed(2)} can't be held. They can sell stock first.`);
+    }
+  }
+}
 
 /**
  * Called from saveBoard (inside no transaction of its own; wraps one). `gold` = what the board reported:

@@ -111,7 +111,7 @@
         }
       }
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'board_stale') {
+      if (e instanceof ApiError && (e.code === 'board_stale' || e.code === 'not_enough_gold')) {
         toast(errorText(e));
         dirty = false;
         await load();
