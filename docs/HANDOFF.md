@@ -313,6 +313,13 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - Contract v1.4 also adds `BoardClaim` kind `build` (`{ playerId, action: settlement | city | longestRoad | largestArmy }`); boards narrow on `kind` (Risk uses `BattleClaim`, Catan `BuildClaim`). Server `createClaim` accepts Catan actions (own only); `playerBoardGames` returns Risk and Catan games (Catan points from board settings, defaults mirrored in `CATAN_DEFAULTS`). Phone `play/apps/CatanApp.svelte` (⬡, only while in a running Catan game); Catan board "From players" panel (`applyBuild`, `buildProblem`). Harness `e2e/boards/catan.mjs` covers the phone flow.
 - `checkBoardGold`: a save that would hold more gold than a player's cash is refused (`not_enough_gold`); BoardHost reloads like a stale save.
 
+### 4o. Security, camera roll, Minter polish (Nov 5)
+- `services/zip.ts` `zipIndex`: declared-size inflate cap (mismatch → `zip_corrupt`), `maxTotalBytes`, `maxRatio` (big entries > 100:1 → `zip_bomb`), checked before any decompression.
+- `auth/attempts.ts`: brute-force brake on `/api/gm/login` (per name+IP and per IP) and `/api/gm/unlock` (per GM): 5 free wrong tries, then 30 s doubling to 15 min (`429 too_many_attempts`). In memory.
+- `app.ts` onSend: nosniff, `X-Frame-Options: DENY`, no-referrer, COOP; strict CSP on HTML (`script-src 'self'`; styles allow inline for Svelte; img/media allow data:/blob:; ws). Any inline `<script>` in the built pages would break: there are none.
+- Statement cards render the PNGs (press-and-hold → Save to Photos); only the button opens the share sheet.
+- Minter client counts whole cycles like `advanceMinter` (no drop at sync), time from the request, monotonic display, rAF ~30 fps; cycles < 0.25 s show a full bar. Rebrand themes `play/fun/minter/themes.svelte.ts` (5, rotate by `rebrands % 5`; `minterBrand` drives the phone header/home label).
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
