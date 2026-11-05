@@ -147,6 +147,52 @@
 
   // Rotation (15° steps): the table and its seats turn around the table's centre; avatars and text stay upright.
   const rotOf = (t: SeatingTable) => t.rotation ?? 0;
+  /** Width of upright text `sh` tall, centred on a w×h box turned `deg`, that stays inside the box. */
+  function stripRoom(w: number, h: number, deg: number, sh: number) {
+    const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+    let best = Infinity;
+    for (const y of [sh / 2, -sh / 2]) {
+      let lo = -Infinity, hi = Infinity;
+      if (Math.abs(c) > 1e-6) { const p = (-w / 2 - y * s) / c, q = (w / 2 - y * s) / c; lo = Math.max(lo, Math.min(p, q)); hi = Math.min(hi, Math.max(p, q)); } else if (Math.abs(y * s) > w / 2) return 0;
+      if (Math.abs(s) > 1e-6) { const p = (y * c - h / 2) / s, q = (y * c + h / 2) / s; lo = Math.max(lo, Math.min(p, q)); hi = Math.min(hi, Math.max(p, q)); } else if (Math.abs(y * c) > h / 2) return 0;
+      best = Math.min(best, 2 * Math.min(hi, -lo)); // text is centred on the table, so the narrower side sets the room
+    }
+    return Math.max(0, best);
+  }
+  let meas: CanvasRenderingContext2D | null = null;
+  const textW = (txt: string, px: number) => {
+    meas ??= document.createElement('canvas').getContext('2d');
+    if (!meas) return txt.length * px * 0.62;
+    meas.font = `700 ${px}px ${getComputedStyle(planEl?.querySelector('.body') ?? document.body).fontFamily}`;
+    return meas.measureText(txt).width;
+  };
+  /** Split a name into two lines at the word break nearest its middle (null if it has no break). */
+  const halves = (txt: string): [string, string] | null => {
+    const sp = [...txt.matchAll(/ /g)].map((m) => m.index!);
+    if (!sp.length) return null;
+    const i = sp.reduce((b, x) => (Math.abs(x - txt.length / 2) < Math.abs(b - txt.length / 2) ? x : b));
+    return [txt.slice(0, i), txt.slice(i + 1)];
+  };
+  /**
+   * Largest font (≤ base, ≥ 9 px) at which the label fits upright inside the turned table, letting the first line
+   * (the name) wrap onto two lines when that fits bigger. Returns the font, the room per line, and whether it wraps.
+   */
+  function fitLabel(lines: { text: string; k: number }[], base: number, w: number, h: number, deg: number, pad: number, wrap = true) {
+    const split = wrap ? halves(lines[0]!.text) : null;
+    const tryAt = (f: number, two: boolean) => {
+      const ls = two && split ? [{ text: split[0], k: lines[0]!.k }, { text: split[1], k: lines[0]!.k }, ...lines.slice(1)] : lines;
+      const room = stripRoom(w, h, deg, ls.reduce((n, l) => n + l.k * f * 1.25, 0) + 6) * 0.9 - pad * f;
+      return { ok: Math.max(...ls.map((l) => textW(l.text, l.k * f))) <= room, room };
+    };
+    let last = { fs: 9, max: 0, wrap: false };
+    for (let f = base; f >= 9; f--) {
+      const one = tryAt(f, false);
+      last = { fs: f, max: Math.max(0, Math.round(one.room)), wrap: false };
+      if (one.ok) return last;
+      if (split) { const two = tryAt(f, true); if (two.ok) return { fs: f, max: Math.max(0, Math.round(two.room)), wrap: true }; }
+    }
+    return last;
+  }
   /** Rotate a point (relative to the table centre) by `deg`. */
   const rot = (x: number, y: number, deg: number) => {
     const a = (deg * Math.PI) / 180;
@@ -314,21 +360,26 @@
         {@const th = g.h * W}
         {@const fs = Math.round(clamp(th * 0.26, 10, Math.max(14, W * 0.032)))}
         {@const deg = rotOf(t)}
-        {@const a = (deg * Math.PI) / 180}
-        {@const lblMax = Math.round(0.92 * Math.min(Math.abs(Math.cos(a)) > 0.01 ? tw / Math.abs(Math.cos(a)) : 1e4, Math.abs(Math.sin(a)) > 0.01 ? th / Math.abs(Math.sin(a)) : 1e4))}
+        {@const cntText = `${t.assignments.length}/${t.seats}${gameName && t.gameId ? ` · ${gameName(t.gameId)}` : ''}`}
+        {@const withGame = th >= 34 && !!gameName && !!t.gameId}
+        {@const P1 = t.props?.length && withGame ? fitLabel([{ text: `${t.name} · ${gameName!(t.gameId!)}`, k: 1 }], Math.round(fs * 0.75), tw, th, deg, 1.1, false) : null}
+        {@const pillGame = !!P1 && P1.fs > 9}
+        {@const L = t.props?.length
+          ? pillGame ? P1! : fitLabel([{ text: t.name, k: 1 }], Math.round(fs * 0.75), tw, th, deg, 1.1, false)
+          : fitLabel(th >= 34 ? [{ text: t.name, k: 1 }, { text: cntText, k: 0.8 }] : [{ text: t.name, k: 1 }], fs, tw, th, deg, 0.3)}
         <div class="tw" class:sel={selectedId === t.id} style="left:{g.x * W}px;top:{g.y * H}px;width:{tw}px;height:{th}px;transform:translate(-50%, -50%) rotate({deg}deg)">
           <button
             class="body"
             class:on={selectedId === t.id}
             class:ro={!editable}
-            style="font-size:{fs}px;--txt-rot:{-deg}deg;--lbl-max:{lblMax}px{t.color ? `;background:${t.color};color:${inkOn(t.color)}` : ''}"
+            style="font-size:{L.fs}px;--txt-rot:{-deg}deg;--lbl-max:{L.max}px{t.color ? `;background:${t.color};color:${inkOn(t.color)}` : ''}"
             onpointerdown={(e) => startMove(e, t)}
             onclick={() => onselect?.(t.id)}
           >
             {#if !t.props?.length}
-              <span class="lb">
+              <span class="lb" class:wrap={L.wrap}>
                 <strong>{t.name}</strong>
-                {#if th >= 34}<span class="muted cnt">{t.assignments.length}/{t.seats}{gameName && t.gameId ? ` · ${gameName(t.gameId)}` : ''}</span>{/if}
+                {#if th >= 34}<span class="muted cnt">{cntText}</span>{/if}
               </span>
             {/if}
           </button>
@@ -353,7 +404,7 @@
           {/each}
           {#if t.props?.length}
             <!-- label above the props, on a pill, never catching the pointer -->
-            <div class="plbl" style="font-size:{fs}px;--txt-rot:{-deg}deg;max-width:{lblMax}px"><strong>{t.name}</strong>{#if th >= 34 && gameName && t.gameId}<span class="cnt"> · {gameName(t.gameId)}</span>{/if}</div>
+            <div class="plbl" style="font-size:{L.fs}px;--txt-rot:{-deg}deg;{L.max >= L.fs * 2.5 ? `max-width:${L.max + L.fs * 1.1}px` : 'max-width:none'}"><strong>{t.name}</strong>{#if pillGame}<span class="cnt">&nbsp;· {gameName!(t.gameId!)}</span>{/if}</div>
           {/if}
           {#each seatPoints(t.seats, tw, th, S, 3, posOf(t)) as p (p.seat)}
             {@const pid = t.assignments.find((a) => a.seat === p.seat)?.playerId ?? null}
@@ -483,6 +534,15 @@
     max-width: var(--lbl-max, 100%);
     rotate: var(--txt-rot, 0deg);
   }
+  .body > .lb.wrap strong {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
   .body .muted {
     color: inherit;
     opacity: 0.75;
@@ -571,6 +631,10 @@
     white-space: nowrap;
     pointer-events: none;
     color: var(--text);
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    padding: 0 0.3em;
+    border-radius: 0.4em;
+    z-index: 2;
   }
   .hd {
     position: absolute;

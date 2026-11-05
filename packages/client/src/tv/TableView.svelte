@@ -3,7 +3,7 @@
    * TV close-up of one table: the table at its real shape, scaled up, with big avatars and first names
    * around it (seat order matches the floor plan). Read-only.
    */
-  import { inkOn, propKind } from '@gn/engine';
+  import { fitProp, inkOn, propKind } from '@gn/engine';
   import PropSprite from '@shared/PropSprite.svelte';
   import Avatar from '@shared/Avatar.svelte';
   import { clamp, relaxSeats, seatFractions, seatPoints } from '@shared/seating';
@@ -12,6 +12,16 @@
   let { table, players, game = '' }: { table: SeatingTable; players: PlayerInfo[]; game?: string } = $props();
 
   let W = $state(0);
+  /** Extra width beside this box (its container is often wider than the 3:2 table area), for long side names. */
+  let spare = $state(0);
+  let el = $state<HTMLDivElement | null>(null);
+  $effect(() => {
+    const p = el?.parentElement;
+    if (!p) return;
+    const ro = new ResizeObserver(() => (spare = Math.max(0, (p.clientWidth - (el?.clientWidth ?? 0)) / 2 - 16)));
+    ro.observe(p);
+    return () => ro.disconnect();
+  });
   const H = $derived(W / 1.5);
   const S = $derived(Math.round(clamp(W * 0.085, 36, 76)));
   const fs = $derived(Math.round(S * 0.36));
@@ -27,9 +37,20 @@
   });
   const byId = $derived(new Map(players.map((p) => [p.id, p])));
   const first = (n: string) => n.split(/\s+/)[0] ?? n;
+  /** Font size (px) at which a seat name fits `maxW` (its pill padding included), shrinking from `base` to 12 px before "…". */
+  let meas: CanvasRenderingContext2D | null = null;
+  function nameFs(name: string, base: number, maxW: number) {
+    meas ??= document.createElement('canvas').getContext('2d');
+    if (!meas || !el) return base;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    meas.font = `400 10px ${getComputedStyle(el).fontFamily}`;
+    const per = meas.measureText(name).width / 10; // width per px of font
+    const pad = 1.6 * rem + 8;
+    return Math.max(12, Math.min(base, Math.floor((maxW - pad) / Math.max(per, 0.01))));
+  }
 </script>
 
-<div class="tv-table" bind:clientWidth={W} style="height:{H}px">
+<div class="tv-table" bind:this={el} bind:clientWidth={W} style="height:{H}px">
   {#if W > 0}
     {@const tw = fit.tw}
     {@const th = fit.th}
@@ -44,7 +65,13 @@
       <!-- props: under the name, in the table's own frame (the close-up is never turned) -->
       {#each table.props ?? [] as pr (pr.id)}
         {@const k = propKind(pr.kind)}
-        {#if k}<div class="prop" style="left:{tw / 2 + pr.x * tw}px;top:{th / 2 + pr.y * th}px;width:{pr.w * tw}px;height:{(pr.w * tw) / k.aspect}px;transform:translate(-50%, -50%) rotate({pr.rotation}deg)"><PropSprite kind={pr.kind} /></div>{/if}
+        {#if k}
+          <!-- the close-up table has its own shape: refit the prop inside it, clear of the rounded corners -->
+          {@const iw = tw - 32}
+          {@const ih = th - 32}
+          {@const q = fitProp(k, pr, iw, ih)}
+          <div class="prop" style="left:{tw / 2 + q.x * iw}px;top:{th / 2 + q.y * ih}px;width:{q.w * iw}px;height:{(q.w * iw) / k.aspect}px;transform:translate(-50%, -50%) rotate({q.rotation}deg)"><PropSprite kind={pr.kind} /></div>
+        {/if}
       {/each}
       <strong>{table.name}</strong>
       <span class="muted cnt">{table.assignments.length}/{table.seats}{game ? ` · ${game}` : ''}</span>
@@ -60,7 +87,8 @@
       <div class="seat" class:empty={!pl} style="left:{W / 2 + p.x}px;top:{H / 2 + p.y}px;width:{S}px;height:{S}px">
         {#if pl}
           <Avatar name={pl.displayName} color={pl.color} src={pl.avatarPath} size={S} />
-          <span class="lbl" class:l={side === 'l'} class:r={side === 'r'} class:lo={side === 'lo'} class:ro={side === 'ro'} class:lb={side === 'lb'} class:rb={side === 'rb'} class:above={top && !side} style="font-size:max(1.4rem,{fs}px);max-width:{mode === 'out' && side ? room : mode === 'low' && side ? Math.round((W - tw) / 2 - 6) : side ? Math.max(40, Math.round(tw * 0.3) - 16) : crowd ? 2 * S + 4 : 192}px;--st:{crowd && !side ? rank % 2 : 0}">{first(pl.displayName)}</span>
+          {@const lmax = mode === 'out' && side ? room + spare : mode === 'low' && side ? Math.round((W - tw) / 2 - 6 + spare) : side ? Math.max(40, Math.round(tw * 0.3) - 16) : crowd ? 2 * S + 4 : 192}
+          <span class="lbl" class:l={side === 'l'} class:r={side === 'r'} class:lo={side === 'lo'} class:ro={side === 'ro'} class:lb={side === 'lb'} class:rb={side === 'rb'} class:above={top && !side} style="font-size:{nameFs(first(pl.displayName), Math.max(1.4 * 16, fs), lmax)}px;max-width:{lmax}px;--st:{crowd && !side ? rank % 2 : 0}">{first(pl.displayName)}</span>
         {/if}
       </div>
     {/each}

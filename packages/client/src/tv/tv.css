@@ -144,8 +144,8 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 .tvroot .fit .tv-table { width: min(100cqw, calc((100cqh - 1.2rem) * 1.5)); margin: 0 auto; overflow: visible; }
 .tvroot .fit .plan { overflow: visible; }
 .tvroot .plan { outline: 0; border: 0.15rem dashed #c9a24a88; border-radius: 1.3rem; background: repeating-linear-gradient(90deg, #ffffff08 0 1px, #0000 1px 16px), repeating-linear-gradient(0deg, #ffffff06 0 1px, #0000 1px 16px), #0a110f; }
-.tvroot .plan .body { background: linear-gradient(150deg, #1b6b5d, #070a09); color: var(--paper); border: 1px solid #c9a24a77; border-radius: 1rem; box-shadow: inset 0 0 0 0.14rem #0b1613, inset 0 0 0 0.2rem #c9a24a30; font-family: var(--serif); font-size: 1.2rem !important; line-height: 1.1; }
-.tvroot .plan .body .cnt { font-family: var(--mono); color: var(--accent); font-size: 1.1rem; }
+.tvroot .plan .body { background: linear-gradient(150deg, #1b6b5d, #070a09); color: var(--paper); border: 1px solid #c9a24a77; border-radius: 1rem; box-shadow: inset 0 0 0 0.14rem #0b1613, inset 0 0 0 0.2rem #c9a24a30; font-family: var(--serif); line-height: 1.1; }
+.tvroot .plan .body .cnt { font-family: var(--mono); color: var(--accent); font-size: 0.8em; }
 .tvroot .plan .seat.dot { background: radial-gradient(circle at 35% 30%, #6fe0cf, #1b6b5d); border: 0.12rem solid #c9a24a; box-shadow: 0 0.2rem 0.5rem #0008; }
 .tvroot .tv-table .tbl { background: linear-gradient(150deg, #1b6b5d, #06100d); border: 1px solid #c9a24a99; border-radius: 2rem; box-shadow: inset 0 0 0 0.2rem #0b1613, inset 0 0 0 0.28rem #c9a24a40, 0 1rem 2rem #0009; }
 .tvroot .tv-table .tbl strong { color: var(--paper); font-size: max(1.2rem, 1em); }
@@ -308,3 +308,4 @@ html, body { margin: 0; background: radial-gradient(120% 70% at 50% 0, #1a2a24, 
 @keyframes tvring { 0%, 100% { transform: rotate(0); } 10% { transform: rotate(-14deg); } 20% { transform: rotate(12deg); } 30% { transform: rotate(-10deg); } 40% { transform: rotate(8deg); } 50% { transform: rotate(0); } }
 @keyframes tvfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.9rem); } }
 @media (prefers-reduced-motion: reduce) { .tvroot .callout .ringing, .tvroot .callout h2.float, .tvroot .callout .float2 { animation: none; } }
+.tvroot .plan .body[style*="background:"] .cnt { color: inherit; opacity: 0.8; }
