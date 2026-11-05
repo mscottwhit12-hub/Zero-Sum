@@ -8,6 +8,7 @@
   import { t } from '@shared/copy';
   import type { PublicState } from '@shared/types';
   import { dapi, deviceToken } from '../../device';
+  import { minterBrand, themeFor } from './themes.svelte';
 
   interface Biz {
     id: string;
@@ -154,16 +155,24 @@
   const secs = (n: number) => (n >= 60 ? `${Math.floor(n / 60)}m ${Math.round(n % 60)}s` : n >= 1 ? `${+n.toFixed(1)}s` : `${+n.toFixed(2)}s`);
   const clock = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
   const fmt = (n: number) => n.toLocaleString();
+  // Each rebrand rebrands the company: names and colour rotate through five themes.
+  const theme = $derived(themeFor(v?.rebrands ?? 0));
+  const next = $derived(themeFor((v?.rebrands ?? 0) + 1));
+  $effect(() => {
+    minterBrand.name = v ? theme.name : minterBrand.name;
+  });
+  const bizName = (id: string, fallback: string) => theme.biz[id] ?? fallback;
   const name = (id: number) => s.players.find((p) => p.id === id)?.displayName ?? '?';
 </script>
 
 {#if !v}
   <p class="muted">{t('minter.loading')}</p>
 {:else}
+<div class="minter" style="--mint-accent: {theme.accent}">
   <div class="ctr">
     <p class="muted">{t('minter.credits_label')}</p>
     <div class="z">{short(credits)}</div>
-    <p class="mono small muted">{t('minter.minted_small', { n: fmt(minted) })}</p>
+    <p class="mono small muted">{t('minter.minted_unit', { n: fmt(minted), unit: theme.unit })}</p>
     {#if v.ratePerSec}<p class="mono small">{t('minter.per_sec', { rate: rate(v.ratePerSec) })}</p>{/if}
     {#if boostLeft > 0}<p class="small bonus">{t('minter.boost', { mult: v.boostMult, left: clock(boostLeft) })}</p>{/if}
     {#if v.investors.have}<p class="small bonus">{t('minter.investors', { n: v.investors.have, pct: v.investors.bonusPct })}</p>{/if}
@@ -177,14 +186,14 @@
     <div class="gen">
       <div class="hw">
         {#if b.owned}
-          <button class="biz" disabled={!v.active || b.managed || f != null} onclick={() => run(b)} aria-label="{t('minter.run')} {b.name}">
+          <button class="biz" disabled={!v.active || b.managed || f != null} onclick={() => run(b)} aria-label="{t('minter.run')} {bizName(b.id, b.name)}">
             <i style="width:{(f ?? 0) * 100}%"></i>
-            <b>{b.name} <span class="mono">×{b.owned}</span></b>
+            <b>{bizName(b.id, b.name)} <span class="mono">×{b.owned}</span></b>
             <small class="mono">{b.managed || f != null ? t('minter.running') : t('minter.run')}</small>
           </button>
-          <button disabled={!v.active || credits < b.cost} onclick={() => buy(b.id)} aria-label="{t('minter.buy')} {b.name}">{short(b.cost)}</button>
+          <button disabled={!v.active || credits < b.cost} onclick={() => buy(b.id)} aria-label="{t('minter.buy')} {bizName(b.id, b.name)}">{short(b.cost)}</button>
         {:else}
-          <span class="grow">{b.name}</span>
+          <span class="grow">{bizName(b.id, b.name)}</span>
           <button disabled={!v.active || credits < b.cost} onclick={() => buy(b.id)}>{t('minter.unlock')} · {short(b.cost)}</button>
         {/if}
       </div>
@@ -211,14 +220,14 @@
     <div class="lab">{t('minter.upgrades')}</div>
     {#each v.upgrades.filter((u) => u.available && !u.bought) as u (u.id)}
       <div class="upg">
-        <span class="grow">{u.name} <span class="muted small">×{u.mult} payout</span></span>
+        <span class="grow">Overclock: {bizName(u.target, u.name)} <span class="muted small">×{u.mult} payout</span></span>
         <button disabled={!v.active || credits < u.cost} onclick={() => buy(`up:${u.id}`)}>{short(u.cost)}</button>
       </div>
     {/each}
   {/if}
 
   <div class="lab">{t('minter.rebrand')}</div>
-  <p class="small muted">{t('minter.rebrand_body', { pct: v.investors.perInvestorPct })}</p>
+  <p class="small muted">{t('minter.rebrand_body', { pct: v.investors.perInvestorPct })} {t('minter.next_brand', { name: next.name })}</p>
   {#if v.investors.claimable > 0}
     <button class="wide" disabled={!v.active} onclick={rebrand}>{t('minter.rebrand_button', { n: v.investors.claimable })}</button>
   {:else}
@@ -231,6 +240,7 @@
   {:else}
     <p class="muted small">{t('minter.nobody')}</p>
   {/each}
+</div>
 {/if}
 
 <style>
@@ -248,7 +258,7 @@
   .hw .biz i {
     position: absolute;
     inset: 0 auto 0 0;
-    background: var(--forest-hi);
+    background: var(--mint-accent, var(--forest-hi));
     border: 0;
     padding: 0;
     min-width: 0;

@@ -327,18 +327,20 @@
     "managed": "Managed",
     "milestone": "{owned}/{next} for 2× speed",
     "rebrand": "Rebrand",
-    "rebrand_body": "Start over with fresh credits and hardware. You keep your NFTs minted (the leaderboard) and gain investors: +{pct}% to everything each.",
+    "rebrand_body": "Start over with fresh credits and businesses, under a new brand. You keep your lifetime total (the leaderboard) and gain investors: +{pct}% to everything each.",
     "rebrand_button": "Rebrand for {n} investor(s)",
     "rebrand_none": "Mint more to attract investors.",
     "investors": "{n} investors · +{pct}% output",
-    "rebrand_confirm": "Rebrand? Credits, hardware, upgrades and managers reset. Your NFTs minted stay.",
+    "rebrand_confirm": "Rebrand? Credits, businesses, upgrades and managers reset, and the company gets a new name. Your lifetime total stays.",
     "run": "Run",
     "running": "Running",
     "unlock": "Unlock",
     "buy": "Buy ×1",
     "cycle": "{payout} every {time}",
     "boost": "×{mult} boost · {left}",
-    "paused_note": "Night paused: the Minter is paused too."
+    "paused_note": "Night paused: the Minter is paused too.",
+    "minted_unit": "{n} {unit} minted tonight",
+    "next_brand": "Next brand: {name}."
   },
   "gm": {
     "music": {

@@ -18,6 +18,7 @@
   import Vote from './apps/Vote.svelte';
   import RiskApp from './apps/RiskApp.svelte';
   import CatanApp from './apps/CatanApp.svelte';
+  import { minterBrand } from './fun/minter/themes.svelte';
   import { FUN_APPS } from './fun';
   import { dapi, deviceToken, pendingToken, setDeviceToken, setPendingToken, store } from './device';
   import Join from './Join.svelte';
@@ -281,7 +282,7 @@
   <button class="app a-{a.id}" onclick={(e) => { setOrigin(e); openApp(a.id); }}>
     <div class="ic">{a.icon}</div>
     {#if badges[a.id]}<i class="nb">{badges[a.id]}</i>{/if}
-    {t(`phone.apps.${a.id}`)}
+    {a.id === 'minter' && minterBrand.name ? minterBrand.name : t(`phone.apps.${a.id}`)}
   </button>
 {/snippet}
 
@@ -356,7 +357,7 @@
         <div class="view" in:zoom={{ kind: 'app' }} out:zoom={{ kind: 'app' }}>
           <div class="appbar">
             <button onclick={() => (app = null)}>‹ Home</button>
-            <strong>{t(`phone.apps.${app}`)}</strong>
+            <strong>{app === 'minter' && minterBrand.name ? minterBrand.name : t(`phone.apps.${app}`)}</strong>
           </div>
           <div class="list appbody">
             {#if app === 'vote'}<Vote {s} {now} ondone={() => { if (app === 'vote') app = null; }} />
