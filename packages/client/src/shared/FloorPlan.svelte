@@ -28,6 +28,7 @@
     selectedPropId = null,
     onselectprop = undefined,
     onprop = undefined,
+    onrotate = undefined,
   }: {
     tables: SeatingTable[];
     players: PlayerInfo[];
@@ -48,7 +49,9 @@
     /** Table props: the selected one (edit handles), picking one, and a move/resize to save. */
     selectedPropId?: number | null;
     onselectprop?: (tableId: number, propId: number) => void;
-    onprop?: (propId: number, g: { x: number; y: number; w: number }) => unknown;
+    onprop?: (propId: number, g: { x: number; y: number; w: number; rotation?: number }) => unknown;
+    /** A table turned by dragging its turn handle (whole degrees, 15° steps). */
+    onrotate?: (id: number, deg: number) => unknown;
   } = $props();
 
   let W = $state(0);
@@ -74,10 +77,16 @@
     | { kind: 'resize'; id: number; axis: 'w' | 'h' | 'wh'; sx: number; sy: number; cx: number; cy: number; deg: number; tw: number; th: number; minW: number; minH: number; moved: boolean }
     | { kind: 'player'; playerId: number; from: { tableId: number; seat: number } | null; sx: number; sy: number; moved: boolean }
     | { kind: 'seat'; tableId: number; seat: number; sx: number; sy: number; moved: boolean }
-    | { kind: 'prop'; tableId: number; propId: number; mode: 'move' | 'size'; sx: number; sy: number; x0: number; y0: number; w0: number; d0: number; moved: boolean };
+    | { kind: 'prop'; tableId: number; propId: number; mode: 'move' | 'size'; sx: number; sy: number; x0: number; y0: number; w0: number; d0: number; moved: boolean }
+    | { kind: 'turn'; tableId: number; propId: number | null; sx: number; sy: number; a0: number; r0: number; moved: boolean };
   type Prop = NonNullable<SeatingTable['props']>[number];
   /** The prop being dragged, shown where it is now (kept briefly after the drop until the server agrees). */
-  let liveProp = $state<{ id: number; x: number; y: number; w: number } | null>(null);
+  let liveProp = $state<{ id: number; x: number; y: number; w: number; rotation?: number } | null>(null);
+  /** A table being turned by its handle (its live angle). */
+  let liveTurn = $state<{ id: number; deg: number } | null>(null);
+  let turnTok = 0;
+  /** Angle 0–359 snapped to 15° steps. */
+  const snap15 = (d: number) => (((Math.round(d / 15) * 15) % 360) + 360) % 360;
   let propTok = 0;
   const propGeo = (p: Prop) => (liveProp && liveProp.id === p.id ? { ...p, ...liveProp } : p);
   let op: Op | null = null;
@@ -146,7 +155,7 @@
   }
 
   // Rotation (15° steps): the table and its seats turn around the table's centre; avatars and text stay upright.
-  const rotOf = (t: SeatingTable) => t.rotation ?? 0;
+  const rotOf = (t: SeatingTable) => (liveTurn && liveTurn.id === t.id ? liveTurn.deg : (t.rotation ?? 0));
   /** Width of upright text `sh` tall, centred on a w×h box turned `deg`, that stays inside the box. */
   function stripRoom(w: number, h: number, deg: number, sh: number) {
     const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
@@ -220,6 +229,22 @@
     return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   };
 
+  /** Grab a turn handle (a table's, or a prop's when `p` is given): the angle follows the pointer around the centre. */
+  function startTurn(e: PointerEvent, t: SeatingTable, p: Prop | null) {
+    if (!editable || !planEl) return;
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (p) onselectprop?.(t.id, p.id);
+    const r = planEl.getBoundingClientRect();
+    const g = geo(t);
+    let a0: number;
+    if (p) {
+      const at = toTable(t, e.clientX, e.clientY);
+      a0 = (Math.atan2(at.y - p.y * g.h * W, at.x - p.x * g.w * W) * 180) / Math.PI;
+    } else a0 = (Math.atan2(e.clientY - (r.top + g.y * H), e.clientX - (r.left + g.x * W)) * 180) / Math.PI;
+    op = { kind: 'turn', tableId: t.id, propId: p?.id ?? null, sx: e.clientX, sy: e.clientY, a0, r0: p ? p.rotation : rotOf(t), moved: false };
+  }
+
   function move(e: PointerEvent) {
     if (!op || !planEl) return;
     const r = planEl.getBoundingClientRect();
@@ -265,6 +290,23 @@
       else next = { ...next, w: po.w0 * (Math.hypot(at.x - po.x0 * tw, at.y - po.y0 * th) / po.d0) };
       const f = fitProp(kind, next, g.w, g.h);
       liveProp = { id: p.id, x: f.x, y: f.y, w: f.w };
+    } else if (op.kind === 'turn') {
+      const to = op;
+      const t = tables.find((x) => x.id === to.tableId);
+      if (!t) return;
+      const g = geo(t);
+      if (to.propId === null) {
+        const a = (Math.atan2(e.clientY - (r.top + g.y * H), e.clientX - (r.left + g.x * W)) * 180) / Math.PI;
+        liveTurn = { id: t.id, deg: snap15(to.r0 + a - to.a0) };
+      } else {
+        const p = t.props?.find((x) => x.id === to.propId);
+        const kind = p ? propKind(p.kind) : null;
+        if (!p || !kind) return;
+        const at = toTable(t, e.clientX, e.clientY);
+        const a = (Math.atan2(at.y - p.y * g.h * W, at.x - p.x * g.w * W) * 180) / Math.PI;
+        const f = fitProp(kind, { x: p.x, y: p.y, w: p.w, rotation: snap15(to.r0 + a - to.a0) }, g.w, g.h);
+        liveProp = { id: p.id, x: f.x, y: f.y, w: f.w, rotation: f.rotation };
+      }
     } else if (op.kind === 'player') {
       ghost = { playerId: op.playerId, x: e.clientX, y: e.clientY };
       draggingPlayer = op.playerId;
@@ -289,7 +331,23 @@
       else if (!target && toTray && o.from) await onseat?.(o.from.tableId, o.from.seat, null);
       return;
     }
-    if (o.kind === 'prop') {
+    if (o.kind === 'turn' && o.propId === null) {
+      const lt = liveTurn;
+      const tok = ++turnTok;
+      if (!o.moved || !lt) {
+        liveTurn = null;
+        return;
+      }
+      try {
+        await onrotate?.(lt.id, lt.deg);
+      } finally {
+        setTimeout(() => {
+          if (tok === turnTok) liveTurn = null;
+        }, 400);
+      }
+      return;
+    }
+    if (o.kind === 'prop' || o.kind === 'turn') {
       const lp = liveProp;
       const tok = ++propTok;
       if (!o.moved || !lp) {
@@ -297,7 +355,7 @@
         return;
       }
       try {
-        await onprop?.(lp.id, { x: lp.x, y: lp.y, w: lp.w });
+        await onprop?.(lp.id, lp.rotation === undefined ? { x: lp.x, y: lp.y, w: lp.w } : { x: lp.x, y: lp.y, w: lp.w, rotation: lp.rotation });
       } finally {
         setTimeout(() => {
           if (tok === propTok) liveProp = null;
@@ -344,6 +402,7 @@
     live = null;
     liveSeat = null;
     liveProp = null;
+    liveTurn = null;
     ghost = null;
     hover = null;
     overTray = false;
@@ -392,13 +451,13 @@
                 class="prop"
                 class:edit={editable}
                 class:psel={selectedPropId === pr.id}
-                style="left:{tw / 2 + q.x * tw}px;top:{th / 2 + q.y * th}px;width:{pw}px;height:{pw / k.aspect}px;transform:translate(-50%, -50%) rotate({pr.rotation}deg)"
+                style="left:{tw / 2 + q.x * tw}px;top:{th / 2 + q.y * th}px;width:{pw}px;height:{pw / k.aspect}px;transform:translate(-50%, -50%) rotate({q.rotation}deg)"
                 title={k.label}
                 role="presentation"
                 onpointerdown={(e) => startProp(e, t, pr, 'move')}
               >
                 <PropSprite kind={pr.kind} />
-                {#if editable && selectedPropId === pr.id}<div class="phd" role="presentation" title="Drag to resize" onpointerdown={(e) => startProp(e, t, pr, 'size')}></div>{/if}
+                {#if editable && selectedPropId === pr.id}<div class="phd" role="presentation" title="Drag to resize" onpointerdown={(e) => startProp(e, t, pr, 'size')}></div><div class="rh prh" role="presentation" title="Drag to turn (15° steps)" onpointerdown={(e) => startTurn(e, t, pr)}>⟳</div>{/if}
               </div>
             {/if}
           {/each}
@@ -433,6 +492,9 @@
               {/if}
             </div>
           {/each}
+          {#if editable && selectedId === t.id && onrotate}
+            <div class="rh trh" role="presentation" title="Drag to turn (15° steps)" onpointerdown={(e) => startTurn(e, t, null)}>⟳</div>
+          {/if}
           {#if editable && selectedId === t.id && !t.props?.length}
             <div class="hd hw" onpointerdown={(e) => startResize(e, t, 'w')} role="presentation" title="Drag to change length"></div>
             <div class="hd hh" onpointerdown={(e) => startResize(e, t, 'h')} role="presentation" title="Drag to change width"></div>
@@ -496,6 +558,45 @@
   .prop.psel {
     outline: 2px dashed var(--accent);
     outline-offset: 2px;
+  }
+  /* turn handles: a round knob off the top-left corner; drag it round the centre */
+  .rh {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: 2px solid #fff;
+    font-size: 13px;
+    line-height: 1;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    z-index: 5;
+    box-shadow: 0 1px 4px #0006;
+  }
+  .rh::before {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+  }
+  .rh:active {
+    cursor: grabbing;
+  }
+  .trh {
+    left: -11px;
+    top: -11px;
+  }
+  .prh {
+    left: -11px;
+    top: -11px;
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
   }
   .phd {
     position: absolute;

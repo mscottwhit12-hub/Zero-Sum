@@ -147,7 +147,7 @@
   </div>
   <p class="small muted">
     {master
-      ? 'Drag a table to move it. Select it, then drag the gold handles to resize (right edge = length, bottom edge = width, corner = both). Drag players onto seats; dropping on an occupied seat swaps. Drag an empty seat to move it around its table. Only GMs and the TV see this.'
+      ? 'Drag a table to move it. Select it, then drag the gold handles to resize (right edge = length, bottom edge = width, corner = both); drag the round ⟳ knob to turn it in 15° steps. Drag players onto seats; dropping on an occupied seat swaps. Drag an empty seat to move it around its table. Only GMs and the TV see this.'
       : 'Click a table to see its seats. Only GMs and the TV see this.'}
   </p>
   <FloorPlan
@@ -165,6 +165,7 @@
     selectedPropId={selProp}
     onselectprop={(tid, pid) => ((selected = tid), (selProp = pid))}
     onprop={(id, g) => saveProp(id, g)}
+    onrotate={(id, deg) => run(() => patch(`/api/tables/${id}`, { rotation: deg }))}
   />
 </section>
 
