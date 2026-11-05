@@ -324,6 +324,13 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 - Phone home pager: touch handled by `swipeTouch` (touch events; `preventDefault` once a swipe is sideways so the scrolling leaderboard can't take it), pointer events only for mouse/pen; flicks (>25 px, <300 ms) count. `.pager .board` has `touch-action: pan-y; overscroll-behavior: contain`.
 - Phone stock page shows `TickCountdown` under the range chips. GM Market: ticker buttons open a stock detail (chart from `GET /api/gm/market/:id/history`, ranges, countdown, mood/offset).
 
+### 4q. QoL small + medium batches (Nov 5)
+- Phone top bar = market countdown (`secondsToNextTick`); TV finale avatars (`av` snippet, photo or initials); Risk app `battles` from the board log; GM nav main/minor tabs; `Sparkline` `scrub` (+ `from`/`to` for times); table `rotation` (migration 25, 15° steps; FloorPlan rotates table + seats, counter-rotates avatars, resize/seat-drag/drop in the table frame; TV close-ups unrotated).
+- BoardHost shows the game's table (FloorPlan, view only, zoomed). Seating mismatch warning + optional fix. `play/CropPhoto.svelte` at join (`encodeAvatar`). TV vote call → "Answer your phones." 1 min (`callUntil`).
+- Finale control: `services/finaleControl.ts` (in-memory clock per night: `start`, `pausedEl`; `finaleSegments`; recap_until follows; `POST /api/night/finale/control` next|prev|pause|play); night info carries `finaleCtl`, `finaleSegments`; TV `finale:ctl` event.
+- Settings: `gm/screens/tuning.ts` + `Tuning.svelte` (dials = multipliers on `DEFAULT_SETTINGS`, ×0–×3; games/cap ≥ ×0.25); all settings under Advanced. Server test `tuningLimits` keeps dial paths valid.
+- Dead-stock pump (sim): accepted as an intended mechanic (Tate, Nov 5).
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
