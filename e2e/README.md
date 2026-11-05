@@ -69,3 +69,4 @@ the GM night export, statements), `events.log` and `shots/`. `SEED=` changes the
 - Nov 5 (QoL small + medium): features 22/22, Risk board 13/13; scratch checks 10/10 (seating warning + fix, board table, tuning, TV call, crop, finale control + TV follows). Tests: client 830, engine 141, server 190, 4.
 - Nov 3 (sound rename, 1 GB music, mood 10%): `features/sounds3.mjs` 7/7; `features/run.mjs` 22/22. Tests: engine 141, server 172, client 658, 4.
 - Nov 5 (table props): scratch props run 10/10 (auto Catan board, add/drag/resize/turn, TV floor + close-up, board cleared at result), 0 errors. Tests: client 831, engine 141, server 193, 4.
+- Nov 5 (table colour + visual audit): scratch geometry audit at GM 360/768/1280/1920, board view, TV floor + close-up 1920/1280 (only known long-name/edge items left); props 10/10, colour 5/5; `features/run.mjs` 22/22, `seating/run.mjs` 21/21, `seating/seats.mjs` 13/13, 0 errors. Tests: client 831, engine 141, server 194, 4.

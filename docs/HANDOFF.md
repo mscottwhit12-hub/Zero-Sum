@@ -334,6 +334,9 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 ### 4r. Table props (Nov 5)
 `6218e9c`. QoL 17. Original SVG sprites (`client/src/shared/propArt.ts`, 23 kinds in `engine/src/props.ts`: 11 game boards, poker pieces, drinks, smokes). Migration 26 `table_prop` (per night, table frame fractions x/y/w + rotation). GM Seating: palette, drag, corner resize, turn, remove (`POST /api/tables/:id/props`, `PATCH|DELETE /api/props/:id`, master). A game starting at a table places its board (`placeGameBoard`); result/cancel/end night clears it. Table w/h locked while it has props (`table_has_props`). Drawn on GM floor plan, TV floor and close-up. Awaiting Tate's device check.
 
+### 4s. Table colour, upright labels, visual audit (Nov 5)
+`7284ebe` + `59d74ba`. Migration 27 `game_table.color` ('#rrggbb'/null; drops bottle props). Bottle prop removed. Table text always upright (counter-rotated) and sized to fit inside the turned table (`stripRoom`/`fitLabel` in FloorPlan: shrink → 2-line wrap → …). Prop pill drops the game name before cutting. Seat names have a backing. TV close-up refits props to its own shape; close-up seat names shrink to fit. Known: 40-char names on tiny tables still end in …; only a table's centre is clamped to the plan, so edge tables can push seats off it. Awaiting Tate's device check.
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
