@@ -237,7 +237,9 @@
       "rarest": "very rare"
     },
     "left_notice": "You've checked out for the night. Your stock stays listed; trading is closed for you.",
-    "photo_failed": "That photo couldn't be used. Try a different one, or skip it."
+    "photo_failed": "That photo couldn't be used. Try a different one, or skip it.",
+    "clock_paused": "Paused",
+    "clock_closed": "Closed"
   },
   "trade_errors": {
     "market_closed": "Trading is closed right now.",

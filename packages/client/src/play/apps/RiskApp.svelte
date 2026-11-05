@@ -74,11 +74,19 @@
     </div>
   {/if}
 
-  {#if g.myClaims.length}
+  {@const waiting = g.myClaims.filter((c) => c.status !== 'approved')}
+  {#if waiting.length || g.battles?.length}
     <div class="cd">
-      <h3>Your battles</h3>
-      {#each g.myClaims as c (c.id)}
-        <div class="kv small"><span>vs {nameOf(c.payload.defenderId)}: took {c.payload.territories}</span><b>{statusText[c.status]}</b></div>
+      <h3>Battles</h3>
+      {#each waiting as c (c.id)}
+        <div class="kv small"><span>You vs {nameOf(c.payload.defenderId)}: took {c.payload.territories}</span><b>{statusText[c.status]}</b></div>
+      {/each}
+      <!-- Everything on the board: battles the GM entered and players' entries the GM approved. -->
+      {#each g.battles ?? [] as b, i (i)}
+        <div class="kv small">
+          <span>{b.attackerId === meId ? 'You' : nameOf(b.attackerId)} took {b.territories} from {b.defenderId === meId ? 'you' : nameOf(b.defenderId)}{b.attackerLosses != null || b.defenderLosses != null ? ` · lost ${b.attackerLosses ?? '?'} / ${b.defenderLosses ?? '?'}` : ''}</span>
+          <b class="muted">{b.byPlayer ? 'player' : 'GM'} · {new Date(b.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</b>
+        </div>
       {/each}
     </div>
   {/if}

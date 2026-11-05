@@ -138,6 +138,23 @@ describe('player battle entries (Risk)', () => {
     expect(me.boardGames).toHaveLength(1);
     expect(me.boardGames[0]!.myClaims[0]!.status).toBe('approved');
   });
+
+  it('the phone Risk app gets every battle on the board, GM-entered and player-logged, newest first', async () => {
+    const { t, gm, ids, g } = await boardNight();
+    const log = [
+      { id: 1, t: 1000, kind: 'battle', playerId: ids[0], defender: ids[1], moved: 2 },
+      { id: 2, t: 2000, kind: 'armies', playerId: ids[2], from: 3, to: 5 },
+      { id: 3, t: 3000, kind: 'battle', playerId: ids[2], defender: ids[0], moved: 1, attackerLosses: 2, defenderLosses: 3, fromPlayer: true },
+    ];
+    await call(t, gm, 'PUT', `/api/games/${g.id}/board`, { state: { players: {}, log }, version: 0 });
+    const { playerView } = await import('../src/services/views');
+    const st = computeNightState(t.ctx, currentNight(t.ctx)!.id)!;
+    const rg = playerView(t.ctx, st, ids[3]!)!.me!.boardGames[0]! as { battles: unknown[] };
+    expect(rg.battles).toEqual([
+      { t: 3000, attackerId: ids[2], defenderId: ids[0], territories: 1, attackerLosses: 2, defenderLosses: 3, byPlayer: true },
+      { t: 1000, attackerId: ids[0], defenderId: ids[1], territories: 2, attackerLosses: null, defenderLosses: null, byPlayer: false },
+    ]);
+  });
 });
 
 describe('player build entries (Catan)', () => {

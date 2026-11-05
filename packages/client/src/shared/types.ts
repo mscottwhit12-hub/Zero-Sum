@@ -179,6 +179,8 @@ export interface SeatingTable {
   h: number;
   /** Where each seat sits around the table: 0–1 fractions along its edge (clockwise from the top-left), index = seat − 1. null = evenly spaced. */
   seatPos: number[] | null;
+  /** Degrees on the floor plan, multiples of 15 (0 = as drawn). */
+  rotation?: number;
   assignments: { seat: number; playerId: number }[];
   gameId: number | null;
 }
@@ -423,6 +425,8 @@ export interface RiskBoardGame {
   name: string;
   board: 'risk';
   players: { id: number; territories: number; armies: number; out: boolean }[];
+  /** Every battle on the board, newest first (GM-entered and approved player entries). */
+  battles?: { t: number; attackerId: number; defenderId: number; territories: number; attackerLosses: number | null; defenderLosses: number | null; byPlayer: boolean }[];
   myClaims: {
     id: number;
     status: ClaimStatus;

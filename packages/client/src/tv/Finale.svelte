@@ -23,6 +23,9 @@
   const crash = $derived(Math.max(0, 1 - el / (f.timing.collapseSeconds * 0.7)));
 
   const name = (id: number) => s.players.find((p) => p.id === id)?.displayName ?? '?';
+  // Profile pictures on the finale (Tate's QoL list): the player's photo when they set one, else initials on their colour.
+  const playerOf = (id: number) => s.players.find((p) => p.id === id);
+  const initials = (id: number) => name(id).split(/\s+/).map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase();
   const placeLabel = (r: number) => t(`tv.place.${r}`);
   // Reveal order 3rd → 2nd → 1st: rank 3 first, rank 1 last.
   const shown = $derived(f.podium.filter((p) => p.rank > 3 - revealed));
@@ -48,6 +51,11 @@
     }
   }
 </script>
+
+{#snippet av(id: number, xl: boolean)}
+  {@const pl = playerOf(id)}
+  <span class="av" class:xl class:pic={!!pl?.avatarPath} style="background:{pl?.color ?? 'var(--navy-hi)'}">{#if pl?.avatarPath}<img src={pl.avatarPath} alt="" />{:else}{initials(id)}{/if}</span>
+{/snippet}
 
 <div class="finale">
   {#if phase === 'collapse'}
@@ -85,7 +93,7 @@
                 <div class="names">
                   {#each here as p, i (p.playerId)}
                     <div class="pl" style="--d:{0.55 + i * 0.15}s">
-                      <span class="av xl" style="background:{s.players.find((q) => q.id === p.playerId)?.color ?? 'var(--navy-hi)'}">{ini(p.playerId)}</span>
+                      {@render av(p.playerId, true)}
                       <div class="who">{name(p.playerId)}</div>
                       <div class="mono gold">{goldTv(p.goldH)}</div>
                     </div>
@@ -127,7 +135,7 @@
             <div class="bars">
               {#each slide.leaders as l, i (l.playerId)}
                 <div class="brow" style="--d:{0.35 + i * 0.18}s;--w:{(l.hours / mx) * 100}%">
-                  <span class="av xl" style="background:{col(l.playerId)}">{ini(l.playerId)}</span>
+                  {@render av(l.playerId, true)}
                   <p class="big nm">{name(l.playerId)}</p>
                   <div class="trk"><i></i></div>
                   <span class="mono hrs">{l.hours} h</span>
@@ -137,12 +145,12 @@
           {:else if slide.id === 'achievements'}
             {@const c = slide.items.length > 5 ? 2 : 1}
             <div class="ach" style="--c:{c};--rows:{Math.max(1, Math.ceil(slide.items.length / c))}">
-              {#each slide.items as a, i (i)}<p style="--d:{0.3 + i * 0.12}s"><span class="av" style="background:{col(a.playerId)}">{ini(a.playerId)}</span><span>{name(a.playerId)} — <strong>{t(`achievements.${a.type}.name`)}</strong></span></p>{/each}
+              {#each slide.items as a, i (i)}<p style="--d:{0.3 + i * 0.12}s">{@render av(a.playerId, false)}<span>{name(a.playerId)} — <strong>{t(`achievements.${a.type}.name`)}</strong></span></p>{/each}
             </div>
           {:else if slide.id === 'top_trade' || slide.id === 'best_investment' || slide.id === 'worst_investment'}
             {@const bad = slide.id === 'worst_investment'}
             <div class="hero">
-              <span class="av xl" style="background:{col(slide.playerId)}">{ini(slide.playerId)}</span>
+              {@render av(slide.playerId, true)}
               <p class="big nm">{name(slide.playerId)}</p>
               <div class="chipt mono">{slide.ticker}</div>
               <div class="stat mono" class:up={!bad} class:down={bad}><span class="arw">{bad ? '▼' : '▲'}</span>{bad ? '−' : '+'}{goldTv(bad ? -slide.profitH : slide.profitH)}{#if bad}<span class="stamp">{t('brand.gm')}</span>{/if}</div>
@@ -150,7 +158,7 @@
             <p class="big cap">{slideBody(slide)}</p>
           {:else if slide.id === 'most_predicted'}
             <div class="hero">
-              <span class="av xl" style="background:{col(slide.playerId)}">{ini(slide.playerId)}</span>
+              {@render av(slide.playerId, true)}
               <p class="big nm">{name(slide.playerId)}</p>
               <div class="stat mono">{slide.votes}</div>
             </div>
@@ -160,8 +168,8 @@
             <p class="big cap">{slideBody(slide)}</p>
           {:else if slide.id === 'mood'}
             <div class="duo">
-              <div class="face" style="--d:0.4s"><span class="av xl" style="background:{col(slide.cheeriest)}">{ini(slide.cheeriest)}</span><span class="emo up">▲</span><p class="big nm">{name(slide.cheeriest)}</p></div>
-              <div class="face" style="--d:0.7s"><span class="av xl" style="background:{col(slide.moodiest)}">{ini(slide.moodiest)}</span><span class="emo down">▼</span><p class="big nm">{name(slide.moodiest)}</p></div>
+              <div class="face" style="--d:0.4s">{@render av(slide.cheeriest, true)}<span class="emo up">▲</span><p class="big nm">{name(slide.cheeriest)}</p></div>
+              <div class="face" style="--d:0.7s">{@render av(slide.moodiest, true)}<span class="emo down">▼</span><p class="big nm">{name(slide.moodiest)}</p></div>
             </div>
             <p class="big cap">{slideBody(slide)}</p>
           {:else if slide.id === 'espionage'}
@@ -173,7 +181,7 @@
             </div>
           {:else if slide.id === 'minter'}
             <div class="hero">
-              <span class="av xl" style="background:{col(slide.playerId)}">{ini(slide.playerId)}</span>
+              {@render av(slide.playerId, true)}
               <p class="big nm">{name(slide.playerId)}</p>
               <div class="stat mono">{slide.minted.toLocaleString()}</div>
             </div>

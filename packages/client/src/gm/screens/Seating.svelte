@@ -26,6 +26,8 @@
   const moveTable = (id: number, x: number, y: number) => run(() => patch(`/api/tables/${id}`, { x, y }));
   const resizeTable = (id: number, g: { x: number; y: number; w: number; h: number }) => run(() => patch(`/api/tables/${id}`, g));
   const moveSeat = (id: number, seatPos: number[]) => run(() => patch(`/api/tables/${id}`, { seatPos }));
+  /** Turn a table in 15° steps (the server keeps it in 0–345). */
+  const turn = (t: SeatingTable, by: number) => run(() => patch(`/api/tables/${t.id}`, { rotation: (t.rotation ?? 0) + by }));
   const seatPlayer = (tableId: number, seat: number, playerId: number | null) => run(() => post(`/api/tables/${tableId}/seat`, { seat, playerId }));
 
   let selected = $state<number | null>(null);
@@ -109,6 +111,10 @@
           <b aria-live="polite">{sel.seats}</b>
           <button aria-label="Add a seat" disabled={sel.seats >= 8} onclick={() => setSeats(sel, sel.seats + 1)}>+</button>
           {#if sel.seatPos}<button onclick={() => run(() => patch(`/api/tables/${sel.id}`, { seatPos: null }), 'Seats evened out')}>Even out seats</button>{/if}
+          <span class="small muted">Turn</span>
+          <button aria-label="Turn left 15°" onclick={() => turn(sel, -15)}>⟲</button>
+          <b class="mono" aria-live="polite">{sel.rotation ?? 0}°</b>
+          <button aria-label="Turn right 15°" onclick={() => turn(sel, 15)}>⟳</button>
           <button class="danger" onclick={() => deleteTableAsk(sel)}>Delete</button>
         </span>
       {/if}

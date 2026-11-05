@@ -62,7 +62,7 @@
 
   type Op =
     | { kind: 'move'; id: number; offX: number; offY: number; sx: number; sy: number; moved: boolean }
-    | { kind: 'resize'; id: number; axis: 'w' | 'h' | 'wh'; sx: number; sy: number; tlx: number; tly: number; tw: number; th: number; minW: number; minH: number; moved: boolean }
+    | { kind: 'resize'; id: number; axis: 'w' | 'h' | 'wh'; sx: number; sy: number; cx: number; cy: number; deg: number; tw: number; th: number; minW: number; minH: number; moved: boolean }
     | { kind: 'player'; playerId: number; from: { tableId: number; seat: number } | null; sx: number; sy: number; moved: boolean }
     | { kind: 'seat'; tableId: number; seat: number; sx: number; sy: number; moved: boolean };
   let op: Op | null = null;
@@ -98,7 +98,7 @@
     liveTok++;
     live = { id: t.id, x: g.x, y: g.y, w: g.w, h: g.h };
     const m = minSize(t.seats);
-    op = { kind: 'resize', id: t.id, axis, sx: e.clientX, sy: e.clientY, tlx: g.x * W - tw / 2, tly: g.y * H - th / 2, tw, th, minW: m.w, minH: m.h, moved: false };
+    op = { kind: 'resize', id: t.id, axis, sx: e.clientX, sy: e.clientY, cx: g.x * W, cy: g.y * H, deg: rotOf(t), tw, th, minW: m.w, minH: m.h, moved: false };
   }
   function startPlayer(e: PointerEvent, playerId: number, from: { tableId: number; seat: number } | null) {
     if (!editable) return;
@@ -114,6 +114,13 @@
     op = { kind: 'seat', tableId: t.id, seat, sx: e.clientX, sy: e.clientY, moved: false };
   }
 
+  // Rotation (15° steps): the table and its seats turn around the table's centre; avatars and text stay upright.
+  const rotOf = (t: SeatingTable) => t.rotation ?? 0;
+  /** Rotate a point (relative to the table centre) by `deg`. */
+  const rot = (x: number, y: number, deg: number) => {
+    const a = (deg * Math.PI) / 180;
+    return { x: x * Math.cos(a) - y * Math.sin(a), y: x * Math.sin(a) + y * Math.cos(a) };
+  };
   function seatAt(cx: number, cy: number) {
     if (!planEl) return null;
     const r = planEl.getBoundingClientRect();
@@ -123,7 +130,8 @@
     for (const t of tables) {
       const g = geo(t);
       for (const p of seatPoints(t.seats, g.w * W, g.h * W, S, 3, posOf(t))) {
-        const d = Math.hypot(px - (g.x * W + p.x), py - (g.y * H + p.y));
+        const q = rot(p.x, p.y, rotOf(t));
+        const d = Math.hypot(px - (g.x * W + q.x), py - (g.y * H + q.y));
         if (d <= S * 0.9 && (!best || d < best.d)) best = { tableId: t.id, seat: p.seat, d };
       }
     }
@@ -143,12 +151,13 @@
     if (op.kind === 'move' && live) {
       live = { ...live, x: clamp((e.clientX - op.offX - r.left) / W, 0, 1), y: clamp((e.clientY - op.offY - r.top) / H, 0, 1) };
     } else if (op.kind === 'resize' && live) {
-      const dx = e.clientX - op.sx;
-      const dy = e.clientY - op.sy;
-      const tw = op.axis === 'h' ? op.tw : clamp(op.tw + dx, op.minW * W, TABLE_W.max * W);
-      const th = op.axis === 'w' ? op.th : clamp(op.th + dy, op.minH * W, TABLE_H.max * W);
-      // The top-left corner stays put; the centre follows the new size.
-      live = { id: live.id, w: tw / W, h: th / W, x: clamp((op.tlx + tw / 2) / W, 0, 1), y: clamp((op.tly + th / 2) / H, 0, 1) };
+      // The drag in the table's own frame (it may be rotated).
+      const d = rot(e.clientX - op.sx, e.clientY - op.sy, -op.deg);
+      const tw = op.axis === 'h' ? op.tw : clamp(op.tw + d.x, op.minW * W, TABLE_W.max * W);
+      const th = op.axis === 'w' ? op.th : clamp(op.th + d.y, op.minH * W, TABLE_H.max * W);
+      // The opposite edges stay put; the centre moves half the growth, along the table's own axes.
+      const shift = rot((tw - op.tw) / 2, (th - op.th) / 2, op.deg);
+      live = { id: live.id, w: tw / W, h: th / W, x: clamp((op.cx + shift.x) / W, 0, 1), y: clamp((op.cy + shift.y) / H, 0, 1) };
     } else if (op.kind === 'seat') {
       // The seat follows the pointer to the nearest free spot on the edge of its own table.
       const so = op;
@@ -158,7 +167,8 @@
       const tw = g.w * W;
       const th = g.h * W;
       const per = 2 * (tw + th);
-      const d = edgeDistance(e.clientX - (r.left + g.x * W), e.clientY - (r.top + g.y * H), tw, th);
+      const local = rot(e.clientX - (r.left + g.x * W), e.clientY - (r.top + g.y * H), -rotOf(t));
+      const d = edgeDistance(local.x, local.y, tw, th);
       const others = posOf(t).filter((_, i) => i + 1 !== so.seat).map((f) => f * per);
       const snapped = snapToFree(d, others, per, SEAT_EDGE * W);
       if (snapped !== null) liveSeat = { tableId: t.id, seat: so.seat, f: snapped / per };
@@ -239,12 +249,13 @@
         {@const tw = g.w * W}
         {@const th = g.h * W}
         {@const fs = Math.round(clamp(th * 0.26, 10, Math.max(14, W * 0.032)))}
-        <div class="tw" class:sel={selectedId === t.id} style="left:{g.x * W}px;top:{g.y * H}px;width:{tw}px;height:{th}px">
+        {@const deg = rotOf(t)}
+        <div class="tw" class:sel={selectedId === t.id} style="left:{g.x * W}px;top:{g.y * H}px;width:{tw}px;height:{th}px;transform:translate(-50%, -50%) rotate({deg}deg)">
           <button
             class="body"
             class:on={selectedId === t.id}
             class:ro={!editable}
-            style="font-size:{fs}px"
+            style="font-size:{fs}px;--txt-rot:{deg > 90 && deg < 270 ? 180 : 0}deg"
             onpointerdown={(e) => startMove(e, t)}
             onclick={() => onselect?.(t.id)}
           >
@@ -261,7 +272,7 @@
               class:mv={editable && !pl && !dots}
               class:moving={liveSeat?.tableId === t.id && liveSeat?.seat === p.seat}
               class:dot={dots && !!pl}
-              style="left:{tw / 2 + p.x}px;top:{th / 2 + p.y}px;width:{S}px;height:{S}px;font-size:{Math.round(S * 0.4)}px"
+              style="left:{tw / 2 + p.x}px;top:{th / 2 + p.y}px;width:{S}px;height:{S}px;font-size:{Math.round(S * 0.4)}px;transform:translate(-50%, -50%) rotate({-deg}deg)"
               title={pl ? pl.displayName : editable && !dots ? `Seat ${p.seat}: drag to move it around the table` : `Seat ${p.seat}`}
               onpointerdown={(e) => !pl && !dots && startSeat(e, t, p.seat)}
               role="presentation"
@@ -330,6 +341,10 @@
   }
   .tw.sel {
     z-index: 3;
+  }
+  /* text on a table turned past 90° is flipped so it's never upside down */
+  .body > :global(*) {
+    rotate: var(--txt-rot, 0deg);
   }
   .body {
     position: absolute;

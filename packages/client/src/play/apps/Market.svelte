@@ -141,7 +141,7 @@
       <b class="px">{price(sec.price)}</b>
     </div>
     {#if sec.halted}<p class="notice small">{t('phone.stock_halted')}</p>{/if}
-    <Sparkline values={chartValues} width={300} height={70} />
+    <Sparkline values={chartValues} width={300} height={70} scrub from={loaded?.from ?? null} to={loaded?.to ?? null} />
     <div class="ranges" role="group" aria-label={t('phone.chart.aria')}>
       {#each RANGES as r (r.k)}
         <button class="chip" class:on={range === r.k} aria-pressed={range === r.k} onclick={() => (range = r.k)}>{t(`phone.chart.${r.k}`)}</button>

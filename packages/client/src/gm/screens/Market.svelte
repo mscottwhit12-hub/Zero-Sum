@@ -33,7 +33,7 @@
     { k: 'full', min: null },
   ];
   let range = $state<(typeof RANGES)[number]['k']>('m30');
-  let series = $state<{ id: string; k: string; prices: number[] } | null>(null);
+  let series = $state<{ id: string; k: string; prices: number[]; from: number | null; to: number | null } | null>(null);
   let seriesReq = 0;
   $effect(() => {
     const id = sel?.id;
@@ -41,13 +41,14 @@
     const r = RANGES.find((x) => x.k === range)!;
     if (!id) return;
     const mine = ++seriesReq;
-    get<{ prices: number[] }>(`/api/gm/market/${encodeURIComponent(id)}/history${r.min == null ? '' : `?minutes=${r.min}`}`)
+    get<{ prices: number[]; from: number | null; to: number | null }>(`/api/gm/market/${encodeURIComponent(id)}/history${r.min == null ? '' : `?minutes=${r.min}`}`)
       .then((d) => {
-        if (mine === seriesReq) series = { id, k: r.k, prices: d.prices };
+        if (mine === seriesReq) series = { id, k: r.k, prices: d.prices, from: d.from, to: d.to };
       })
       .catch(() => {});
   });
-  const chart = $derived(sel && series && series.id === sel.id && series.k === range ? series.prices : (sel?.history ?? []));
+  const cur = $derived(sel && series && series.id === sel.id && series.k === range ? series : null);
+  const chart = $derived(cur ? cur.prices : (sel?.history ?? []));
   let chartW = $state(600);
   const nameOf = (m: { kind: string; playerId?: number | null; ticker: string }) =>
     m.kind === 'player' ? (gs?.players.find((p) => p.id === m.playerId)?.displayName ?? m.ticker) : m.ticker;
@@ -67,7 +68,7 @@
       {#if sel.halted}<span class="badge warn">Halted</span>{/if}
       <TickCountdown night={gs?.night} />
     </div>
-    <div class="gm-chart" bind:clientWidth={chartW}><Sparkline values={chart} width={Math.max(240, chartW)} height={160} /></div>
+    <div class="gm-chart" bind:clientWidth={chartW}><Sparkline values={chart} width={Math.max(240, chartW)} height={160} scrub from={cur?.from ?? null} to={cur?.to ?? null} /></div>
     <div class="row" role="group" aria-label={t('phone.chart.aria')}>
       {#each RANGES as r (r.k)}
         <button class="chip" class:on={range === r.k} aria-pressed={range === r.k} onclick={() => (range = r.k)}>{t(`phone.chart.${r.k}`)}</button>

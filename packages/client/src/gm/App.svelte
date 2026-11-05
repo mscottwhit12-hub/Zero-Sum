@@ -69,6 +69,11 @@
     (gmState?.games ?? []).filter((g) => g.status === 'active' && g.board && BOARDS[g.board]).map((g) => ({ id: `board-${g.id}` as Route, label: g.name, field: true })),
   );
   const NAV = $derived<Nav[]>([ROUTES[0], ...boardTabs, ...ROUTES.slice(1)]);
+  /** The tabs used all night (plus running game boards) are big; setup and rarely used tabs are smaller, below. */
+  const PRIMARY = new Set<string>(['dashboard', 'games', 'players', 'market', 'seating', 'notify']);
+  const isMain = (r: Nav) => PRIMARY.has(r.id) || r.id.startsWith('board-');
+  const NAV_MAIN = $derived(NAV.filter(isMain));
+  const NAV_REST = $derived(NAV.filter((r) => !isMain(r)));
   /** Phone bottom bar: board tabs first, then field actions, four buttons in all; everything else under More. */
   const BAR = $derived<Nav[]>([...boardTabs.slice(0, 2), ...ROUTES.filter((r) => r.field).slice(0, 4 - Math.min(2, boardTabs.length))]);
   const readRoute = (): Route => {
@@ -164,8 +169,12 @@
 
     {#if layout === 'laptop'}
       <nav class="side">
-        {#each NAV as r (r.id)}
-          <button class:on={route === r.id} class:board={r.id.startsWith('board-')} onclick={() => go(r.id)}>{r.label}</button>
+        {#each NAV_MAIN as r (r.id)}
+          <button class="main" class:on={route === r.id} class:board={r.id.startsWith('board-')} onclick={() => go(r.id)}>{r.label}</button>
+        {/each}
+        <div class="navsep" aria-hidden="true"></div>
+        {#each NAV_REST as r (r.id)}
+          <button class="minor" class:on={route === r.id} onclick={() => go(r.id)}>{r.label}</button>
         {/each}
       </nav>
     {/if}
@@ -208,7 +217,7 @@
       {#if moreOpen}
         <div class="more panel">
           {#each NAV.filter((r) => !BAR.some((x) => x.id === r.id)) as r (r.id)}
-            <button class="big" onclick={() => go(r.id)}>{r.label}</button>
+            <button class="big" class:minor={!isMain(r)} onclick={() => go(r.id)}>{r.label}</button>
           {/each}
         </div>
       {/if}
@@ -267,6 +276,28 @@
     padding: 0 0.8rem;
     border-color: transparent;
     background: transparent;
+  }
+  .side button.main {
+    min-height: 48px;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .side button.minor {
+    min-height: 32px;
+    font-size: 0.88rem;
+    color: var(--muted);
+  }
+  .side button.minor.on {
+    color: inherit;
+  }
+  .navsep {
+    height: 1px;
+    background: var(--line);
+    margin: 0.5rem 0.4rem;
+  }
+  .more :global(button.minor) {
+    font-size: 0.9rem;
+    opacity: 0.85;
   }
   @media (hover: hover) {
     .side button:hover:not(:disabled) {

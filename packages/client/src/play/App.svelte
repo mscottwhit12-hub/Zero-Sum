@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { copy, t } from '@shared/copy';
   import { gold } from '@shared/format';
-  import { connectLive, type Live } from '@shared/socket';
+  import { connectLive, secondsToNextTick, type Live } from '@shared/socket';
   import Toasts from '@shared/Toasts.svelte';
   import { toast } from '@shared/ui';
   import { signedGold } from '@shared/format';
@@ -331,6 +331,16 @@
     return `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
   });
   const timeStr = $derived(new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+  // Status bar: the market clock (seconds to the next price update) instead of the real time, which the phone
+  // already shows above the app. Server clock, so a phone with a wrong clock is still right.
+  let clockOffset = $state(0);
+  $effect(() => {
+    if (s?.night) clockOffset = s.night.serverTime - Date.now();
+  });
+  const tickSecs = $derived(secondsToNextTick(s?.night ?? null, now + clockOffset));
+  const marketClock = $derived(
+    tickSecs != null ? `▲ ${Math.floor(tickSecs / 60)}:${String(tickSecs % 60).padStart(2, '0')}` : s?.night?.status === 'paused' ? t('phone.clock_paused') : s?.night?.tradingClosed || s?.night?.status === 'ended' ? t('phone.clock_closed') : '',
+  );
 </script>
 
 {#snippet tile(a: { id: string; icon: string })}
@@ -361,7 +371,7 @@
     </div>
   {:else}
     <header class="sb">
-      <span>{timeStr}</span>
+      <span class="mono" aria-label={tickSecs != null ? t('tick.next', { s: tickSecs }) : undefined}>{marketClock}</span>
       <span class="r">
         {#if s?.me}<span class="gold">{gold(s.me.cashH)} gold</span>{/if}
         <span class="sig" class:off={!connected} aria-label={connected ? 'connected' : 'offline'}><i style="height:4px"></i><i style="height:7px"></i><i style="height:10px"></i></span>

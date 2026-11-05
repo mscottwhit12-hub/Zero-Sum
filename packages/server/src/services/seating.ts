@@ -20,6 +20,8 @@ export interface SeatingTable {
   h: number;
   /** Where each seat sits around the table: fractions (0–1) along its edge, clockwise from the top-left; index = seat − 1. null = evenly spaced. */
   seatPos: number[] | null;
+  /** Degrees on the floor plan, multiples of 15. */
+  rotation: number;
   /** seat number (1-based) → player id */
   assignments: { seat: number; playerId: number }[];
   /** Active game at this table, if any (else the next scheduled one). */
@@ -38,7 +40,14 @@ export function minSize(seats: number) {
   return { w: Math.min(TABLE_W.max, TABLE_W.min * k), h: Math.min(TABLE_H.max, TABLE_H.min * k) };
 }
 
-type TableRow = { id: number; name: string; seats: number; map_x: number; map_y: number; map_w: number; map_h: number; seat_pos: string | null };
+type TableRow = { id: number; name: string; seats: number; map_x: number; map_y: number; map_w: number; map_h: number; seat_pos: string | null; rotation: number };
+
+/** Rotation snaps to 15° steps, kept in 0–345. */
+export const cleanRotation = (v: unknown, fallback: number) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return (((Math.round(n / 15) * 15) % 360) + 360) % 360;
+};
 
 /** Stored seat positions, or null when unset or no longer matching the seat count. */
 function readSeatPos(raw: string | null, seats: number): number[] | null {
@@ -97,6 +106,7 @@ export function seatingView(ctx: Ctx, nightId: number): SeatingTable[] {
     w: t.map_w,
     h: t.map_h,
     seatPos: readSeatPos(t.seat_pos, t.seats),
+    rotation: t.rotation ?? 0,
     assignments: seats.filter((s) => s.table_id === t.id).map((s) => ({ seat: s.seat, playerId: s.player_id })),
     gameId: games.find((g) => g.table_id === t.id)?.id ?? null,
   }));
@@ -131,10 +141,11 @@ export function createTable(ctx: Ctx, actor: GmAuth, input: { name?: unknown; se
   return { id };
 }
 
-export function updateTable(ctx: Ctx, actor: GmAuth, id: number, input: { name?: unknown; seats?: unknown; x?: unknown; y?: unknown; w?: unknown; h?: unknown; seatPos?: unknown }) {
+export function updateTable(ctx: Ctx, actor: GmAuth, id: number, input: { name?: unknown; seats?: unknown; x?: unknown; y?: unknown; w?: unknown; h?: unknown; seatPos?: unknown; rotation?: unknown }) {
   masterOnly(actor);
   const n = night(ctx);
   const t = table(ctx, n.id, id);
+  const rotation = input.rotation === undefined ? (t.rotation ?? 0) : cleanRotation(input.rotation, t.rotation ?? 0);
   const name = input.name === undefined ? t.name : cleanName(input.name);
   const seats = input.seats === undefined ? t.seats : cleanSeats(input.seats);
   const x = input.x === undefined ? t.map_x : clamp01(input.x, t.map_x);
@@ -156,7 +167,7 @@ export function updateTable(ctx: Ctx, actor: GmAuth, id: number, input: { name?:
     }
   } else if (seatPos && (seats !== t.seats || !spacedOk(seatPos, w, h))) seatPos = null;
   ctx.db.transaction(() => {
-    ctx.db.prepare('UPDATE game_table SET name = ?, seats = ?, map_x = ?, map_y = ?, map_w = ?, map_h = ?, seat_pos = ? WHERE id = ?').run(name, seats, x, y, w, h, seatPos ? JSON.stringify(seatPos) : null, id);
+    ctx.db.prepare('UPDATE game_table SET name = ?, seats = ?, map_x = ?, map_y = ?, map_w = ?, map_h = ?, seat_pos = ?, rotation = ? WHERE id = ?').run(name, seats, x, y, w, h, seatPos ? JSON.stringify(seatPos) : null, rotation, id);
     if (seats < t.seats) ctx.db.prepare('DELETE FROM seat_assignment WHERE table_id = ? AND seat > ?').run(id, seats);
     // Moves and resizes are frequent (drag); only audit structural edits.
     if (name !== t.name || seats !== t.seats)

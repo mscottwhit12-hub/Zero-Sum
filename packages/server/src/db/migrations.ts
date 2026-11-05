@@ -622,4 +622,7 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX board_gold_night ON board_gold(night_id, status);
   ALTER TABLE game_board ADD COLUMN gold TEXT;
   `,
+  /* 25 — table rotation on the floor plan, in degrees (multiples of 15; QoL list). */ `
+  ALTER TABLE game_table ADD COLUMN rotation INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

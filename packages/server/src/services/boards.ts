@@ -182,11 +182,23 @@ export function playerBoardGames(ctx: Ctx, nightId: number, playerId: number) {
         myClaims,
       };
     }
-    const st = g.state ? (JSON.parse(g.state) as { players?: Record<string, { territories?: number; armies?: number; eliminated?: boolean }> }) : {};
+    const st = g.state
+      ? (JSON.parse(g.state) as {
+          players?: Record<string, { territories?: number; armies?: number; eliminated?: boolean }>;
+          log?: { id?: number; t?: number; kind?: string; playerId?: number | null; defender?: number; moved?: number; attackerLosses?: number | null; defenderLosses?: number | null; fromPlayer?: boolean }[];
+        })
+      : {};
+    // Every battle on the board (GM-entered and approved player entries), newest first: the whole table's history.
+    const battles = (st.log ?? [])
+      .filter((e) => e.kind === 'battle' && typeof e.playerId === 'number' && typeof e.defender === 'number')
+      .slice(-40)
+      .reverse()
+      .map((e) => ({ t: e.t ?? 0, attackerId: e.playerId!, defenderId: e.defender!, territories: e.moved ?? 0, attackerLosses: e.attackerLosses ?? null, defenderLosses: e.defenderLosses ?? null, byPlayer: !!e.fromPlayer }));
     return {
       gameId: g.id,
       name: g.name,
       board: 'risk' as const,
+      battles,
       players: parts.map((id) => {
         const p = st.players?.[String(id)] ?? {};
         return { id, territories: p.territories ?? 0, armies: p.armies ?? 0, out: !!p.eliminated };
