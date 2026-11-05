@@ -61,10 +61,12 @@
     busy = true;
     const body = { buys };
     buys = [];
+    const sentAt = Date.now(); // the server counts time up to the request, not the answer
     try {
       v = await dapi<View>('POST', '/api/minter/sync', body, token);
-      syncedAt = Date.now();
+      syncedAt = sentAt;
       started = {};
+      if (body.buys.length) floor = { credits: 0, minted: floor.minted }; // spending may lower credits
     } catch {
       buys = [...body.buys, ...buys]; // retry next time
     } finally {
@@ -72,26 +74,58 @@
     }
     if (buys.length) void sync();
   }
-  const timer = setInterval(() => (now = Date.now()), 100);
+  // Smooth at any refresh rate: one animation frame at a time, at most ~30 updates a second.
+  let raf = 0;
+  let last = 0;
+  const frame = (t: number) => {
+    if (t - last >= 33) {
+      last = t;
+      now = Date.now();
+      // Never show a number lower than one already shown, unless the player spent something.
+      floor = { credits: Math.max(floor.credits, rawCredits), minted: Math.max(floor.minted, rawMinted) };
+    }
+    raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
   const syncTimer = setInterval(sync, 3000);
   onMount(sync);
   onDestroy(() => {
-    clearInterval(timer);
+    cancelAnimationFrame(raf);
     clearInterval(syncTimer);
     if (buys.length) void sync();
   });
 
   const elapsed = $derived(v && v.active ? Math.max(0, (now - syncedAt) / 1000) : 0);
   const boostLeft = $derived(v ? Math.max(0, v.boostLeft - elapsed) : 0);
-  // Managed businesses pay continuously between syncs; tapped cycles land on the next sync.
-  const gained = $derived(v ? v.ratePerSec * (elapsed + Math.min(elapsed, v.boostLeft) * (v.boostMult - 1)) : 0);
-  const minted = $derived(Math.floor((v?.minted ?? 0) + gained));
-  const credits = $derived(Math.floor((v?.credits ?? 0) + gained));
+  // Between syncs, pay whole cycles exactly as the server will (managed businesses loop; a tapped cycle pays once
+  // when it fills), boosted cycles ×boostMult. Counting cycles, not a smooth rate, keeps the phone and the server in
+  // step, so the number never jumps back at a sync.
+  function cyclesPaid(b: Biz): number {
+    if (!v || !b.owned || elapsed <= 0) return 0;
+    const T = b.time;
+    const tapped = started[b.id];
+    const managed = b.managed;
+    if (tapped == null && b.progress == null && !managed) return 0;
+    // seconds from the sync until this business next pays
+    const first = tapped != null ? T + (tapped - syncedAt) / 1000 : T - (b.progress ?? 0) * T;
+    const d = elapsed;
+    const n = first > d ? 0 : managed ? 1 + Math.floor((d - first) / T) : 1;
+    const bw = Math.min(d, v.boostLeft);
+    const boosted = n === 0 || first > bw ? 0 : Math.min(n, 1 + Math.floor((bw - first) / T));
+    return b.payout * (n + boosted * (v.boostMult - 1));
+  }
+  const gained = $derived(v ? v.shop.reduce((a, b) => a + cyclesPaid(b), 0) : 0);
+  const rawMinted = $derived(Math.floor((v?.minted ?? 0) + gained));
+  const rawCredits = $derived(Math.floor((v?.credits ?? 0) + gained));
+  let floor = $state({ credits: 0, minted: 0 });
+  const minted = $derived(Math.max(rawMinted, floor.minted));
+  const credits = $derived(Math.max(rawCredits, floor.credits));
 
   /** Cycle fill 0..1 right now, or null when idle. */
   function fill(b: Biz): number | null {
     if (!b.owned) return null;
     if (started[b.id] != null) return Math.min(1, (now - started[b.id]!) / 1000 / b.time);
+    if (b.managed && b.time < 0.25) return 1; // faster than the eye: a steady full bar, like Adventure Capitalist
     if (b.managed) return (((((b.progress ?? 0) * b.time + elapsed) % b.time) + b.time) % b.time) / b.time;
     if (b.progress == null) return null;
     return Math.min(1, b.progress + elapsed / b.time);
