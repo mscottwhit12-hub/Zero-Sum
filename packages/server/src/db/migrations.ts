@@ -640,4 +640,8 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX table_prop_table ON table_prop(table_id);
   `,
+  /* 27 — table colour (QoL list; '#rrggbb' or null = theme); the bottle prop was dropped. */ `
+  ALTER TABLE game_table ADD COLUMN color TEXT;
+  DELETE FROM table_prop WHERE kind = 'bottle';
+  `,
 ];

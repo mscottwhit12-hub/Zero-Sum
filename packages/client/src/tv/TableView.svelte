@@ -3,7 +3,7 @@
    * TV close-up of one table: the table at its real shape, scaled up, with big avatars and first names
    * around it (seat order matches the floor plan). Read-only.
    */
-  import { propKind } from '@gn/engine';
+  import { inkOn, propKind } from '@gn/engine';
   import PropSprite from '@shared/PropSprite.svelte';
   import Avatar from '@shared/Avatar.svelte';
   import { clamp, relaxSeats, seatFractions, seatPoints } from '@shared/seating';
@@ -40,7 +40,7 @@
     {@const sideSeat = (p: { x: number }) => p.x < -tw / 2 || p.x > tw / 2}
     {@const crowded = room < 150 && pts.some((p) => sideSeat(p) && pts.some((q) => q.seat !== p.seat && sideSeat(q) && Math.abs(q.x - p.x) < S * 0.4 && Math.abs(q.y - p.y) < S + 56))}
     {@const mode = room >= 150 ? 'out' : crowded ? 'in' : 'low'}
-    <div class="tbl" class:hasprops={!!table.props?.length} style="width:{tw}px;height:{th}px;font-size:{Math.round(clamp(th * 0.2, 16, S * 0.6))}px;padding:0 {mode === 'in' ? Math.round(tw * 0.3) : 6}px">
+    <div class="tbl" class:hasprops={!!table.props?.length} style="width:{tw}px;height:{th}px;font-size:{Math.round(clamp(th * 0.2, 16, S * 0.6))}px;padding:0 {mode === 'in' ? Math.round(tw * 0.3) : 6}px{table.color ? `;background:${table.color};color:${inkOn(table.color)}` : ''}">
       <!-- props: under the name, in the table's own frame (the close-up is never turned) -->
       {#each table.props ?? [] as pr (pr.id)}
         {@const k = propKind(pr.kind)}

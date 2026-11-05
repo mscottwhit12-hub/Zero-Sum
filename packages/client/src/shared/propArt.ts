@@ -132,7 +132,6 @@ const ART: Record<string, string> = {
     `<circle cx="50" cy="50" r="47" fill="#c9a43a"/><circle cx="50" cy="50" r="41" fill="#d8dadf"/><circle cx="50" cy="50" r="36" fill="#c4c7cd"/>` +
     `<ellipse cx="50" cy="34" rx="10" ry="7" fill="#999ca3"/><rect x="40" y="40" width="20" height="18" rx="9" fill="#b3b6bc" stroke="#888" stroke-width="1.5"/><circle cx="50" cy="66" r="3" fill="#999ca3"/>`,
   cup: `<circle cx="50" cy="50" r="47" fill="#c62f2f"/><circle cx="50" cy="50" r="42" fill="#f4efe9"/><circle cx="50" cy="50" r="37" fill="#d99a2b"/><circle cx="40" cy="40" r="8" fill="#f2c35caa"/>`,
-  bottle: `<path d="M8 100 L8 44 C8 34 14 30 16 22 L16 4 L24 4 L24 22 C26 30 32 34 32 44 L32 100Z" fill="#5a3a1a" stroke="#2a1a0a" stroke-width="1"/><rect x="15" y="0" width="10" height="6" fill="#c9a43a"/><rect x="8" y="58" width="24" height="22" fill="#e9d9b0"/>`,
   vape:
     `<rect x="4" y="22" width="250" height="56" rx="26" fill="#2b2d33"/><rect x="250" y="34" width="62" height="32" rx="14" fill="#55585f"/>` +
     `<rect x="40" y="40" width="80" height="20" rx="10" fill="#6aa7c9"/><circle cx="216" cy="50" r="7" fill="#7ef0b8"/>`,

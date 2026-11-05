@@ -38,6 +38,21 @@ describe('table props', () => {
     expect((await call(t, gm, 'PATCH', `/api/tables/${tid}`, { w: 0.5 })).statusCode).toBe(200);
   });
 
+  it('table colour: set, refuse junk, clear; the bottle prop is gone', async () => {
+    const t = await makeApp();
+    const { gm } = await liveNight(t, 2);
+    const tid = (await call(t, gm, 'POST', '/api/tables', { name: 'Main', seats: 4 })).json().id;
+    expect(seating(t)[0]!.color).toBeNull();
+    expect((await call(t, gm, 'PATCH', `/api/tables/${tid}`, { color: '#1F6B3A' })).statusCode).toBe(200);
+    expect(seating(t)[0]!.color).toBe('#1f6b3a');
+    expect((await call(t, gm, 'PATCH', `/api/tables/${tid}`, { color: 'red; x' })).statusCode).toBe(400);
+    await call(t, gm, 'PATCH', `/api/tables/${tid}`, { name: 'Big' });
+    expect(seating(t)[0]!.color).toBe('#1f6b3a');
+    await call(t, gm, 'PATCH', `/api/tables/${tid}`, { color: null });
+    expect(seating(t)[0]!.color).toBeNull();
+    expect((await call(t, gm, 'POST', `/api/tables/${tid}/props`, { kind: 'bottle' })).statusCode).toBe(400);
+  });
+
   it('a game starting at a table puts its mini board there; the result takes it away (hand-placed props stay)', async () => {
     const t = await makeApp();
     const { gm, devices } = await liveNight(t, 3);

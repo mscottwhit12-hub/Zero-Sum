@@ -6,7 +6,7 @@
   import type { GmState, SeatingTable, WhoAmI } from '@shared/types';
   import FloorPlan from '@shared/FloorPlan.svelte';
   import PropSprite from '@shared/PropSprite.svelte';
-  import { PROP_KINDS, propKind } from '@gn/engine';
+  import { PROP_KINDS, TABLE_COLORS, propKind } from '@gn/engine';
   import { activePlayers, playerName } from '../lib';
 
   let { gs, whoami }: { gs: GmState | null; whoami: WhoAmI } = $props();
@@ -29,6 +29,7 @@
   const resizeTable = (id: number, g: { x: number; y: number; w: number; h: number }) => run(() => patch(`/api/tables/${id}`, g));
   const moveSeat = (id: number, seatPos: number[]) => run(() => patch(`/api/tables/${id}`, { seatPos }));
   /** Turn a table in 15° steps (the server keeps it in 0–345). */
+  const paint = (t: SeatingTable, color: string | null) => run(() => patch(`/api/tables/${t.id}`, { color }));
   const turn = (t: SeatingTable, by: number) => run(() => patch(`/api/tables/${t.id}`, { rotation: (t.rotation ?? 0) + by }));
   const seatPlayer = (tableId: number, seat: number, playerId: number | null) => run(() => post(`/api/tables/${tableId}/seat`, { seat, playerId }));
 
@@ -190,6 +191,14 @@
           <button aria-label="Turn right 15°" onclick={() => turn(sel, 15)}>⟳</button>
           <button class="danger" onclick={() => deleteTableAsk(sel)}>Delete</button>
         </span>
+        <span class="row colors" role="group" aria-label="Table colour">
+          <span class="small muted">Colour</span>
+          <button class="sw none" class:on={!sel.color} title="Theme colour" aria-label="Theme colour" onclick={() => paint(sel, null)}>✕</button>
+          {#each TABLE_COLORS as c (c.id)}
+            <button class="sw" class:on={sel.color === c.id} style="background:{c.id}" title={c.label} aria-label={c.label} onclick={() => paint(sel, c.id)}></button>
+          {/each}
+          <label class="sw custom" title="Any colour"><input type="color" aria-label="Any colour" value={sel.color ?? '#1f6b3a'} onchange={(e) => paint(sel, (e.currentTarget as HTMLInputElement).value)} /></label>
+        </span>
       {/if}
     </div>
     <div class="grid2">
@@ -267,5 +276,37 @@
   .seat-prob {
     padding: 0.4rem 0;
     border-bottom: 1px solid var(--line);
+  }
+  .colors {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+  }
+  .sw {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+  }
+  .sw.on {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .sw.none {
+    font-size: 0.8rem;
+  }
+  .sw.custom {
+    position: relative;
+    overflow: hidden;
+    background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+    cursor: pointer;
+  }
+  .sw.custom input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
   }
 </style>

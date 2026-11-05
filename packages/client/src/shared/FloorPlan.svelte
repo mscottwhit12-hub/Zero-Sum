@@ -5,7 +5,7 @@
    * seats and the unseated tray. An empty seat can be dragged to another spot around its table. Read-only mode (TV) just draws it.
    */
   import Avatar from './Avatar.svelte';
-  import { fitProp, propKind } from '@gn/engine';
+  import { fitProp, inkOn, propKind } from '@gn/engine';
   import PropSprite from './PropSprite.svelte';
   import { clamp, edgeDistance, minSize, SEAT_EDGE, seatFractions, seatPoints, snapToFree, TABLE_H, TABLE_W } from './seating';
   import type { PlayerInfo, SeatingTable } from './types';
@@ -314,18 +314,22 @@
         {@const th = g.h * W}
         {@const fs = Math.round(clamp(th * 0.26, 10, Math.max(14, W * 0.032)))}
         {@const deg = rotOf(t)}
+        {@const a = (deg * Math.PI) / 180}
+        {@const lblMax = Math.round(0.92 * Math.min(Math.abs(Math.cos(a)) > 0.01 ? tw / Math.abs(Math.cos(a)) : 1e4, Math.abs(Math.sin(a)) > 0.01 ? th / Math.abs(Math.sin(a)) : 1e4))}
         <div class="tw" class:sel={selectedId === t.id} style="left:{g.x * W}px;top:{g.y * H}px;width:{tw}px;height:{th}px;transform:translate(-50%, -50%) rotate({deg}deg)">
           <button
             class="body"
             class:on={selectedId === t.id}
             class:ro={!editable}
-            style="font-size:{fs}px;--txt-rot:{deg > 90 && deg < 270 ? 180 : 0}deg"
+            style="font-size:{fs}px;--txt-rot:{-deg}deg;--lbl-max:{lblMax}px{t.color ? `;background:${t.color};color:${inkOn(t.color)}` : ''}"
             onpointerdown={(e) => startMove(e, t)}
             onclick={() => onselect?.(t.id)}
           >
             {#if !t.props?.length}
-              <strong>{t.name}</strong>
-              {#if th >= 34}<span class="muted cnt">{t.assignments.length}/{t.seats}{gameName && t.gameId ? ` · ${gameName(t.gameId)}` : ''}</span>{/if}
+              <span class="lb">
+                <strong>{t.name}</strong>
+                {#if th >= 34}<span class="muted cnt">{t.assignments.length}/{t.seats}{gameName && t.gameId ? ` · ${gameName(t.gameId)}` : ''}</span>{/if}
+              </span>
             {/if}
           </button>
           {#each t.props ?? [] as pr (pr.id)}
@@ -349,7 +353,7 @@
           {/each}
           {#if t.props?.length}
             <!-- label above the props, on a pill, never catching the pointer -->
-            <div class="plbl" style="font-size:{fs}px;--txt-rot:{deg > 90 && deg < 270 ? 180 : 0}deg"><strong>{t.name}</strong>{#if th >= 34 && gameName && t.gameId}<span class="cnt"> · {gameName(t.gameId)}</span>{/if}</div>
+            <div class="plbl" style="font-size:{fs}px;--txt-rot:{-deg}deg;max-width:{lblMax}px"><strong>{t.name}</strong>{#if th >= 34 && gameName && t.gameId}<span class="cnt"> · {gameName(t.gameId)}</span>{/if}</div>
           {/if}
           {#each seatPoints(t.seats, tw, th, S, 3, posOf(t)) as p (p.seat)}
             {@const pid = t.assignments.find((a) => a.seat === p.seat)?.playerId ?? null}
@@ -421,7 +425,6 @@
     z-index: 2;
     pointer-events: none;
     white-space: nowrap;
-    max-width: 95%;
     overflow: hidden;
     text-overflow: ellipsis;
     padding: 0.05em 0.5em;
@@ -472,9 +475,17 @@
   .tw.sel {
     z-index: 3;
   }
-  /* text on a table turned past 90° is flipped so it's never upside down */
-  .body > :global(*) {
+  /* table text always reads left to right, however the table is turned */
+  .body > .lb {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: var(--lbl-max, 100%);
     rotate: var(--txt-rot, 0deg);
+  }
+  .body .muted {
+    color: inherit;
+    opacity: 0.75;
   }
   .body {
     position: absolute;

@@ -31,7 +31,6 @@ export const PROP_KINDS: PropKind[] = [
   { id: 'dealer', label: 'Dealer button', group: 'pieces', aspect: 1, w: 0.06 },
   { id: 'beer-can', label: 'Beer can', group: 'drinks', aspect: 1, w: 0.07 },
   { id: 'cup', label: 'Party cup', group: 'drinks', aspect: 1, w: 0.08 },
-  { id: 'bottle', label: 'Bottle', group: 'drinks', aspect: 0.4, w: 0.04 },
   { id: 'vape', label: 'Vape', group: 'smoke', aspect: 3.2, w: 0.09 },
   { id: 'cig-pack', label: 'Cigarette pack', group: 'smoke', aspect: 0.66, w: 0.07 },
   { id: 'cigarette', label: 'Cigarette', group: 'smoke', aspect: 6, w: 0.09 },
@@ -86,4 +85,26 @@ export function fitProp(kind: PropKind, p: PropPlace, tw: number, th: number): P
   }
   const clamp = (v: number, m: number) => Math.min(m, Math.max(-m, v));
   return { x: clamp(p.x, 0.5 - h.hx / tw), y: clamp(p.y, 0.5 - h.hy / th), w, rotation: p.rotation };
+}
+
+/** Table colours offered on the GM Seating screen (any #rrggbb is accepted; null = the theme's own). */
+export const TABLE_COLORS: { id: string; label: string }[] = [
+  { id: '#1f6b3a', label: 'Green felt' },
+  { id: '#1d4f8c', label: 'Blue felt' },
+  { id: '#8c1d2a', label: 'Red felt' },
+  { id: '#5b2a86', label: 'Purple felt' },
+  { id: '#7a4a24', label: 'Wood' },
+  { id: '#c9a46a', label: 'Light wood' },
+  { id: '#222222', label: 'Black' },
+  { id: '#e8e4dc', label: 'White' },
+];
+/** A clean table colour: '#rrggbb' lower case, or null. */
+export function cleanTableColor(v: unknown): string | null {
+  return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : null;
+}
+/** Black or white text, whichever reads on `hex`. */
+export function inkOn(hex: string): '#000' | '#fff' {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#000' : '#fff';
 }
