@@ -81,12 +81,19 @@ export interface ZipFile {
 /**
  * Index a ZIP without decompressing anything (stored + deflate entries; no ZIP64, no encryption). Folders are skipped.
  * Throws an Error whose message is a short code: not_a_zip, zip_unsupported, zip_too_many_files, zip_entry_too_large,
- * zip_corrupt. Names are returned as stored: callers must never use them as filesystem paths. `read()` never inflates
- * more than `maxEntryBytes`, whatever the zip claims, so a crafted zip cannot balloon memory.
+ * zip_too_large, zip_bomb, zip_corrupt. Names are returned as stored: callers must never use them as filesystem paths.
+ *
+ * Zip-bomb defense (checked before anything is decompressed): entry count, each entry's declared size, the total of
+ * all declared sizes (`maxTotalBytes`), and the compression ratio of big entries (`maxRatio`). `read()` then inflates
+ * at most the entry's DECLARED size and refuses an entry whose real size differs, so a zip that lies about its sizes
+ * cannot balloon memory or CPU beyond what the checks allowed.
  */
-export function zipIndex(buf: Buffer, opts: { maxEntries?: number; maxEntryBytes?: number } = {}): ZipFile[] {
+export function zipIndex(buf: Buffer, opts: { maxEntries?: number; maxEntryBytes?: number; maxTotalBytes?: number; maxRatio?: number } = {}): ZipFile[] {
   const maxEntries = opts.maxEntries ?? 500;
   const maxEntry = opts.maxEntryBytes ?? 64 * 1024 * 1024;
+  const maxTotal = opts.maxTotalBytes ?? 256 * 1024 * 1024;
+  const maxRatio = opts.maxRatio ?? 100;
+  let total = 0;
   let eocd = -1;
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) {
     if (buf.readUInt32LE(i) === 0x06054b50) {
@@ -115,6 +122,10 @@ export function zipIndex(buf: Buffer, opts: { maxEntries?: number; maxEntryBytes
     if (name.endsWith('/')) continue;
     if (flags & 1 || csize === 0xffffffff || usize === 0xffffffff || lho === 0xffffffff) throw new Error('zip_unsupported');
     if (usize > maxEntry) throw new Error('zip_entry_too_large');
+    total += usize;
+    if (total > maxTotal) throw new Error('zip_too_large');
+    // Audio barely compresses; text compresses well but is tiny. A big entry that shrank more than maxRatio:1 is a bomb.
+    if (usize > 1024 * 1024 && usize > csize * maxRatio) throw new Error('zip_bomb');
     out.push({
       name,
       size: usize,
@@ -123,13 +134,20 @@ export function zipIndex(buf: Buffer, opts: { maxEntries?: number; maxEntryBytes
         const start = lho + 30 + buf.readUInt16LE(lho + 26) + buf.readUInt16LE(lho + 28);
         if (start + csize > buf.length) throw new Error('zip_corrupt');
         const raw = buf.subarray(start, start + csize);
-        if (method === 0) return Buffer.from(raw);
+        if (method === 0) {
+          if (csize !== usize) throw new Error('zip_corrupt');
+          return Buffer.from(raw);
+        }
         if (method !== 8) throw new Error('zip_unsupported');
+        let out: Buffer;
         try {
-          return inflateRawSync(raw, { maxOutputLength: maxEntry });
+          // Never more than the declared size (+1 so a lie is detectable), whatever the data says.
+          out = inflateRawSync(raw, { maxOutputLength: Math.max(1, usize + 1) });
         } catch {
           throw new Error('zip_corrupt');
         }
+        if (out.length !== usize) throw new Error('zip_corrupt');
+        return out;
       },
     });
   }

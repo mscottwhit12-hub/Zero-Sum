@@ -438,12 +438,33 @@ describe('zip safety', () => {
     const bomb = deflateZip('a.bin', Buffer.alloc(100 * MB)); // ~100 KB on disk
     expect(bomb.length).toBeLessThan(MB);
     expect(() => zipIndex(bomb, { maxEntryBytes: 31 * MB })).toThrow('zip_entry_too_large');
+    expect(() => zipIndex(bomb, { maxEntryBytes: 200 * MB })).toThrow('zip_bomb');
   });
   it('a zip that lies about its size still cannot inflate past the cap', () => {
     const liar = deflateZip('a.bin', Buffer.alloc(100 * MB), 1000);
-    const [f] = zipIndex(liar, { maxEntryBytes: 31 * MB });
+    const [f] = zipIndex(liar, { maxEntryBytes: 31 * MB, maxRatio: 1e9 });
     expect(f!.size).toBe(1000);
     expect(() => f!.read()).toThrow('zip_corrupt');
+  });
+  it('a liar that claims a tiny size never inflates past its claim (not even up to the per-file cap)', () => {
+    const liar = deflateZip('a.bin', Buffer.alloc(20 * MB), 10);
+    const [f] = zipIndex(liar, { maxEntryBytes: 31 * MB, maxRatio: 1e9 });
+    expect(() => f!.read()).toThrow('zip_corrupt'); // inflate stops at 11 bytes
+  });
+  it('refuses, before inflating anything: too much in total, and big entries that compress like a bomb', () => {
+    const two = zip([{ name: 'a', data: Buffer.alloc(3 * MB, 1) }, { name: 'b', data: Buffer.alloc(3 * MB, 2) }]);
+    expect(() => zipIndex(two, { maxTotalBytes: 5 * MB })).toThrow('zip_too_large');
+    expect(zipIndex(two, { maxTotalBytes: 6 * MB })).toHaveLength(2);
+    const ratio = deflateZip('a.bin', Buffer.alloc(20 * MB)); // 20 MB of zeros → ~20 KB: ratio ~1000:1
+    expect(() => zipIndex(ratio, { maxEntryBytes: 31 * MB })).toThrow('zip_bomb');
+    expect(zipIndex(deflateZip('t.txt', Buffer.alloc(500_000)), {})).toHaveLength(1); // small text is fine at any ratio
+  });
+  it('a stored entry whose sizes disagree is refused', () => {
+    const z = zip([{ name: 'a', data: 'hello' }]);
+    z.writeUInt32LE(4, 18); // local header compressed size: irrelevant; central directory decides
+    const cd = z.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    z.writeUInt32LE(3, cd + 24); // central: uncompressed size 3 ≠ compressed 5
+    expect(() => zipIndex(z)[0]!.read()).toThrow('zip_corrupt');
   });
   it('zipIndex decompresses nothing until read() is called', () => {
     const idx = zipIndex(zip([{ name: 'a', data: 'x' }, { name: 'b', data: 'yy' }]));

@@ -28,6 +28,8 @@ const ZIP_ERRORS: Record<string, string> = {
   zip_too_many_files: 'That zip has too many files.',
   zip_entry_too_large: `A file inside is larger than ${SOUND_MAX_MB} MB.`,
   zip_corrupt: 'That zip is damaged.',
+  zip_too_large: `The files inside add up to more than ${PACK_MAX_MB} MB.`,
+  zip_bomb: 'That zip is suspicious (a file inside expands far more than audio can). Re-zip the audio normally.',
 };
 const zipMsg = (e: unknown) => ZIP_ERRORS[(e as Error).message] ?? 'That zip could not be read.';
 
@@ -43,7 +45,7 @@ export function importSoundPack(ctx: Ctx, actor: GmAuth, body: unknown): PackRes
   if (body.length > PACK_MAX_MB * 1024 * 1024) throw bad('bad_pack', `A sound pack can be up to ${PACK_MAX_MB} MB.`);
   let index: ZipFile[];
   try {
-    index = zipIndex(body, { maxEntries: MAX_TRACKS * 2 + 10, maxEntryBytes: MAX_SOUND_BYTES + 1024 * 1024 });
+    index = zipIndex(body, { maxEntries: MAX_TRACKS * 2 + 10, maxEntryBytes: MAX_SOUND_BYTES + 1024 * 1024, maxTotalBytes: PACK_MAX_MB * 1024 * 1024 + MANIFEST_MAX_BYTES * 4 });
   } catch (e) {
     throw bad('bad_pack', zipMsg(e));
   }
