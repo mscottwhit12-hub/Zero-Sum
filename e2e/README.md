@@ -48,7 +48,7 @@ for r in e2e/rounds/r*.mjs; do NODE_PATH=$(npm root -g) node $r; done   # all te
 | sched (`e2e/features/sched.mjs`) | Schedule timeline drag: earlier, later, earlier again all land where dropped |
 | oct29 (`e2e/features/oct29.mjs`) | Oct 29 round: early vote + call closes after voting, phone short (not own stock), Risk phone app + battle approved on the GM board + GM Battle panel, FLAC upload, end-of-night package zip and phone cards |
 
-**Known false positives** (checked by hand; not app bugs): r03 "selling locked…" and "past the invest cap" (the app
+**Known false positives** (checked by hand; not app bugs; `npm run check` shows them as "known" and doesn't fail on them, list in `scripts/check.mjs` `KNOWN`): r03 "selling locked…" and "past the invest cap" (the app
 correctly answers "one trade per tick" / "not enough gold"); r05 "Start disabled while paused" (timing; it is disabled);
 r06 "paused laptop shows the PIN lock" (text check misses the PIN placeholder; it does lock); r09 `{"market":null}` → 200
 (null resets a settings section by design); r10 "hourly handicap check" (a test server restarted at 60× resets its clock).
@@ -80,3 +80,4 @@ the GM night export, statements), `events.log` and `shots/`. `SEED=` changes the
 - Nov 5 (table props): scratch props run 10/10 (auto Catan board, add/drag/resize/turn, TV floor + close-up, board cleared at result), 0 errors. Tests: client 831, engine 141, server 193, 4.
 - Nov 5 (table colour + visual audit): scratch geometry audit at GM 360/768/1280/1920, board view, TV floor + close-up 1920/1280 (only known long-name/edge items left); props 10/10, colour 5/5; `features/run.mjs` 22/22, `seating/run.mjs` 21/21, `seating/seats.mjs` 13/13, 0 errors. Tests: client 831, engine 141, server 194, 4.
 - Nov 6 (drag-to-turn + mood rework): scratch turn run 8/8, scratch mood run 4/4 (noise in every price record, mood-1 player ±2.97 fading), 0 errors; `seating/run.mjs` 21/21, `seating/seats.mjs` 13/13, `features/run.mjs` 22/22. Tests: client 831, engine 145, server 194, 4.
+- Nov 6 (`npm run check -- --e2e all`, every harness but the 60× night): 30 harnesses, 0 real bugs, 0 page errors, 0 server errors; 6 known false positives (r03 ×2, r05, r06, r09, r10). Fixed 3 outdated checks (swipe short drag slow, oct29 Risk battle text, r09 opens Advanced). Tests: client 831, engine 145, server 194, 4.

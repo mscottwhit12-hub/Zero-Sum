@@ -92,6 +92,9 @@ try {
   // Settings screen: type a negative number and save → readable error.
   await gmRoute(gm.page, 'settings');
   await sleep(600);
+  // Every setting sits under "Advanced" since the Nov 5 tuning dials.
+  await gm.page.locator('details.advanced > summary').click().catch(() => {});
+  await sleep(400);
   const fee = gm.page.locator('input[id="market.feeFrac"]');
   if (await fee.isVisible().catch(() => false)) {
     await fee.fill('-3');

@@ -66,7 +66,8 @@ try {
   await gp.getByRole('button', { name: 'Approve' }).click(); await sleep(2500);
   const after = (await api(gm.req, s.base, 'GET', `/api/games/${g.id}/board`)).body.state.players;
   R.check(after[ids[0]].territories === before[ids[0]].territories + 2 && after[ids[1]].territories === before[ids[1]].territories - 2, 'risk', 'approving moves 2 territories Ben → Ann', `${before[ids[0]].territories}->${after[ids[0]].territories}`);
-  R.check(/approved/.test((await pa.textContent('body')) ?? ''), 'risk', "Ann's phone shows the battle approved");
+  // Since the Nov 5 small batch an approved entry shows in the phone's full battle list ("You took 2 from Ben").
+  R.check(/You took 2 from Ben/.test((await pa.textContent('body')) ?? ''), 'risk', "Ann's phone shows the battle approved");
   // GM logs a battle directly
   await gp.getByLabel('Attacker', { exact: true }).selectOption({ label: 'Cat' });
   await gp.getByLabel('Defender', { exact: true }).selectOption({ label: 'Ann' });
