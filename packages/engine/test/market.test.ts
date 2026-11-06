@@ -203,7 +203,7 @@ describe('tickMarket', () => {
         mood: new Map(),
         impulses: [],
       },
-      S,
+      { ...S, market: { ...S.market, noise: { ...S.market.noise, base: 0 } } }, // no background noise: exact model prices
       createRng(1),
     );
     const p = Object.fromEntries(r.securities.map((s) => [s.id, s.price]));

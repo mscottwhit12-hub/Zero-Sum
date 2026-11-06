@@ -1,4 +1,4 @@
-import { createRng, moodBiasMap, tickMarket, type Impulse, type MoodReading } from '@gn/engine';
+import { createRng, moodBiasMap, moodJitterMap, tickMarket, type Impulse, type MoodReading } from '@gn/engine';
 import { j } from '../db';
 import { bad, notFound, type Ctx } from '../context';
 import { computeNightState, getNight, pid, upsertSecurities } from './state';
@@ -73,6 +73,7 @@ export function runTick(ctx: Ctx, nightId: number): boolean {
         earned,
         drift: activeDrift(ctx, nightId, n.current_quarter),
         mood: moodBiasMap(moodReadings(ctx, nightId), tick, st.settings),
+        jitter: moodJitterMap(moodReadings(ctx, nightId), tick, st.settings),
         live: liveBias(ctx, nightId),
         impulses,
         indexExtra: indexTerms(ctx, n).extra,

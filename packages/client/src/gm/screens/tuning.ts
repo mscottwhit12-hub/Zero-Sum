@@ -35,7 +35,9 @@ export const DIAL_GROUPS: DialGroup[] = [
     help: 'Bigger moves mean more to win (and lose) by trading.',
     dials: [
       { id: 'standings', label: 'Game standings', help: 'How much a player’s live place in a game nudges their stock.', paths: ['market.player.liveMax'] },
-      { id: 'mood', label: 'Mood', help: 'How much the mood ratings move a player’s stock.', paths: ['mood.moodMax'] },
+      { id: 'mood', label: 'Reported mood push', help: 'How far reported mood pushes a player’s price up or down.', paths: ['mood.moodMax'] },
+      { id: 'jitter', label: 'GM reported mood jitter', help: 'How much an upset player’s stock jitters.', paths: ['mood.jitterMax'] },
+      { id: 'noise', label: 'Background noise', help: 'The small jiggle every stock has.', paths: ['market.noise.base'] },
       { id: 'kingfall', label: 'Kingfall jump', help: 'How hard crypto jumps when a long-reigning leader falls.', paths: ['market.crypto.kingfallFrac'] },
       { id: 'impact', label: 'Trades move prices', help: 'How much buying and selling pushes a price.', paths: ['market.impact.player', 'market.impact.crypto', 'market.impact.event', 'market.impact.dead'] },
       { id: 'crypto', label: 'Crypto swings', help: 'How wild COIN moves on its own.', paths: ['market.crypto.sigma'] },

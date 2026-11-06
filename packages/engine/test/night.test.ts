@@ -138,11 +138,11 @@ describe('votes', () => {
 });
 
 describe('mood', () => {
-  it('centered average', () => {
+  it('push comes from reported mood (self-assessment) only', () => {
     expect(centeredMood(5, 5)).toBe(1);
     expect(centeredMood(1, 1)).toBe(-1);
-    expect(centeredMood(4, 2)).toBe(0);
-    expect(centeredMood(5, 3)).toBe(0.5);
+    expect(centeredMood(4, 2)).toBe(-0.5);
+    expect(centeredMood(1, 3)).toBe(0);
   });
   it('bias = 0.10 × centered, decays 1%/tick', () => {
     const r = { playerId: 'a', mood: 5, selfAssessment: 5, tick: 0 };

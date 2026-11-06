@@ -1,6 +1,7 @@
 import type { GoldH } from '../money';
 import type { Rng } from '../rng';
 import { bandAt, type Settings } from '../settings';
+import { clampTo, round4 } from './clamp';
 import { tickCrypto } from './crypto';
 import { tickDead } from './dead';
 import { tickEvent } from './event';
@@ -22,6 +23,8 @@ export interface TickContext {
   live?: Map<string, number>;
   /** Hidden index growth minus running games' start drops, price units (see indexExtra). */
   indexExtra?: number;
+  /** ± gold each player's stock jitters (GM reported mood); absent = the background noise. */
+  jitter?: Map<string, number>;
 }
 
 export interface TickResult {
@@ -32,8 +35,25 @@ export interface TickResult {
 /** A halted stock stays where the GM halted it: no model, drift or impulse moves it any more. */
 const frozen = (sec: SecurityState, r: { sec: SecurityState; record: PriceRecord }) => ({ sec: { ...sec }, record: { ...r.record, price: sec.price } });
 
+/**
+ * Background noise (QoL mood rework): every stock carries a noise offset `nz` (gold) on top of its model price.
+ * Half of it (by variance, driftShare) wanders and eases back; the rest is a fresh jiggle each tick. `size` is
+ * the ± gold the noise mostly stays within (2 standard deviations). Returns the new offset and its wandering part.
+ */
+export function drawNoise(prevDrift: number, size: number, settings: Settings, rng: Rng): { nz: number; drift: number } {
+  const n = settings.market.noise;
+  const sd = Math.max(0, size) / 2;
+  const r = Math.min(1, Math.max(0.001, n.reversion));
+  const share = Math.min(1, Math.max(0, n.driftShare));
+  const drift = prevDrift * (1 - r) + sd * Math.sqrt(share) * Math.sqrt(r * (2 - r)) * rng.normal();
+  return { nz: drift + sd * Math.sqrt(1 - share) * rng.normal(), drift };
+}
+
 /** One market tick for every security. Pure apart from the passed RNG. */
 export function tickMarket(securities: SecurityState[], ctx: TickContext, settings: Settings, rng: Rng): TickResult {
+  const raw = securities;
+  // Models run on the noise-free price; noise is laid back on at the end.
+  securities = raw.map((sec) => (sec.nz ? { ...sec, price: round4(sec.price - sec.nz) } : sec));
   const s = settings.market;
   const fair = computeFair(ctx.earned, s.bands.player, s.player.fairInnerLo, s.player.fairInnerHi);
   const bySec = new Map<string, Impulse[]>();
@@ -69,7 +89,19 @@ export function tickMarket(securities: SecurityState[], ctx: TickContext, settin
     else if (sec.kind === 'event') out.set(sec.id, tickEvent(sec, imp(sec.id), settings));
     else if (sec.kind === 'dead') out.set(sec.id, tickDead(sec, imp(sec.id), settings));
   }
-  for (const sec of securities) if (sec.halted) out.set(sec.id, frozen(sec, out.get(sec.id)!));
+  // Background noise last (after every other draw, so the old randomness is unchanged).
+  for (const sec of securities) {
+    const r = out.get(sec.id)!;
+    const size = sec.kind === 'player' && !sec.left ? ctx.jitter?.get(sec.playerId!) ?? s.noise.base : s.noise.base;
+    const { nz, drift } = drawNoise(sec.nzDrift ?? 0, size, settings, rng);
+    const price = clampTo(round4(r.sec.price + nz), s.bands[sec.kind]);
+    const applied = round4(price - r.sec.price);
+    out.set(sec.id, { sec: { ...r.sec, price, nz: applied, nzDrift: round4(drift) }, record: { ...r.record, price, causes: { ...r.record.causes, noise: applied, noiseSize: round4(size) } } });
+  }
+  // A halted stock keeps its exact price (noise included).
+  raw.forEach((sec) => {
+    if (sec.halted) out.set(sec.id, frozen(sec, out.get(sec.id)!));
+  });
   // Preserve input order.
   const res = securities.map((sec) => out.get(sec.id)!);
   return { securities: res.map((r) => r.sec), records: res.map((r) => r.record) };

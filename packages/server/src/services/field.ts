@@ -1,5 +1,5 @@
 /** Field actions (Master or Sub): mood rounds, re-roll logging, notifications. Plus Master-only GM price offsets. */
-import { centeredMood, liquidateAll, moodBiasMap, rerollImpulse } from '@gn/engine';
+import { centeredMood, liquidateAll, moodBiasMap, moodJitterMap, rerollImpulse } from '@gn/engine';
 import { j } from '../db';
 import { bad, conflict, forbidden, notFound, type Ctx } from '../context';
 import { audit } from './audit';
@@ -22,7 +22,7 @@ const rating = (v: unknown) => {
 
 // ---------------------------------------------------------------- mood rounds
 
-/** Two 1–5 ratings: mood (gloomy→cheery) and perceived self-assessment. Target ≤10 s per player. */
+/** Two 1–5 ratings: GM reported mood (1 most upset … 5 calm → jitter) and reported mood (how well they feel they're doing → push). */
 export function recordMood(ctx: Ctx, actor: GmAuth, input: { playerId: unknown; mood: unknown; selfAssessment: unknown }) {
   const n = liveNight(ctx);
   const playerId = Number(input.playerId);
@@ -44,9 +44,10 @@ export function recordMood(ctx: Ctx, actor: GmAuth, input: { playerId: unknown; 
 export function moodGmView(ctx: Ctx, n: NightRow) {
   const readings = moodReadings(ctx, n.id);
   const bias = moodBiasMap(readings, n.tick_count, nightSettings(n));
+  const jitter = moodJitterMap(readings, n.tick_count, nightSettings(n));
   const latest = new Map<string, { mood: number; selfAssessment: number; tick: number }>();
   for (const r of readings) latest.set(r.playerId, r);
-  return [...latest].map(([playerId, r]) => ({ playerId: Number(playerId), mood: r.mood, selfAssessment: r.selfAssessment, bias: bias.get(playerId) ?? 0 }));
+  return [...latest].map(([playerId, r]) => ({ playerId: Number(playerId), mood: r.mood, selfAssessment: r.selfAssessment, bias: bias.get(playerId) ?? 0, jitter: jitter.get(playerId) ?? nightSettings(n).market.noise.base }));
 }
 
 // ---------------------------------------------------------------- re-rolls

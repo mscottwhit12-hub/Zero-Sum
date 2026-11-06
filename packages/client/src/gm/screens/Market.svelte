@@ -74,7 +74,7 @@
         <button class="chip" class:on={range === r.k} aria-pressed={range === r.k} onclick={() => (range = r.k)}>{t(`phone.chart.${r.k}`)}</button>
       {/each}
     </div>
-    {#if x}<p class="small muted mono">Mood {pct(x.moodTerm)} · GM offset {x.gmOffset.toFixed(2)}</p>{/if}
+    {#if x}<p class="small muted mono">Reported mood {pct(x.moodTerm)} · GM offset {x.gmOffset.toFixed(2)}</p>{/if}
   </section>
 {/if}
 

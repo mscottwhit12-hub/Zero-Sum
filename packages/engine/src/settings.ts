@@ -81,6 +81,15 @@ export interface Settings {
        */
       liveMax: number;
     };
+    /** Background noise on every stock (gold): a slow wander that eases back plus a fresh jiggle each tick. */
+    noise: {
+      /** Every stock moves about ± this much gold from noise alone (≈ 2 standard deviations). */
+      base: number;
+      /** How fast the wander eases back each tick (0–1). */
+      reversion: number;
+      /** Share of the noise that wanders (the rest is the fresh jiggle), 0–1. */
+      driftShare: number;
+    };
     index: {
       scale: number;
       /** Fraction of the gap to (average × scale) closed per tick. Low = low volatility. */
@@ -141,10 +150,12 @@ export interface Settings {
     driftMax: number;
   };
   mood: {
-    /** mood_bias = moodMax × centered average, band units. */
+    /** Reported mood (the player's own sense of how they're doing, 1–5) pushes the price by up to ± moodMax band units. */
     moodMax: number;
-    /** Bias multiplies by (1 − decayPerTick) each tick after a reading. */
+    /** The push and the extra jitter both fade by (1 − decayPerTick) each tick after a reading. */
     decayPerTick: number;
+    /** GM reported mood 1 (most upset) makes the stock jitter by up to ± this much gold; 5 = just the background noise. */
+    jitterMax: number;
   };
   rerolls: {
     perPlayer: number;
@@ -267,6 +278,7 @@ export const DEFAULT_SETTINGS: Settings = {
       espionageFrac: 0.03,
       liveMax: 0.05,
     },
+    noise: { base: 0.3, reversion: 0.1, driftShare: 0.5 },
     index: { scale: 1, smoothing: 0.3, growthPerGold: 0.23, startDropPerGold: 0.15, noiseFrac: 0.01, noiseReversion: 0.1 },
     crypto: {
       sigma: 0.07,
@@ -289,7 +301,7 @@ export const DEFAULT_SETTINGS: Settings = {
     topTwoMinPlayers: 16,
     driftMax: 0.15,
   },
-  mood: { moodMax: 0.1, decayPerTick: 0.01 },
+  mood: { moodMax: 0.1, decayPerTick: 0.01, jitterMax: 3 },
   rerolls: { perPlayer: 3 },
   espionage: { goldReward: 3, revealDelayMinSec: 15, revealDelayMaxSec: 45 },
   betting: { enabled: true, maxStake: 5, ticketMaxStake: 10, maxOpenOffers: 5 },
@@ -419,6 +431,10 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   frac(v.driftMax, 'votes.driftMax');
   frac(s.mood.moodMax, 'mood.moodMax');
   frac(s.mood.decayPerTick, 'mood.decayPerTick');
+  nonNeg(s.mood.jitterMax, 'mood.jitterMax');
+  nonNeg(m.noise.base, 'market.noise.base');
+  frac(m.noise.reversion, 'market.noise.reversion');
+  frac(m.noise.driftShare, 'market.noise.driftShare');
   need(Number.isInteger(s.rerolls.perPlayer) && s.rerolls.perPlayer >= 0, 'rerolls.perPlayer', 'must be a whole number ≥ 0');
   nonNeg(s.betting.maxStake, 'betting.maxStake');
   need(s.betting.ticketMaxStake >= s.betting.maxStake, 'betting.ticketMaxStake', 'must be at least the normal limit');

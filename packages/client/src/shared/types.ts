@@ -262,7 +262,7 @@ export interface GmExtras {
   feed: FeedItem[];
   requests: PendingRequest[];
   vote: (VoteInfo & { ballotsCast: number; eligible: number }) | null;
-  mood: { playerId: number; mood: number; selfAssessment: number; bias: number }[];
+  mood: { playerId: number; mood: number; selfAssessment: number; bias: number; jitter?: number }[];
   challenges: GmChallenge[];
   notifications: { id: number; to: string; message: string; readCount: number; createdAt: number }[];
   rerolls: Record<number, number>;

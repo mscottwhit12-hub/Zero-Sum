@@ -164,6 +164,7 @@ export function loadSecurities(ctx: Ctx, nightId: number): SecurityState[] {
       driver: st.driver ?? null,
       baseline: st.baseline,
       noise: st.noise,
+      ...(st.nz ? { nz: st.nz, nzDrift: st.nzDrift ?? 0 } : st.nzDrift ? { nzDrift: st.nzDrift } : {}),
       lastFair: st.lastFair,
       left: st.left,
       leaverFair: st.leaverFair,
@@ -173,7 +174,7 @@ export function loadSecurities(ctx: Ctx, nightId: number): SecurityState[] {
 }
 
 export function securityStateJson(s: SecurityState): string {
-  return j.str({ driver: s.driver ?? null, baseline: s.baseline, noise: s.noise, lastFair: s.lastFair, left: s.left, leaverFair: s.leaverFair, halted: s.halted ? true : undefined });
+  return j.str({ driver: s.driver ?? null, baseline: s.baseline, noise: s.noise, nz: s.nz || undefined, nzDrift: s.nzDrift || undefined, lastFair: s.lastFair, left: s.left, leaverFair: s.leaverFair, halted: s.halted ? true : undefined });
 }
 
 export function upsertSecurities(ctx: Ctx, nightId: number, secs: SecurityState[]): void {

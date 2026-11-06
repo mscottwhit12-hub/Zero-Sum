@@ -15,6 +15,10 @@ export interface SecurityState {
   baseline?: number;
   /** Index: current wobble (fraction of price) around the trend. */
   noise?: number;
+  /** Background noise now in the price (gold): price = model price + nz. */
+  nz?: number;
+  /** The wandering part of nz (gold); the rest is this tick's jiggle. */
+  nzDrift?: number;
   /** GM offset in band units. Applies to player stocks only (locked #6). */
   gmOffset: number;
   /** Last computed fair (player stocks). */
@@ -59,6 +63,9 @@ export interface PriceCauses {
   /** Crypto: the random shock (log return). */
   shock?: number;
   baseline?: number;
+  /** Background noise in the price this tick (gold), and the ± size it was drawn at. */
+  noise?: number;
+  noiseSize?: number;
 }
 
 export interface PriceRecord {
