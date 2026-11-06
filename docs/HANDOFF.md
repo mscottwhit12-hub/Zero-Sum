@@ -337,6 +337,9 @@ Mirrors the project's Decisions Log. 1–17 come from Phases 0–8; 18–27 were
 ### 4s. Table colour, upright labels, visual audit (Nov 5)
 `7284ebe` + `59d74ba`. Migration 27 `game_table.color` ('#rrggbb'/null; drops bottle props). Bottle prop removed. Table text always upright (counter-rotated) and sized to fit inside the turned table (`stripRoom`/`fitLabel` in FloorPlan: shrink → 2-line wrap → …). Prop pill drops the game name before cutting. Seat names have a backing. TV close-up refits props to its own shape; close-up seat names shrink to fit. Known: 40-char names on tiny tables still end in …; only a table's centre is clamped to the plan, so edge tables can push seats off it. Awaiting Tate's device check.
 
+### 4t. Drag-to-turn, mood rework (Nov 5–6)
+`2c0ee0b`: selected table/prop gets a ⟳ knob (top-left); drag round the centre, 15° steps. `023d6a6` + curve commit: QoL mood rework. Background noise on every stock (`market.noise`: ±0.30 gold ≈ 2 SD, half OU wander / half per-tick jiggle; laid over the model price in `tickMarket`, state `nz`/`nzDrift`, causes `noise`/`noiseSize`). GM reported mood → jitter (`mood.jitterMax` 3 gold at mood 1, `jitterCurve` 2.15: 3 → ±0.91, 4 → ±0.44, 5 → background), fades like the push. Reported mood (self-assessment) alone → push (±`moodMax` band). GM Mood screen labels "GM reported mood" / "Reported mood"; tuning dials for jitter and background noise. Sim 200×12p default 9/9. Awaiting Tate's device check.
+
 ### Immediately next
 1. **The user pulls the Oct 27 builds** (`git pull && docker compose up -d --build zero-sum`, see §13) and runs a short night with auto handicap on. Migrations run automatically.
 2. **First real test night** on physical phones and the TV. This is still the biggest unknown: Android vibration, iOS Safari, the call screen, TV audio, real Wi-Fi.
