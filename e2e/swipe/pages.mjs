@@ -18,8 +18,13 @@ try {
   };
   R.check((await page.locator('.phone .app.a-standings').count()) === 0, 'removed', 'there is no Standings app icon any more');
   R.check((await pagerX()) === 0, 'start', 'starts on the home page');
-  await swipe(40);
-  R.check((await pagerX()) === 0, 'short', 'a short drag snaps back to home');
+  { // a slow short drag (a quick 40 px flick counts as a swipe since the Nov 5 swipe-back fix)
+    const bx = await page.evaluate(() => { const r = document.querySelector('.phone').getBoundingClientRect(); return r.x + r.width / 2; });
+    await page.mouse.move(bx, 400); await page.mouse.down();
+    for (let i = 1; i <= 10; i++) { await page.mouse.move(bx + 4 * i, 400 + i / 2); await sleep(45); }
+    await page.mouse.up(); await sleep(500);
+  }
+  R.check((await pagerX()) === 0, 'short', 'a slow short drag snaps back to home');
   await swipe(-150);
   R.check((await pagerX()) === 0, 'no-overscroll', 'swiping left on home does nothing');
   await swipe(-150);

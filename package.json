@@ -10,6 +10,7 @@
     "start": "npm run start -w @gn/server",
     "dev": "npm run dev -w @gn/server",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "check": "node scripts/check.mjs"
   }
 }

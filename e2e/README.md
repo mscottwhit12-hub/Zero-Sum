@@ -5,6 +5,14 @@ Scripts that drive real browsers against a real server. They need **Playwright w
 then run with `NODE_PATH=$(npm root -g)`). Output (server data, screenshots, JSON reports) goes to `e2e/.out/` (gitignored),
 or to `$E2E_OUT`. Build the client first (`npm run build`): the servers serve `packages/client/dist`.
 
+## Quick way
+`npm run check -- --e2e` runs the quick set (tables, seating, seats, features, swipe, bets) after the type checks,
+unit tests and build, and prints one line per step; `--e2e all` runs every harness below except the 60× night;
+`--e2e risk,poker` runs named ones. Full output: `e2e/.out/check.log`.
+
+**New checks:** start from `lib/night.mjs` (`testNight(name, { players, tables, game })` sets up a night in one call)
+and `lib/audit.mjs` (`layoutProblems(page)` lists anything crossing, overlapping or cut off). See `tables/run.mjs`.
+
 ## Human-behaviour bug rounds (`rounds/`)
 Each round starts its own fresh server (ports from 8200 up), plays out what real people do, and writes
 `e2e/.out/out/<round>.json` (bugs, passed checks, console/page errors, server errors).
@@ -26,6 +34,7 @@ for r in e2e/rounds/r*.mjs; do NODE_PATH=$(npm root -g) node $r; done   # all te
 | r08-messages | trade-in and buy spam, tip taps, memo reject/reassign, peek twice, long/HTML messages, Minter mashing, tip to a leaver |
 | r09-junk | RTL names, fake/huge photos, script/markdown injection everywhere, junk settings, broken pack file, 2 MB payload, nonsense API calls |
 | r10-load (60×) | 14 phones + 2 GMs + TV, simultaneous buys, score storms, group refresh, Wi-Fi drops, crash under load, latency |
+| tables (`e2e/tables/run.mjs`) | Built on `lib/night.mjs`: auto Catan board, props (palette, no bottle, drag, corner resize, turn knob), table turn knob + ⟲ button, colour swatches + ✕, labels upright, board view, TV floor + close-ups at 1920/1280, the result removes the auto board; `lib/audit.mjs` finds nothing crossing, overlapping or cut off on GM 1280/1920, GM phone and the TV |
 | seating (`e2e/seating/run.mjs`) | table resize handles and limits, moving tables, drag players onto seats, swap, unseat, dropdown fallback, TV floor dots + table close-up |
 | seat-move (`e2e/seating/seats.mjs`) | Drag an empty seat around its table on GM Seating: saved on the server, stays around the table, never on top of another seat, seated players unaffected, TV mirrors it, "Even out seats" resets |
 | swipe-pages (`e2e/swipe/pages.mjs`) | Phone home screen: swipe right to the full-screen leaderboard, short drag snaps back, no overscroll, dots and swipe return home, dock hides on the leaderboard, no Standings app, taps still open apps |
