@@ -32,12 +32,12 @@ export function moodBias(reading: MoodReading | undefined, currentTick: number, 
 
 /**
  * How far (± gold) a player's stock jitters: the background noise, plus up to jitterMax for GM reported mood 1
- * (linear: 5 → background only), fading back to the background after the reading like the push does.
+ * (steep near 1: 1 → ±3, 2 → ±1.8, 3 → ±0.9, 4 → ±0.45, 5 → background only), fading back to the background after the reading like the push does.
  */
 export function moodJitter(reading: MoodReading | undefined, currentTick: number, settings: Settings): number {
   const base = settings.market.noise.base;
   if (!reading) return base;
-  const upset = (5 - clamp15(reading.mood)) / 4;
+  const upset = Math.pow((5 - clamp15(reading.mood)) / 4, settings.mood.jitterCurve);
   return base + Math.max(0, settings.mood.jitterMax - base) * upset * fade(reading, currentTick, settings);
 }
 

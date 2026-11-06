@@ -156,6 +156,8 @@ export interface Settings {
     decayPerTick: number;
     /** GM reported mood 1 (most upset) makes the stock jitter by up to ± this much gold; 5 = just the background noise. */
     jitterMax: number;
+    /** How steeply jitter climbs toward "very upset": jitter share = ((5 − mood) / 4) ^ jitterCurve (1 = even). */
+    jitterCurve: number;
   };
   rerolls: {
     perPlayer: number;
@@ -301,7 +303,7 @@ export const DEFAULT_SETTINGS: Settings = {
     topTwoMinPlayers: 16,
     driftMax: 0.15,
   },
-  mood: { moodMax: 0.1, decayPerTick: 0.01, jitterMax: 3 },
+  mood: { moodMax: 0.1, decayPerTick: 0.01, jitterMax: 3, jitterCurve: 2.15 },
   rerolls: { perPlayer: 3 },
   espionage: { goldReward: 3, revealDelayMinSec: 15, revealDelayMaxSec: 45 },
   betting: { enabled: true, maxStake: 5, ticketMaxStake: 10, maxOpenOffers: 5 },
@@ -432,6 +434,7 @@ export function validateSettings(s: Settings): SettingsIssue[] {
   frac(s.mood.moodMax, 'mood.moodMax');
   frac(s.mood.decayPerTick, 'mood.decayPerTick');
   nonNeg(s.mood.jitterMax, 'mood.jitterMax');
+  nonNeg(s.mood.jitterCurve, 'mood.jitterCurve');
   nonNeg(m.noise.base, 'market.noise.base');
   frac(m.noise.reversion, 'market.noise.reversion');
   frac(m.noise.driftShare, 'market.noise.driftShare');

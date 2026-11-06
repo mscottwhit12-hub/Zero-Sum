@@ -14,7 +14,8 @@ describe('mood rework: GM reported mood → jitter, reported mood → push', () 
     expect(moodJitter(undefined, 0, S)).toBeCloseTo(0.3);
     expect(moodJitter(read(5, 1), 0, S)).toBeCloseTo(0.3);
     expect(moodJitter(read(1, 5), 0, S)).toBeCloseTo(3);
-    expect(moodJitter(read(3, 3), 0, S)).toBeCloseTo(1.65);
+    expect(moodJitter(read(3, 3), 0, S)).toBeCloseTo(0.91, 1);
+    expect(moodJitter(read(4, 3), 0, S)).toBeCloseTo(0.44, 1);
     const later = moodJitter(read(1, 3, 0), 100, S);
     expect(later).toBeLessThan(1.5);
     expect(later).toBeGreaterThan(0.3);
